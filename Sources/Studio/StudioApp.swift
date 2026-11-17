@@ -97,6 +97,8 @@ struct AppCommands: Commands {
         }
         CommandGroup(before: .toolbar) {
             Button("Go to Session…") { project?.palette = "" }
+            Button("Next Up: Session Waiting for You") { project?.goToNextUp() }
+                .keyboardShortcut("j")
                 .keyboardShortcut("p")
                 .disabled(project == nil)
             Button("Command Palette…") { project?.palette = ">" }

@@ -132,6 +132,29 @@ final class ProjectModel: ObservableObject {
 
     func newTab() { select(store.newSession(in: folder)) }
 
+    /// Short message shown at the bottom of the window ("All caught up").
+    @Published var toast: String?
+    /// Tab whose peek card is showing (hover).
+    @Published var peekTab: UUID?
+
+    /// ⌘J: jump to the session that has waited longest for you (blocked ones first), in any project.
+    func goToNextUp() {
+        let current = selectedSessionId
+        guard let item = store.nextUp.first(where: { $0.sessionId != current }), let sid = item.sessionId else {
+            showToast("All caught up")
+            return
+        }
+        if isInside(item.cwd, folder) || isInside(projectRoot(item.cwd), folder) { open(sessionId: sid) }
+        else { store.reveal(sessionId: sid, cwd: item.cwd) }
+    }
+
+    func showToast(_ text: String) {
+        toast = text
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
+            if self?.toast == text { self?.toast = nil }
+        }
+    }
+
     func newShellTab() { select(store.newShell(in: folder)) }
 
     func resume(_ sid: String) { select(store.resume(sid)) }

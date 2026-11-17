@@ -195,6 +195,7 @@ struct CommandPalette: View {
                  leading: .icon("paintpalette"), run: { enterThemes() }),
             cmd("Session: New Session", "⌘N", "plus") { m.newTab() },
             cmd("Terminal: New Terminal", "⌃`", "terminal") { m.newShellTab() },
+            cmd("Session: Next Up (waiting for you)", "⌘J", "arrow.turn.down.right") { m.goToNextUp() },
             cmd("Session: Close Tab", "⌘W", "xmark") { m.closeSelectedTab() },
             cmd("View: Next Tab", "⌘]", "arrow.right") { m.cycleTab(1) },
             cmd("View: Previous Tab", "⌘[", "arrow.left") { m.cycleTab(-1) },

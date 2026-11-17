@@ -7,6 +7,7 @@ struct SessionRecord: Identifiable, Hashable, Equatable {
     var title: String?          // custom-title > agent-name > ai-title
     var firstPrompt: String?
     var lastPrompt: String?
+    var lastReply: String?      // Claude's last text message, for the tab peek
     var lastActivity: Date
     var transcriptPath: String
 
@@ -23,7 +24,8 @@ struct LiveInfo: Hashable {
     let sessionId: String
     let cwd: String
     let name: String?
-    let status: String          // busy | idle | shell | ...
+    let status: String          // busy | idle | shell | waiting
+    let waitingFor: String?     // when waiting: what for, e.g. "permission" or "input needed"
     let entrypoint: String?     // cli | claude-desktop | ...
     let startedAt: Date
     let updatedAt: Date

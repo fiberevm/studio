@@ -92,6 +92,16 @@ struct ProjectView: View {
                 }
             }
         }
+        .overlay(alignment: .bottom) {
+            if let toast = model.toast {
+                Text(toast).font(.system(size: 12))
+                    .padding(.horizontal, 14).padding(.vertical, 7)
+                    .background(SwiftUI.Color(nsColor: Theme.chrome))
+                    .overlay(Rectangle().stroke(SwiftUI.Color(nsColor: Theme.paneDivider), lineWidth: 1))
+                    .padding(.bottom, 40)
+                    .allowsHitTesting(false)
+            }
+        }
         .environmentObject(model)
         .focusedSceneObject(model)
         .onAppear {
@@ -107,6 +117,12 @@ struct ProjectView: View {
             // debug/screenshot aid: split the last tab off to the right
             if CommandLine.arguments.contains("--split-demo"), let t = model.tabs.last, model.tabs.count > 1 {
                 model.move(t.id, to: model.activeGroup, zone: .right)
+            }
+            // debug/screenshot aid: keep the first tab's peek card open
+            if CommandLine.arguments.contains("--peek-demo") {
+                Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+                    Task { @MainActor in if model.peekTab == nil { model.peekTab = model.tabs.last?.id } }
+                }
             }
             // debug/screenshot aid: open the palette on launch
             if let i = CommandLine.arguments.firstIndex(of: "--open-palette") {
@@ -336,7 +352,7 @@ struct SessionRow: View {
                     .foregroundStyle(pr.state.color)
                     .help("PR #\(pr.number) \(pr.state.rawValue): \(pr.title)")
             }
-            StatusDot(status: item.status)
+            StatusDot(status: item.status, attention: attention)
         }
         .padding(.leading, 16).padding(.trailing, 12)
         .frame(height: 28)
@@ -351,13 +367,18 @@ struct SessionRow: View {
 
 struct StatusDot: View {
     let status: SessionStatus
+    /// Finished while you weren't looking: shows an unread dot instead of nothing.
+    var attention = false
     var body: some View {
         Group {
             switch status {
             case .working, .starting:
                 ClaudeSpinner()
+            case .waiting:
+                NeedsYouDot()
             case .idle:
-                SwiftUI.Color.clear   // ready is the quiet default: no dot
+                if attention { Circle().fill(SwiftUI.Color(nsColor: Theme.accent)).frame(width: 7, height: 7) }
+                else { SwiftUI.Color.clear }   // ready is the quiet default: no dot
             default:
                 Circle().fill(color).frame(width: 7, height: 7)
             }
@@ -367,12 +388,28 @@ struct StatusDot: View {
     var color: SwiftUI.Color {
         switch status {
         case .idle: return .green
-        case .waiting: return .yellow
+        case .waiting: return NeedsYouDot.red
         case .shell: return .blue
         case .exited: return .gray
         case .inactive: return .gray.opacity(0.4)
         default: return .orange
         }
+    }
+}
+
+/// Blocked on you (permission prompt, question): a red dot with a slow pulse, so it reads as different from "done".
+struct NeedsYouDot: View {
+    static let red = SwiftUI.Color(red: 0.95, green: 0.30, blue: 0.30)
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 30)) { ctx in
+            let t = ctx.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.4) / 1.4
+            ZStack {
+                Circle().stroke(Self.red.opacity(0.7 * (1 - t)), lineWidth: 1.5)
+                    .frame(width: 7 + 6 * t, height: 7 + 6 * t)
+                Circle().fill(Self.red).frame(width: 7, height: 7)
+            }
+        }
+        .frame(width: 12, height: 12)
     }
 }
 
@@ -544,6 +581,16 @@ struct GroupView: View {
                     .onDrop(of: [.text], delegate: TabDropDelegate(group: group, model: model, size: geo.size))
             }
         }
+        .overlayPreferenceValue(TabAnchors.self) { anchors in
+            GeometryReader { proxy in
+                if let id = model.peekTab, let a = anchors[id], let t = model.terminal(id) {
+                    let r = proxy[a]
+                    PeekCard(terminal: t, item: model.item(for: t))
+                        .offset(x: max(0, min(r.minX, proxy.size.width - 400)), y: r.maxY + 4)
+                        .transition(.opacity)
+                }
+            }
+        }
     }
 
     /// Shaded area showing where the tab will land.
@@ -655,7 +702,7 @@ struct TabButton: View {
             if terminal.isShell {
                 Image(systemName: "terminal").font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 12)
             } else {
-                StatusDot(status: item?.status ?? (terminal.running ? .starting : .exited))
+                StatusDot(status: item?.status ?? (terminal.running ? .starting : .exited), attention: attention)
             }
             Text(tabTitle)
                 .font(.system(size: 12))
@@ -681,9 +728,19 @@ struct TabButton: View {
         }
         .zIndex(selected ? 1 : 0)
         .contentShape(Rectangle())
-        .onTapGesture { model.select(terminal, in: group) }
-        .onHover { hovering = $0 }
-        .onDrag { TabDrag.provider(terminal) }
+        .onTapGesture { model.peekTab = nil; model.select(terminal, in: group) }
+        .onHover { h in
+            hovering = h
+            if h, !terminal.isShell {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                    if hovering, model.dropTarget == nil { model.peekTab = terminal.id }
+                }
+            } else if model.peekTab == terminal.id {
+                model.peekTab = nil
+            }
+        }
+        .anchorPreference(key: TabAnchors.self, value: .bounds) { [terminal.id: $0] }
+        .onDrag { model.peekTab = nil; return TabDrag.provider(terminal) }
         .contextMenu {
             Button("Split Right") { model.split(terminal, .right) }
             Button("Split Left") { model.split(terminal, .left) }
@@ -693,7 +750,62 @@ struct TabButton: View {
             Button("Close Tab") { model.close(terminal) }
             Button("End Session") { model.endSession(terminal) }
         }
-        .help(abbreviatePath(terminal.cwd))
+    }
+}
+
+struct TabAnchors: PreferenceKey {
+    static let defaultValue: [UUID: Anchor<CGRect>] = [:]
+    static func reduce(value: inout [UUID: Anchor<CGRect>], nextValue: () -> [UUID: Anchor<CGRect>]) {
+        value.merge(nextValue()) { $1 }
+    }
+}
+
+/// Hover card under a tab: where the session stands and Claude's last words, so you can decide without switching.
+struct PeekCard: View {
+    @ObservedObject var terminal: TerminalSession
+    let item: ActiveItem?
+    @EnvironmentObject var model: ProjectModel
+
+    var body: some View {
+        let sid = terminal.sessionId
+        let rec = sid.flatMap { model.store.records[$0] }
+        let info = sid.flatMap { model.store.live[$0] }
+        let status = item?.status ?? (terminal.running ? .starting : .exited)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                StatusDot(status: status, attention: sid.map(model.store.attention.contains) ?? false)
+                Text(item?.title ?? "New session").font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                Spacer(minLength: 8)
+                Text(statusLine(status, info: info)).font(.system(size: 11))
+                    .foregroundStyle(status == .waiting ? NeedsYouDot.red : .secondary)
+            }
+            if let reply = rec?.lastReply {
+                Text(reply).font(.system(size: 12)).lineLimit(9).truncationMode(.head)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text(status == .working ? "Working on it…" : "No reply yet").font(.system(size: 12)).foregroundStyle(.secondary)
+            }
+            if let p = rec?.lastPrompt {
+                HStack(alignment: .top, spacing: 6) {
+                    Text("You").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+                    Text(p).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2)
+                }
+            }
+        }
+        .padding(12)
+        .frame(width: 400, alignment: .leading)
+        .background(SwiftUI.Color(nsColor: Theme.chrome))
+        .overlay(Rectangle().stroke(SwiftUI.Color(nsColor: Theme.paneDivider), lineWidth: 1))
+        .allowsHitTesting(false)
+    }
+
+    private func statusLine(_ s: SessionStatus, info: LiveInfo?) -> String {
+        let since = info.map { " · " + relativeTime($0.updatedAt) } ?? ""
+        switch s {
+        case .waiting: return "Needs you: \(info?.waitingFor ?? "input")\(since)"
+        case .idle: return "Ready\(since)"
+        default: return s.label + since
+        }
     }
 }
 

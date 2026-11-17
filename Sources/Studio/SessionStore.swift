@@ -45,6 +45,9 @@ final class SessionStore: ObservableObject {
     private var liveTimer: Timer?
     private var scanTimer: Timer?
     private var lastStatus: [String: String] = [:]
+    /// When each session last started working; a finish only notifies after real work.
+    private var busySince: [String: Date] = [:]
+    private let notifications = NotificationHandler()
     /// Session currently shown in each window (window id → session id); used for the attention badge.
     private var viewing: [UUID: String] = [:]
     /// Project folders whose saved terminals have been restored into a window.
@@ -62,7 +65,12 @@ final class SessionStore: ObservableObject {
             Task { @MainActor in self?.rescanTranscripts() }
         }
         if Self.canNotify {
-            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+            let center = UNUserNotificationCenter.current()
+            center.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+            let open = UNNotificationAction(identifier: "open", title: "Open", options: [.foreground])
+            center.setNotificationCategories([UNNotificationCategory(identifier: "session", actions: [open], intentIdentifiers: [])])
+            notifications.store = self
+            center.delegate = notifications
         }
     }
 
@@ -140,14 +148,23 @@ final class SessionStore: ObservableObject {
             }
         }
 
-        // Detect "finished working" transitions for the attention badge.
+        // Transitions that mean "this session needs you": it finished, or it's blocked on you.
+        // Nothing happens for a session you're looking at; a finish only notifies after 30s+ of work.
         let viewed = Set(viewing.values)
         for (sid, info) in bySid {
             let prev = lastStatus[sid]
-            if prev == "busy" && info.status != "busy" && !(viewed.contains(sid) && NSApp.isActive) {
-                attention.insert(sid)
-                notifyFinished(sid: sid, info: info)
+            let watching = viewed.contains(sid) && NSApp.isActive
+            if info.status == "busy", prev != "busy" { busySince[sid] = Date() }
+            if let prev, prev != info.status {
+                if info.status == "waiting", !watching {
+                    attention.insert(sid)
+                    notify(sid: sid, info: info)
+                } else if prev == "busy", info.status == "idle", !watching {
+                    attention.insert(sid)
+                    if let since = busySince[sid], Date().timeIntervalSince(since) >= 30 { notify(sid: sid, info: info) }
+                }
             }
+            if info.status != "busy" { busySince[sid] = nil }
             lastStatus[sid] = info.status
         }
         if live != bySid { live = bySid }
@@ -339,13 +356,57 @@ final class SessionStore: ObservableObject {
     /// UNUserNotificationCenter crashes when not running from an .app bundle.
     static let canNotify = Bundle.main.bundleIdentifier != nil && Bundle.main.bundlePath.hasSuffix(".app")
 
-    private func notifyFinished(sid: String, info: LiveInfo) {
+    /// Only while you're in another app: inside Studio the tab badges already say it.
+    private func notify(sid: String, info: LiveInfo) {
         guard Self.canNotify, !NSApp.isActive else { return }
         let content = UNMutableNotificationContent()
         content.title = title(rec: records[sid], info: info, fallback: "Claude")
-        content.body = info.status == "idle" ? "Finished — ready for you" : "Status: \(info.status)"
+        if info.status == "waiting" {
+            content.subtitle = "Needs you: \(info.waitingFor ?? "input")"
+        }
+        let reply = records[sid]?.lastReply.map { $0.replacingOccurrences(of: "\n", with: " ") }
+        content.body = reply.map { String($0.suffix(180)) } ?? (info.status == "waiting" ? "Blocked until you answer" : "Finished — ready for you")
         content.sound = .default
+        content.categoryIdentifier = "session"
+        content.userInfo = ["sid": sid, "cwd": info.cwd]
         let req = UNNotificationRequest(identifier: sid, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(req)
+    }
+
+    // MARK: Next up
+
+    /// Studio sessions that need you, most urgent first: blocked ones (permission, questions), then
+    /// finished-and-unread ones; within each, whoever has waited longest.
+    var nextUp: [ActiveItem] {
+        allActiveItems
+            .filter { $0.inApp && ($0.status == .waiting || $0.sessionId.map(attention.contains) == true) }
+            .sorted {
+                let (a, b) = ($0.status == .waiting, $1.status == .waiting)
+                return a != b ? a : $0.updatedAt < $1.updatedAt
+            }
+    }
+
+    /// Bring a session forward in its project's window, opening the window if needed.
+    func reveal(sessionId sid: String, cwd: String) {
+        let root = projectRoot(cwd)
+        requestFocus(sessionId: sid, in: root)
+        StudioControl.shared.openWindow?(root)
+    }
+}
+
+/// Clicking a Studio notification (or its Open button) jumps to that session.
+final class NotificationHandler: NSObject, UNUserNotificationCenterDelegate {
+    weak var store: SessionStore?
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                withCompletionHandler done: @escaping () -> Void) {
+        let info = response.notification.request.content.userInfo
+        if let sid = info["sid"] as? String, let cwd = info["cwd"] as? String {
+            DispatchQueue.main.async {
+                NSApp.activate(ignoringOtherApps: true)
+                MainActor.assumeIsolated { self.store?.reveal(sessionId: sid, cwd: cwd) }
+            }
+        }
+        done()
     }
 }

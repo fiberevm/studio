@@ -50,7 +50,7 @@ final class TranscriptScanner {
         let sessionId = ((path as NSString).lastPathComponent as NSString).deletingPathExtension
         var cwd: String?
         var aiTitle: String?, customTitle: String?, agentName: String?
-        var firstPrompt: String?, lastPrompt: String?
+        var firstPrompt: String?, lastPrompt: String?, lastReply: String?
         var lastTimestamp: Date?
 
         func visit(_ data: Data, isHead: Bool) {
@@ -67,7 +67,11 @@ final class TranscriptScanner {
                     if let text = promptText(obj) {
                         if isHead && firstPrompt == nil { firstPrompt = text }
                         lastPrompt = text
+                        lastReply = nil   // a reply older than the latest prompt is stale
                     }
+                case "assistant":
+                    if obj["isSidechain"] as? Bool == true { break }
+                    if let text = replyText(obj) { lastReply = text }
                 default: break
                 }
                 if let ts = obj["timestamp"] as? String, let d = Self.iso.date(from: ts) { lastTimestamp = d }
@@ -82,9 +86,18 @@ final class TranscriptScanner {
         return SessionRecord(
             id: sessionId, cwd: cwd,
             title: customTitle ?? agentName ?? aiTitle,
-            firstPrompt: firstPrompt, lastPrompt: lastPrompt,
+            firstPrompt: firstPrompt, lastPrompt: lastPrompt, lastReply: lastReply,
             lastActivity: lastTimestamp ?? mtime,
             transcriptPath: path)
+    }
+
+    /// The text blocks of an assistant message (tool calls and thinking are skipped).
+    private func replyText(_ obj: [String: Any]) -> String? {
+        guard let msg = obj["message"] as? [String: Any], let arr = msg["content"] as? [[String: Any]] else { return nil }
+        let text = arr.compactMap { $0["type"] as? String == "text" ? $0["text"] as? String : nil }
+            .joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        return text.count > 1200 ? String(text.suffix(1200)) : text   // the end holds the question
     }
 
     private func promptText(_ obj: [String: Any]) -> String? {
@@ -142,6 +155,7 @@ enum LiveScanner {
                 cwd: o["cwd"] as? String ?? "",
                 name: o["name"] as? String,
                 status: o["status"] as? String ?? "idle",
+                waitingFor: o["waitingFor"] as? String,
                 entrypoint: o["entrypoint"] as? String,
                 startedAt: date("startedAt"),
                 updatedAt: date("statusUpdatedAt")))
