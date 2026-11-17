@@ -70,6 +70,9 @@ struct AppCommands: Commands {
             Button("New Session") { project?.newTab() }
                 .keyboardShortcut("n")
                 .disabled(project == nil)
+            Button("New Tab") { project?.newTab() }
+                .keyboardShortcut("t")
+                .disabled(project == nil)
             Button("New Terminal") { project?.newShellTab() }
                 .keyboardShortcut("`", modifiers: .control)
                 .disabled(project == nil)

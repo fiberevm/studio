@@ -101,7 +101,7 @@ open build/Studio.app --args --resume <session-id>        # resume a specific se
 | <kbd>⇧⌘P</kbd> | Command palette, including Color Theme |
 | <kbd>⌘J</kbd> | Next up: the session that has waited longest for you |
 | <kbd>⌘K</kbd> | Quick prompt: message any session (or several) without switching |
-| <kbd>⌘N</kbd> | New Claude session in this project |
+| <kbd>⌘T</kbd> or <kbd>⌘N</kbd> | New tab with a Claude session in this project |
 | <kbd>⌃`</kbd> | New terminal tab |
 | <kbd>⇧⌘N</kbd> | Open another project window |
 | <kbd>⌘[</kbd> / <kbd>⌘]</kbd> | Previous / next tab |
