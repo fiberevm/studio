@@ -183,9 +183,14 @@ final class ProjectModel: ObservableObject {
         focusTerminal()
     }
 
-    /// Close the tab only; the session keeps running and stays in the sidebar.
-    /// A plain terminal has nowhere else to live, so closing its tab ends it.
+    /// Close a tab. Without the sidebar there's nowhere for a hidden session to show up, so closing ends it
+    /// (⌘P can still resume the conversation). With the sidebar visible, the session keeps running there.
     func close(_ t: TerminalSession) {
+        if sidebarVisible && !t.isShell { closeKeepingRunning(t) } else { endSession(t) }
+    }
+
+    /// Close the tab only; a Claude session keeps running (find it with ⌘P). A terminal ends.
+    func closeKeepingRunning(_ t: TerminalSession) {
         guard let g = group(containing: t.id) else { return }
         detach(t.id, from: g)   // an emptied pane stays, showing its empty state
         if t.isShell { store.close(t) }
@@ -194,8 +199,8 @@ final class ProjectModel: ObservableObject {
 
     /// Stop the claude process for good (it can still be resumed later with `claude --resume`).
     func endSession(_ t: TerminalSession) {
-        close(t)
-        if !t.isShell { store.close(t) }   // close() already ended a shell
+        closeKeepingRunning(t)
+        if !t.isShell { store.close(t) }   // a shell was already ended
     }
 
     func closeSelectedTab() { if let t = selectedTerminal { close(t) } }

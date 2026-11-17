@@ -38,7 +38,7 @@ happened. Studio is built around one idea: **you should only look at a session w
 ### Sessions
 - **Embedded Claude Code** in real terminals ([SwiftTerm](https://github.com/migueldeicaza/SwiftTerm)): it's the real `claude` CLI, so slash commands, hooks, MCP servers and settings all work unchanged.
 - **Imports what's already running.** Studio reads Claude Code's own session files, so sessions started in other terminals show up too.
-- **Closing a tab never ends a conversation.** Tabs are for quick access; the session keeps running and comes back with <kbd>⌘P</kbd>.
+- **Closing a tab never loses a conversation.** It ends the session; <kbd>⌘P</kbd> resumes it any time, right where it left off.
 - **Restores your workspace.** Tabs, splits, pane sizes and terminal tabs come back after a restart (Claude sessions are resumed with `claude --resume`).
 - **Plain terminals** with <kbd>⌃`</kbd>, next to your sessions, just like VS Code.
 - **Drag and drop** files or images onto a session to paste their paths.
@@ -59,7 +59,7 @@ Everything here is about one thing: spending your attention only where a session
 | 🔔 | **Notifications that matter** | Only while you're in another app, only when a session is blocked on you or finished 30+ seconds of work, never for the one you're watching. Each shows Claude's last words; clicking it opens the session. |
 | 🔍 | **Go to anything** <kbd>⌘P</kbd> | Fuzzy-search every running and past session in every project, plus all commands. Picking a session in another project opens that project's window. |
 | 🪟 | **Focus without noise** | Unfocused panes dim slightly (with a quick fade), so the one you're typing in stands out. |
-| 🧷 | **Tabs are bookmarks** | Closing a tab never ends the conversation; it keeps running and is one <kbd>⌘P</kbd> away. Emptied panes stay put with a quiet *New Session* action. |
+| 🧷 | **Nothing is ever lost** | Closing a tab ends the session, but the conversation is one <kbd>⌘P</kbd> away and resumes where it left off. Right-click → *Close Tab, Keep Session Running* to leave it working in the background. Emptied panes stay put with a quiet *New Session* action. |
 | 💾 | **Layout survives restarts** | Tabs, splits, pane sizes and terminal tabs come back exactly where they were; Claude sessions are resumed with `claude --resume`. |
 | 🌿 | **Context at a glance** | Each session's status bar shows its git branch, model and tokens in/out, and Studio finds the PR it opened, with CI and review state. |
 | 🖼 | **Drop to paste** | Drag files or screenshots onto a session to paste their paths into the prompt. |
@@ -107,7 +107,7 @@ open build/Studio.app --args --resume <session-id>        # resume a specific se
 | <kbd>⇧⌘N</kbd> | Open another project window |
 | <kbd>⌘[</kbd> / <kbd>⌘]</kbd> | Previous / next tab |
 | <kbd>⌘1</kbd>…<kbd>⌘9</kbd> | Jump to tab |
-| <kbd>⌘W</kbd> | Close tab (the session keeps running); in an empty pane, close the pane |
+| <kbd>⌘W</kbd> | Close tab and end its session (resume it any time from <kbd>⌘P</kbd>); in an empty pane, close the pane |
 | <kbd>⇧⌘W</kbd> | Close window |
 | <kbd>⌘B</kbd> | Toggle the session sidebar |
 | <kbd>⌘+</kbd> / <kbd>⌘−</kbd> / <kbd>⌘0</kbd> | Text size |

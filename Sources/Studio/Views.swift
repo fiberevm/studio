@@ -320,7 +320,7 @@ struct Sidebar: View {
     @ViewBuilder private func menu(_ item: ActiveItem) -> some View {
         if let t = model.store.terminals.first(where: { "t:\($0.id)" == item.key }) {
             if !t.running { Button("Restart") { t.restart() } }
-            if model.isOpen(t) { Button("Close Tab") { model.close(t) } }
+            if model.isOpen(t) { Button("Close Tab") { model.closeKeepingRunning(t) } }
             Button("End Session") { model.endSession(t) }
         } else if let sid = item.sessionId {
             Button("Open as Tab") { model.resume(sid) }
@@ -747,7 +747,7 @@ struct TabButton: View {
             }
             .buttonStyle(.borderless)
             .opacity(hovering || selected ? 1 : 0)
-            .help("Close tab — session keeps running (⌘W)")
+            .help(model.sidebarVisible ? "Close tab — session keeps running (⌘W)" : "Close tab and end the session (⌘W)")
         }
         .padding(.leading, 16).padding(.trailing, 10)
         .frame(height: topBarHeight)
@@ -782,7 +782,9 @@ struct TabButton: View {
             Button("Split Up") { model.split(terminal, .top) }
             Divider()
             Button("Close Tab") { model.close(terminal) }
-            Button("End Session") { model.endSession(terminal) }
+            if !terminal.isShell {
+                Button("Close Tab, Keep Session Running") { model.closeKeepingRunning(terminal) }
+            }
         }
     }
 }

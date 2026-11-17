@@ -223,8 +223,9 @@ final class StudioControl {
 
         case "close_tab":
             let t = try tab(defaultToCaller: false)
-            model.close(t)
-            return t.isShell ? "terminal closed" : "tab closed (session keeps running)"
+            let keep = (p["keep_running"] as? Bool == true || model.sidebarVisible) && !t.isShell
+            if keep { model.closeKeepingRunning(t) } else { model.endSession(t) }
+            return keep ? "tab closed (session keeps running)" : "tab closed (session ended)"
 
         case "resize_pane":
             let g = try group(p, model, fallback: callerGroup)
