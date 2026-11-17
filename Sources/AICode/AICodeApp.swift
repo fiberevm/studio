@@ -4,6 +4,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)   // needed when run as a bare SwiftPM executable
         NSApp.activate(ignoringOtherApps: true)
+        NSWindow.allowsAutomaticWindowTabbing = false
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 }
@@ -14,29 +15,43 @@ struct AICodeApp: App {
     @StateObject private var store = SessionStore()
 
     var body: some Scene {
-        Window("AICode", id: "main") {
-            ContentView()
+        // One window per project folder. The folder is the window's value, so it survives relaunch,
+        // and opening a folder that already has a window brings that window forward.
+        WindowGroup("AICode", for: String.self) { $folder in
+            ProjectWindow(folder: $folder)
                 .environmentObject(store)
-                .frame(minWidth: 900, minHeight: 560)
+                .frame(minWidth: 820, minHeight: 520)
         }
         .defaultSize(width: 1400, height: 900)
-        .commands { SessionCommands(store: store) }
+        .commands { AppCommands(store: store) }
     }
 }
 
-struct SessionCommands: Commands {
+struct AppCommands: Commands {
     @ObservedObject var store: SessionStore
+    @FocusedObject private var project: ProjectModel?
+    @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
-            Button("New Session…") { store.newSessionPickingFolder() }
-                .keyboardShortcut("n")
-            Button("New Session in Same Folder") {
-                let cwd = store.selectedTerminal?.cwd
-                    ?? store.selectedSessionId.flatMap { store.records[$0]?.cwd ?? store.live[$0]?.cwd }
-                if let cwd { store.newSession(in: cwd) } else { store.newSessionPickingFolder() }
+            Button("New Tab") { project?.newTab() }
+                .keyboardShortcut("t")
+                .disabled(project == nil)
+            Button("Open Project…") {
+                if let f = pickFolder(prompt: "Open", startingAt: project.map { ($0.folder as NSString).deletingLastPathComponent }) {
+                    openWindow(value: f)
+                }
             }
-            .keyboardShortcut("n", modifiers: [.command, .shift])
+            .keyboardShortcut("n")
+            Menu("Open Recent Project") {
+                ForEach(RecentProjects.list(), id: \.self) { f in
+                    Button(abbreviatePath(f)) { openWindow(value: f) }
+                }
+            }
+            Divider()
+            Button("Close Tab") { project?.closeSelectedTab() }
+                .keyboardShortcut("w", modifiers: [.command, .option])
+                .disabled(project?.selectedTerminal == nil)
         }
         CommandGroup(after: .toolbar) {
             Button("Bigger Text") { store.fontSize = min(store.fontSize + 1, 24) }
@@ -46,26 +61,16 @@ struct SessionCommands: Commands {
             Button("Default Text Size") { store.fontSize = 12 }
                 .keyboardShortcut("0")
         }
-        CommandMenu("Session") {
-            Button("Resume Selected") { if let sid = store.selectedSessionId { store.resume(sid) } }
-                .keyboardShortcut("r", modifiers: [.command, .shift])
-            Button("Close Terminal") { store.closeSelected() }
-                .keyboardShortcut("w", modifiers: [.command, .option])
+        CommandMenu("Tab") {
+            Button("Previous Tab") { project?.cycleTab(-1) }
+                .keyboardShortcut("[", modifiers: .command)
+            Button("Next Tab") { project?.cycleTab(1) }
+                .keyboardShortcut("]", modifiers: .command)
             Divider()
-            Button("Previous Active Session") { cycle(-1) }.keyboardShortcut("[", modifiers: [.command, .shift])
-            Button("Next Active Session") { cycle(1) }.keyboardShortcut("]", modifiers: [.command, .shift])
-            Divider()
-            ForEach(Array(store.activeItems.prefix(9).enumerated()), id: \.offset) { i, item in
-                Button(item.title) { store.selection = item.key }
+            ForEach(Array((project?.tabs ?? []).prefix(9).enumerated()), id: \.offset) { i, t in
+                Button(project?.item(for: t)?.title ?? "New session") { project?.selectTab(i) }
                     .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: .command)
             }
         }
-    }
-
-    private func cycle(_ d: Int) {
-        let items = store.activeItems
-        guard !items.isEmpty else { return }
-        let idx = items.firstIndex { $0.key == store.selection } ?? (d > 0 ? -1 : 0)
-        store.selection = items[(idx + d + items.count) % items.count].key
     }
 }

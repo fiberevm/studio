@@ -94,3 +94,24 @@ func relativeTime(_ d: Date) -> String {
     f.dateFormat = "MMM d"
     return f.string(from: d)
 }
+
+/// True when `path` is `folder` or somewhere beneath it.
+func isInside(_ path: String, _ folder: String) -> Bool {
+    let f = folder.hasSuffix("/") ? String(folder.dropLast()) : folder
+    return path == f || path.hasPrefix(f + "/")
+}
+
+/// The repo a session belongs to: worktrees under <repo>/.claude/worktrees/ fold into <repo>.
+func projectRoot(_ cwd: String) -> String {
+    if let r = cwd.range(of: "/.claude/worktrees/") { return String(cwd[..<r.lowerBound]) }
+    return cwd
+}
+
+enum RecentProjects {
+    static func list() -> [String] { UserDefaults.standard.stringArray(forKey: "recentProjects") ?? [] }
+    static func add(_ folder: String) {
+        var l = list().filter { $0 != folder }
+        l.insert(folder, at: 0)
+        UserDefaults.standard.set(Array(l.prefix(12)), forKey: "recentProjects")
+    }
+}

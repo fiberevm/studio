@@ -22,7 +22,6 @@ final class SessionStore: ObservableObject {
     @Published private(set) var records: [String: SessionRecord] = [:]
     @Published private(set) var live: [String: LiveInfo] = [:]       // by sessionId
     @Published private(set) var terminals: [TerminalSession] = []
-    @Published var selection: String? { didSet { selectionChanged() } }
     @Published private(set) var attention: Set<String> = []          // session ids that finished while unviewed
     @Published var fontSize: CGFloat = UserDefaults.standard.object(forKey: "fontSize") as? CGFloat ?? 12 {
         didSet {
@@ -36,6 +35,10 @@ final class SessionStore: ObservableObject {
     private var liveTimer: Timer?
     private var scanTimer: Timer?
     private var lastStatus: [String: String] = [:]
+    /// Session currently shown in each window (window id → session id); used for the attention badge.
+    private var viewing: [UUID: String] = [:]
+    /// Project folders whose saved terminals have been restored into a window.
+    private var restoredFolders: Set<String> = []
     private var bag: Set<AnyCancellable> = []
 
     init() {
@@ -78,20 +81,16 @@ final class SessionStore: ObservableObject {
         // Map in-app terminals to their claude session via pid. Handles /clear and /resume inside the session too.
         for t in terminals where t.running {
             if let info = byPid[t.pid], t.sessionId != info.sessionId {
-                let old = t.sessionId
                 t.sessionId = info.sessionId
                 persistTerminals()
-                if selection == "t:\(t.id)" || (old != nil && selection == "s:\(old!)") {
-                    selection = "s:\(info.sessionId)"
-                }
             }
         }
 
         // Detect "finished working" transitions for the attention badge.
-        let selectedSid = selectedSessionId
+        let viewed = Set(viewing.values)
         for (sid, info) in bySid {
             let prev = lastStatus[sid]
-            if prev == "busy" && info.status != "busy" && sid != selectedSid {
+            if prev == "busy" && info.status != "busy" && !(viewed.contains(sid) && NSApp.isActive) {
                 attention.insert(sid)
                 notifyFinished(sid: sid, info: info)
             }
@@ -103,7 +102,15 @@ final class SessionStore: ObservableObject {
 
     // MARK: Derived lists
 
-    var activeItems: [ActiveItem] {
+    func activeItems(in folder: String) -> [ActiveItem] {
+        allActiveItems.filter { isInside($0.cwd, folder) }
+    }
+
+    func terminals(in folder: String) -> [TerminalSession] {
+        terminals.filter { isInside($0.cwd, folder) }
+    }
+
+    var allActiveItems: [ActiveItem] {
         var items: [ActiveItem] = []
         var covered = Set<String>()
         for t in terminals {
@@ -113,7 +120,7 @@ final class SessionStore: ObservableObject {
             let rec = sid.flatMap { records[$0] }
             let status: SessionStatus = !t.running ? .exited : (info.map { SessionStatus(raw: $0.status) } ?? .starting)
             items.append(ActiveItem(
-                key: sid.map { "s:\($0)" } ?? "t:\(t.id)",
+                key: "t:\(t.id)",
                 sessionId: sid,
                 title: title(rec: rec, info: info, fallback: "New session"),
                 cwd: info?.cwd ?? rec?.cwd ?? t.cwd,
@@ -132,102 +139,110 @@ final class SessionStore: ObservableObject {
         return items.sorted { $0.startedAt > $1.startedAt }
     }
 
-    private func title(rec: SessionRecord?, info: LiveInfo?, fallback: String) -> String {
+    func title(rec: SessionRecord?, info: LiveInfo?, fallback: String) -> String {
         if let t = rec?.title, !t.isEmpty { return t }
         if let n = info?.name, !n.isEmpty { return n }
         if let p = rec?.firstPrompt { return p }
         return fallback
     }
 
-    // MARK: Selection
+    // MARK: Viewing
 
-    var selectedSessionId: String? {
-        guard let sel = selection else { return nil }
-        if sel.hasPrefix("s:") { return String(sel.dropFirst(2)) }
-        if sel.hasPrefix("t:") { return terminals.first { "t:\($0.id)" == sel }?.sessionId }
-        return nil
-    }
-
-    var selectedTerminal: TerminalSession? {
-        guard let sel = selection else { return nil }
-        if sel.hasPrefix("t:") { return terminals.first { "t:\($0.id)" == sel } }
-        let sid = String(sel.dropFirst(2))
-        return terminals.first { $0.sessionId == sid }
-    }
-
-    private func selectionChanged() {
-        if let sid = selectedSessionId, attention.contains(sid) {
+    func setViewing(window: UUID, sessionId: String?) {
+        viewing[window] = sessionId
+        if let sid = sessionId, attention.contains(sid) {
             attention.remove(sid)
             updateDockBadge()
         }
     }
 
+    func endViewing(window: UUID) { viewing.removeValue(forKey: window) }
+
     // MARK: Actions
 
-    /// `AICode --new <dir>` starts a session in dir; `AICode --resume <sessionId>` resumes one.
-    func handleLaunchArguments() {
-        let args = CommandLine.arguments
-        if !args.contains("--no-restore") { restoreTerminals() }
-        if let i = args.firstIndex(of: "--new"), i + 1 < args.count { newSession(in: args[i + 1]) }
-        if let i = args.firstIndex(of: "--resume"), i + 1 < args.count { resume(args[i + 1]) }
-    }
-
     /// Terminals opened in the app are remembered so quitting/relaunching brings them back.
+    /// Entries for projects whose window hasn't been reopened yet are kept as-is.
     private func persistTerminals() {
-        let saved = terminals.compactMap { t in t.sessionId.map { ["sid": $0, "cwd": t.cwd] } }
-        UserDefaults.standard.set(saved, forKey: "openTerminals")
-    }
-
-    private func restoreTerminals() {
-        guard let saved = UserDefaults.standard.array(forKey: "openTerminals") as? [[String: String]] else { return }
-        refreshLive()
-        for e in saved {
-            guard let sid = e["sid"], let cwd = e["cwd"], live[sid] == nil else { continue } // skip if running elsewhere
-            open(TerminalSession(cwd: cwd, claudeArgs: ["--resume", sid], sessionId: sid, fontSize: fontSize))
+        let current = terminals.compactMap { t in t.sessionId.map { ["sid": $0, "cwd": t.cwd] } }
+        let pending = savedTerminals().filter { e in
+            !restoredFolders.contains { isInside(e["cwd"] ?? "", $0) } && !current.contains { $0["sid"] == e["sid"] }
         }
-        if selection == nil, let first = terminals.first { selection = first.sessionId.map { "s:\($0)" } }
+        UserDefaults.standard.set(current + pending, forKey: "openTerminals")
     }
 
-    private func open(_ t: TerminalSession) {
+    /// Project roots that have saved tabs not yet restored into a window.
+    var savedProjectFolders: [String] {
+        var seen: [String] = []
+        for e in savedTerminals() {
+            guard let cwd = e["cwd"] else { continue }
+            let root = projectRoot(cwd)
+            if !seen.contains(root) && !restoredFolders.contains(root) { seen.append(root) }
+        }
+        return seen
+    }
+
+    private func savedTerminals() -> [[String: String]] {
+        UserDefaults.standard.array(forKey: "openTerminals") as? [[String: String]] ?? []
+    }
+
+    /// Reopen terminals that were open in this project when the app last quit. Returns them in order.
+    @discardableResult
+    func restoreTerminals(in folder: String) -> [TerminalSession] {
+        guard !restoredFolders.contains(folder) else { return [] }
+        restoredFolders.insert(folder)
+        guard !CommandLine.arguments.contains("--no-restore") else { return [] }
+        refreshLive()
+        var out: [TerminalSession] = []
+        for e in savedTerminals() {
+            guard let sid = e["sid"], let cwd = e["cwd"], isInside(cwd, folder),
+                  live[sid] == nil,                                   // running elsewhere → leave it
+                  Self.transcriptExists(sid),                         // never prompted → nothing to resume
+                  !terminals.contains(where: { $0.sessionId == sid }) else { continue }
+            let t = TerminalSession(cwd: cwd, claudeArgs: ["--resume", sid], sessionId: sid, fontSize: fontSize)
+            add(t)
+            out.append(t)
+        }
+        return out
+    }
+
+    static func transcriptExists(_ sid: String) -> Bool {
+        let fm = FileManager.default
+        guard let dirs = try? fm.contentsOfDirectory(atPath: Paths.projects.path) else { return false }
+        return dirs.contains { fm.fileExists(atPath: Paths.projects.appendingPathComponent($0).appendingPathComponent("\(sid).jsonl").path) }
+    }
+
+    private func add(_ t: TerminalSession) {
         terminals.append(t)
         observe(t)
         persistTerminals()
     }
 
-    func resume(_ sid: String) {
-        if terminals.contains(where: { $0.sessionId == sid }) { selection = "s:\(sid)"; return }
+    /// Resume a session in an embedded terminal (or return the one already open).
+    func resume(_ sid: String) -> TerminalSession {
+        if let t = terminals.first(where: { $0.sessionId == sid }) { return t }
         let cwd = records[sid]?.cwd ?? live[sid]?.cwd ?? NSHomeDirectory()
-        open(TerminalSession(cwd: cwd, claudeArgs: ["--resume", sid], sessionId: sid, fontSize: fontSize))
-        selection = "s:\(sid)"
+        let t = TerminalSession(cwd: cwd, claudeArgs: ["--resume", sid], sessionId: sid, fontSize: fontSize)
+        add(t)
+        return t
     }
 
-    func newSession(in cwd: String) {
+    func newSession(in cwd: String) -> TerminalSession {
         let t = TerminalSession(cwd: cwd, claudeArgs: [], sessionId: nil, fontSize: fontSize)
-        open(t)
-        selection = "t:\(t.id)"
-    }
-
-    func newSessionPickingFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Start Claude Here"
-        if let cwd = selectedTerminal?.cwd ?? selectedSessionId.flatMap({ records[$0]?.cwd ?? live[$0]?.cwd }) {
-            panel.directoryURL = URL(fileURLWithPath: cwd)
-        }
-        if panel.runModal() == .OK, let url = panel.url { newSession(in: url.path) }
+        add(t)
+        return t
     }
 
     func close(_ t: TerminalSession) {
         t.terminate()
         terminals.removeAll { $0 === t }
         persistTerminals()
-        if selection == "t:\(t.id)" { selection = nil }
     }
 
-    func closeSelected() {
-        if let t = selectedTerminal { close(t) }
+    /// Folders that have running sessions, grouped by project root (worktrees fold into their repo).
+    var runningProjects: [(folder: String, count: Int)] {
+        let roots = allActiveItems.map { projectRoot($0.cwd) }
+        return Dictionary(grouping: roots, by: { $0 }).map { ($0.key, $0.value.count) }
+            .sorted { $0.count != $1.count ? $0.count > $1.count : $0.folder < $1.folder }
     }
 
     /// Kill an externally running claude process (sends SIGHUP like closing its terminal would).
