@@ -479,7 +479,8 @@ struct ClaudeSpinner: View {
 
 /// The line between split panes: thicker and higher-contrast than chrome hairlines so panes read as separate.
 struct PaneDivider: View {
-    static let thickness: CGFloat = 1
+    /// One physical pixel: a true hairline on Retina (0.5pt), 1pt elsewhere.
+    static let thickness: CGFloat = 1 / max(NSScreen.main?.backingScaleFactor ?? 2, 1)
     var vertical = false
     var body: some View {
         SwiftUI.Color(nsColor: Theme.paneDivider)
