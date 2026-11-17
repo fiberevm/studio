@@ -30,11 +30,16 @@ final class ProjectModel: ObservableObject {
         // Re-render this window whenever global session state changes.
         store.objectWillChange.sink { [weak self] in
             self?.objectWillChange.send()
-            DispatchQueue.main.async { self?.consumePendingFocus() }
+            DispatchQueue.main.async {
+                self?.consumePendingFocus()
+                self?.saveLayoutSoon()   // new sessions learn their id later; save once they have it
+            }
         }.store(in: &bag)
         let restored = store.restoreTerminals(in: folder)
-        first.tabIds = restored.map(\.id)
-        first.selection = restored.first.map { "t:\($0.id)" }
+        if !restoreLayout() {
+            first.tabIds = restored.map(\.id)
+            first.selection = restored.first.map { "t:\($0.id)" }
+        }
         consumePendingFocus()   // opened from another window's palette
         watchClicks()
         StudioControl.shared.register(self)
@@ -89,6 +94,7 @@ final class ProjectModel: ObservableObject {
 
     private func changed() {
         objectWillChange.send()
+        saveLayout()
         StudioControl.shared.noteActive(self)
         store.setViewing(window: windowId, sessionId: selectedSessionId)
     }
@@ -163,6 +169,9 @@ final class ProjectModel: ObservableObject {
     }
 
     func windowClosed() {
+        saveLayout()
+        // Plain terminals live only in this window's layout; end them rather than leave them running unreachable.
+        for g in groups { for t in tabs(in: g) where t.isShell { store.close(t) } }
         store.endViewing(window: windowId)
         StudioControl.shared.unregister(self)
         if let m = clickMonitor { NSEvent.removeMonitor(m); clickMonitor = nil }
@@ -253,6 +262,79 @@ final class ProjectModel: ObservableObject {
     func resize(_ box: SplitBox, fractions: [CGFloat]) {
         box.fractions = fractions
         objectWillChange.send()
+        saveLayoutSoon()
+    }
+
+    // MARK: Layout persistence
+
+    private var saveWork: DispatchWorkItem?
+
+    /// Divider drags fire continuously; save once they settle.
+    private func saveLayoutSoon() {
+        saveWork?.cancel()
+        let w = DispatchWorkItem { [weak self] in self?.saveLayout() }
+        saveWork = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: w)
+    }
+
+    func saveLayout() {
+        func encode(_ n: LayoutNode) -> SavedLayout? {
+            switch n {
+            case .group(let g):
+                let sids = g.tabIds.compactMap { terminal($0)?.sessionId }
+                let sel = selectedTerminal(in: g)?.sessionId
+                return .group(tabs: sids, selected: sel, active: g.id == activeGroupId)
+            case .split(let box):
+                let kids = zip(box.children, box.fractions).compactMap { c, f in encode(c).map { ($0, Double(f)) } }
+                guard !kids.isEmpty else { return nil }
+                return .split(horizontal: box.axis == .horizontal, fractions: kids.map(\.1), children: kids.map(\.0))
+            }
+        }
+        // Don't overwrite a saved layout while restored sessions are still learning their ids.
+        guard groups.flatMap(\.tabIds).allSatisfy({ terminal($0)?.isShell == true || terminal($0)?.sessionId != nil })
+        else { return }
+        guard let layout = encode(root), let data = try? JSONEncoder().encode(layout), data != lastSavedLayout else { return }
+        lastSavedLayout = data
+        layout.save(folder)
+    }
+
+    private var lastSavedLayout: Data?
+
+    /// Rebuild the saved split layout from this folder's restored sessions. Returns false if there was nothing to restore.
+    private func restoreLayout() -> Bool {
+        guard let saved = SavedLayout.load(folder) else { return false }
+        let mine = store.terminals(in: folder)
+        var used = Set<UUID>()
+        var active: UUID?
+
+        func build(_ s: SavedLayout) -> LayoutNode? {
+            switch s {
+            case .group(let sids, let sel, let isActive):
+                let ts = sids.compactMap { sid in mine.first { $0.sessionId == sid && !used.contains($0.id) } }
+                guard !ts.isEmpty else { return nil }
+                ts.forEach { used.insert($0.id) }
+                let selected = ts.first { $0.sessionId == sel } ?? ts[0]
+                let g = GroupNode(tabIds: ts.map(\.id), selection: "t:\(selected.id)")
+                if isActive { active = g.id }
+                return .group(g)
+            case .split(let horizontal, let fractions, let children):
+                let built = zip(children, fractions).compactMap { c, f in build(c).map { ($0, CGFloat(f)) } }
+                if built.isEmpty { return nil }
+                if built.count == 1 { return built[0].0 }
+                let box = SplitBox(axis: horizontal ? .horizontal : .vertical, children: built.map(\.0))
+                let total = built.map(\.1).reduce(0, +)
+                box.fractions = built.map { total > 0 ? $0.1 / total : 1 / CGFloat(built.count) }
+                return .split(box)
+            }
+        }
+
+        guard let node = build(saved) else { return false }
+        root = node
+        // sessions that were restored but missing from the saved layout go into the first group
+        let leftovers = mine.filter { !used.contains($0.id) && $0.sessionId != nil && !$0.isShell }
+        if let g = root.groups.first { g.tabIds += leftovers.map(\.id) }
+        activeGroupId = active ?? root.groups.first?.id ?? activeGroupId
+        return true
     }
 
     private func detach(_ id: UUID, from g: GroupNode) {

@@ -65,3 +65,22 @@ enum DropZone: Equatable {
         return .center
     }
 }
+
+// MARK: - Saving the layout across launches
+
+/// Serializable form of a window's layout. Tabs are stored by Claude session id (plain terminals aren't kept).
+indirect enum SavedLayout: Codable {
+    case group(tabs: [String], selected: String?, active: Bool)
+    case split(horizontal: Bool, fractions: [Double], children: [SavedLayout])
+
+    static func key(_ folder: String) -> String { "layout:" + folder }
+
+    static func load(_ folder: String) -> SavedLayout? {
+        guard let data = UserDefaults.standard.data(forKey: key(folder)) else { return nil }
+        return try? JSONDecoder().decode(SavedLayout.self, from: data)
+    }
+
+    func save(_ folder: String) {
+        if let data = try? JSONEncoder().encode(self) { UserDefaults.standard.set(data, forKey: Self.key(folder)) }
+    }
+}
