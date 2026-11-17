@@ -96,6 +96,12 @@ struct ProjectView: View {
             if LaunchArgs.pendingNewSession { LaunchArgs.pendingNewSession = false; model.newTab() }
             if let sid = LaunchArgs.pendingResume { LaunchArgs.pendingResume = nil; model.resume(sid) }
             if CommandLine.arguments.contains("--new-terminal") { model.newShellTab() }
+            // debug: split like a user would, a few seconds after launch
+            if CommandLine.arguments.contains("--split-later") {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                    if let t = model.tabs.last, model.tabs.count > 1 { model.split(t, .right) }
+                }
+            }
             // debug/screenshot aid: split the last tab off to the right
             if CommandLine.arguments.contains("--split-demo"), let t = model.tabs.last, model.tabs.count > 1 {
                 model.move(t.id, to: model.activeGroup, zone: .right)
@@ -786,16 +792,30 @@ struct TerminalPane: View {
 
 /// Hosts a long-lived SwiftTerm view inside SwiftUI without recreating it.
 ///
-/// SwiftUI may create a pane's container more than once and discard some, and during a re-layout the old
-/// container lingers briefly. So a container takes the terminal when it's created, and reclaims it later only
-/// if the terminal isn't on screen (orphaned or left inside a discarded container). Never steal from a live one.
+/// A terminal view can live in only one container, and SwiftUI creates new containers before tearing down old
+/// ones (and sometimes creates one it then discards). Rule: the most recent container to be created or to
+/// appear in a window *owns* the terminal; only the owner adopts it. A container on its way out never steals
+/// it back — that's what blanked panes after a split.
 struct TerminalHost: NSViewRepresentable {
     let view: LocalProcessTerminalView
 
-    final class Container: NSView {
+    @MainActor final class Container: NSView {
         weak var terminal: LocalProcessTerminalView?
+        private static var owners: [ObjectIdentifier: WeakContainer] = [:]
+        private struct WeakContainer { weak var c: Container? }
 
-        func adopt() {
+        private var isOwner: Bool {
+            guard let t = terminal else { return false }
+            return Self.owners[ObjectIdentifier(t)]?.c === self
+        }
+
+        func claim() {
+            guard let t = terminal else { return }
+            Self.owners[ObjectIdentifier(t)] = WeakContainer(c: self)
+            adopt()
+        }
+
+        private func adopt() {
             guard let t = terminal, t.superview !== self else { return }
             subviews.forEach { $0.removeFromSuperview() }
             t.removeFromSuperview()
@@ -816,28 +836,28 @@ struct TerminalHost: NSViewRepresentable {
             }
         }
 
-        /// Reclaim the terminal if it isn't on screen anywhere.
-        func adoptIfOrphaned() {
-            guard window != nil, let t = terminal, t.superview !== self else { return }
-            if t.superview == nil || t.window == nil { adopt() }
-        }
-
+        /// Owner in a window keeps it; a container that shows up in a window claims it (covers the case where
+        /// the newest container was a throwaway that never got on screen).
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
-            adoptIfOrphaned()
+            if window != nil { claim() }
+        }
+
+        /// SwiftUI update: re-attach only if we own it (e.g. it was pulled out from under us) — never steal.
+        func refresh() {
+            if isOwner { adopt() }
         }
     }
 
     func makeNSView(context: Context) -> Container {
         let c = Container()
         c.terminal = view
-        c.adopt()
+        c.claim()
         return c
     }
 
     func updateNSView(_ c: Container, context: Context) {
-        if c.terminal !== view { c.terminal = view; c.adopt() }
-        else { c.adoptIfOrphaned() }
+        if c.terminal !== view { c.terminal = view; c.claim() } else { c.refresh() }
     }
 }
 
