@@ -52,6 +52,8 @@ struct AppCommands: Commands {
             Button("Close Tab") { project?.closeSelectedTab() }
                 .keyboardShortcut("w", modifiers: [.command, .option])
                 .disabled(project?.selectedTerminal == nil)
+            Button("End Session") { if let t = project?.selectedTerminal { project?.endSession(t) } }
+                .disabled(project?.selectedTerminal == nil)
         }
         CommandGroup(after: .toolbar) {
             Button("Bigger Text") { store.fontSize = min(store.fontSize + 1, 24) }

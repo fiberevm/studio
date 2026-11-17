@@ -8,7 +8,18 @@ final class ProjectModel: ObservableObject {
     let windowId = UUID()
     let folder: String
     let store: SessionStore
-    @Published var selection: String? { didSet { store.setViewing(window: windowId, sessionId: selectedSessionId) } }
+    @Published var selection: String? {
+        didSet {
+            // Selecting an in-app session from the sidebar reopens its tab.
+            if let sel = selection, sel.hasPrefix("t:"), let t = store.terminals.first(where: { "t:\($0.id)" == sel }),
+               !tabIds.contains(t.id) {
+                tabIds.append(t.id)
+            }
+            store.setViewing(window: windowId, sessionId: selectedSessionId)
+        }
+    }
+    /// Tabs are just quick access: closing one hides it, the claude process keeps running.
+    @Published private(set) var tabIds: [UUID] = []
     private var bag: Set<AnyCancellable> = []
 
     init(folder: String, store: SessionStore) {
@@ -18,16 +29,20 @@ final class ProjectModel: ObservableObject {
         // Re-render this window whenever global session state changes.
         store.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &bag)
         let restored = store.restoreTerminals(in: folder)
-        selection = (restored.first ?? tabs.first).map { "t:\($0.id)" }
+        tabIds = restored.map(\.id)
+        selection = restored.first.map { "t:\($0.id)" }
     }
 
     var name: String { projectName(for: folder) }
-    var tabs: [TerminalSession] { store.terminals(in: folder) }
+    var tabs: [TerminalSession] {
+        let all = store.terminals(in: folder)
+        return tabIds.compactMap { id in all.first { $0.id == id } }
+    }
     var items: [ActiveItem] { store.activeItems(in: folder) }
 
     var selectedTerminal: TerminalSession? {
         guard let sel = selection, sel.hasPrefix("t:") else { return nil }
-        return tabs.first { "t:\($0.id)" == sel }
+        return store.terminals.first { "t:\($0.id)" == sel }
     }
 
     var selectedSessionId: String? {
@@ -46,15 +61,21 @@ final class ProjectModel: ObservableObject {
 
     func select(_ t: TerminalSession) { selection = "t:\(t.id)" }
 
+    /// Close the tab only; the session keeps running and stays in the sidebar.
     func close(_ t: TerminalSession) {
-        let list = tabs
-        let idx = list.firstIndex { $0 === t } ?? 0
+        let idx = tabIds.firstIndex(of: t.id) ?? 0
         let wasSelected = selection == "t:\(t.id)"
-        store.close(t)
+        tabIds.removeAll { $0 == t.id }
         if wasSelected {
             let rest = tabs
             selection = rest.isEmpty ? nil : "t:\(rest[min(idx, rest.count - 1)].id)"
         }
+    }
+
+    /// Stop the claude process for good (it can still be resumed later with `claude --resume`).
+    func endSession(_ t: TerminalSession) {
+        close(t)
+        store.close(t)
     }
 
     func closeSelectedTab() { if let t = selectedTerminal { close(t) } }

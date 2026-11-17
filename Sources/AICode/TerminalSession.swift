@@ -92,6 +92,9 @@ enum Theme {
     static let background = NSColor(srgbRed: 0.130, green: 0.153, blue: 0.203, alpha: 1)
     static let foreground = NSColor(srgbRed: 0.902, green: 0.902, blue: 0.902, alpha: 1)
     static let selection = NSColor(srgbRed: 0.201, green: 0.305, blue: 0.370, alpha: 1)
+    /// Sidebar / tab bar: a step darker than the terminal, like VS Code's chrome.
+    static let chrome = NSColor(srgbRed: 0.098, green: 0.114, blue: 0.153, alpha: 1)
+    static let border = NSColor(white: 1, alpha: 0.08)
 
     // black, red, green, yellow, blue, magenta, cyan, white, then bright variants
     static let ansi: [(Double, Double, Double)] = [

@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftTerm
 
-private let topBarHeight: CGFloat = 40
+private let topBarHeight: CGFloat = 30
 private let sidebarWidth: CGFloat = 250
 
 // MARK: - Window root
@@ -20,7 +20,7 @@ struct ProjectWindow: View {
                 ProjectPicker(folder: $folder)
             }
         }
-        .background(VisualEffectBackground().ignoresSafeArea())
+        .background(SwiftUI.Color(nsColor: Theme.chrome).ignoresSafeArea())
         .background(WindowConfigurator())
         .modifier(HideTitlebarBackground())
         .ignoresSafeArea()
@@ -69,12 +69,12 @@ struct ProjectView: View {
         HStack(spacing: 0) {
             Sidebar()
                 .frame(width: sidebarWidth)
+            Hairline(vertical: true)
             VStack(spacing: 0) {
                 TabStrip()
                     .frame(height: topBarHeight)
+                Hairline()
                 DetailCard()
-                    .padding(.trailing, 10)
-                    .padding(.bottom, 10)
             }
         }
         .environmentObject(model)
@@ -138,7 +138,7 @@ struct ProjectPicker: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
+        .background(SwiftUI.Color.white.opacity(0.04))
     }
 }
 
@@ -150,33 +150,33 @@ struct Sidebar: View {
 
     var body: some View {
         let items = model.items
+        let busy = items.filter { $0.status == .working }
+        let rest = items.filter { $0.status != .working }
         VStack(alignment: .leading, spacing: 0) {
             // Traffic lights sit in this row; keep it draggable.
             SwiftUI.Color.clear.frame(height: topBarHeight).background(WindowDragArea())
 
             HStack {
-                Text(model.name).font(.system(size: 13, weight: .semibold)).lineLimit(1)
+                Text(model.name.uppercased())
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
                 Spacer()
                 Button { model.newTab() } label: {
-                    Image(systemName: "plus").font(.system(size: 12, weight: .medium)).frame(width: 22, height: 20)
+                    Image(systemName: "plus").font(.system(size: 12)).frame(width: 20, height: 20)
                 }
                 .buttonStyle(.borderless)
                 .help("New session in \(model.name) (⌘T)")
             }
-            .padding(.leading, 18).padding(.trailing, 12)
+            .padding(.leading, 12).padding(.trailing, 6)
+            .frame(height: 26)
             .help(abbreviatePath(model.folder))
 
-            let busy = items.filter { $0.status == .working }
-            let rest = items.filter { $0.status != .working }
-            List(selection: $model.selection) {
-                ForEach(rest) { item in
-                    SessionRow(item: item, attention: item.sessionId.map(model.store.attention.contains) ?? false)
-                        .tag(item.key)
-                        .contextMenu { menu(item) }
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(rest) { row($0) }
                 }
             }
-            .listStyle(.sidebar)
-            .scrollContentBackground(.hidden)
             .overlay {
                 if items.isEmpty {
                     Text("No sessions running here").font(.callout).foregroundStyle(.secondary)
@@ -189,54 +189,54 @@ struct Sidebar: View {
         }
     }
 
+    private func row(_ item: ActiveItem) -> some View {
+        SessionRow(item: item,
+                   attention: item.sessionId.map(model.store.attention.contains) ?? false,
+                   selected: model.selection == item.key)
+            .onTapGesture { model.selection = item.key }
+            .contextMenu { menu(item) }
+    }
+
     /// Sessions that are working right now, tucked into a collapsible drawer pinned to the bottom.
     private func busyDrawer(_ busy: [ActiveItem]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Divider().opacity(0.5)
-            Button { withAnimation(.easeInOut(duration: 0.15)) { busyExpanded.toggle() } } label: {
+            Hairline()
+            Button { busyExpanded.toggle() } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .bold))
-                        .rotationEffect(.degrees(busyExpanded ? 90 : 0))
-                    Text("Busy").font(.system(size: 12, weight: .semibold))
+                    Image(systemName: busyExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .frame(width: 10)
+                    Text("BUSY").font(.system(size: 11, weight: .semibold))
                     Text("\(busy.count)")
-                        .font(.system(size: 11, weight: .medium)).monospacedDigit()
-                        .padding(.horizontal, 6).padding(.vertical, 1)
-                        .background(.orange.opacity(0.25), in: Capsule())
+                        .font(.system(size: 10, weight: .semibold)).monospacedDigit()
+                        .padding(.horizontal, 5)
+                        .background(SwiftUI.Color.white.opacity(0.12))
                     Spacer()
-                    ProgressView().controlSize(.mini).scaleEffect(0.8)
                 }
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 18).padding(.vertical, 9)
+                .padding(.horizontal, 8)
+                .frame(height: 24)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
             if busyExpanded {
                 ScrollView {
-                    VStack(spacing: 1) {
-                        ForEach(busy) { item in
-                            SessionRow(item: item, attention: false)
-                                .padding(.horizontal, 8).padding(.vertical, 4)
-                                .background(model.selection == item.key ? SwiftUI.Color.white.opacity(0.12) : .clear,
-                                            in: RoundedRectangle(cornerRadius: 6))
-                                .contentShape(Rectangle())
-                                .onTapGesture { model.selection = item.key }
-                                .contextMenu { menu(item) }
-                        }
+                    LazyVStack(spacing: 0) {
+                        ForEach(busy) { row($0) }
                     }
-                    .padding(.horizontal, 10).padding(.bottom, 8)
                 }
-                .frame(maxHeight: 220)
+                .frame(maxHeight: 22 * 10)
                 .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 
     @ViewBuilder private func menu(_ item: ActiveItem) -> some View {
-        if let t = model.tabs.first(where: { "t:\($0.id)" == item.key }) {
+        if let t = model.store.terminals.first(where: { "t:\($0.id)" == item.key }) {
             if !t.running { Button("Restart") { t.restart() } }
-            Button("Close Tab") { model.close(t) }
+            if model.tabIds.contains(t.id) { Button("Close Tab") { model.close(t) } }
+            Button("End Session") { model.endSession(t) }
         } else if let sid = item.sessionId {
             Button("Open as Tab") { model.resume(sid) }
             if let pid = item.pid {
@@ -257,20 +257,28 @@ struct Sidebar: View {
     }
 }
 
-/// One line: title on the left, status dot on the right. Unread (finished while you were away) shows bold.
+/// One 22px line: title on the left, status dot on the right. Unread (finished while you were away) shows bold.
 struct SessionRow: View {
     let item: ActiveItem
     let attention: Bool
+    let selected: Bool
+    @State private var hovering = false
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             Text(item.title)
+                .font(.system(size: 13, weight: attention ? .semibold : .regular))
+                .foregroundStyle(selected ? .primary : .secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .fontWeight(attention ? .semibold : .regular)
             Spacer(minLength: 4)
             StatusDot(status: item.status)
         }
+        .padding(.leading, 12).padding(.trailing, 8)
+        .frame(height: 22)
+        .background(selected ? SwiftUI.Color(nsColor: Theme.selection) : (hovering ? SwiftUI.Color.white.opacity(0.04) : .clear))
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
         .help("\(item.title)\n\(item.status.label) · \(abbreviatePath(item.cwd))\(item.inApp ? "" : "\nRunning outside AICode (pid \(item.pid ?? 0))")")
     }
 }
@@ -281,7 +289,7 @@ struct StatusDot: View {
         Group {
             switch status {
             case .working, .starting:
-                ProgressView().controlSize(.mini).scaleEffect(0.8)
+                ProgressView().controlSize(.mini).scaleEffect(0.7)
             default:
                 Circle().fill(color).frame(width: 7, height: 7)
             }
@@ -300,31 +308,39 @@ struct StatusDot: View {
     }
 }
 
+/// 1px divider in the chrome border color.
+struct Hairline: View {
+    var vertical = false
+    var body: some View {
+        SwiftUI.Color(nsColor: Theme.border)
+            .frame(width: vertical ? 1 : nil, height: vertical ? nil : 1)
+    }
+}
+
 // MARK: - Tabs
 
 struct TabStrip: View {
     @EnvironmentObject var model: ProjectModel
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 2) {
+        HStack(spacing: 0) {
             ForEach(model.tabs) { t in
                 TabButton(terminal: t, item: model.item(for: t),
                           selected: model.selection == "t:\(t.id)",
                           attention: t.sessionId.map(model.store.attention.contains) ?? false)
+                Hairline(vertical: true)
             }
             Button { model.newTab() } label: {
-                Image(systemName: "plus").font(.system(size: 11, weight: .medium)).frame(width: 24, height: 24)
+                Image(systemName: "plus").font(.system(size: 12)).frame(width: 30, height: topBarHeight)
             }
             .buttonStyle(.borderless)
-            .padding(.bottom, 3)
             .help("New tab (⌘T)")
             SwiftUI.Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity).background(WindowDragArea())
         }
-        .frame(maxHeight: .infinity, alignment: .bottom)
-        .padding(.trailing, 10)
     }
 }
 
+/// VS Code-style tab: square, full height, active tab takes the editor color and a top accent line.
 struct TabButton: View {
     @ObservedObject var terminal: TerminalSession
     let item: ActiveItem?
@@ -342,22 +358,27 @@ struct TabButton: View {
         HStack(spacing: 6) {
             StatusDot(status: item?.status ?? (terminal.running ? .starting : .exited))
             Text(tabTitle)
-                .font(.system(size: 12, weight: selected || attention ? .medium : .regular))
+                .font(.system(size: 12))
                 .foregroundStyle(selected ? .primary : .secondary)
                 .lineLimit(1)
             Button { model.close(terminal) } label: {
-                Image(systemName: "xmark").font(.system(size: 8, weight: .bold)).frame(width: 14, height: 14)
+                Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)).frame(width: 16, height: 16)
             }
             .buttonStyle(.borderless)
             .opacity(hovering || selected ? 1 : 0)
-            .help("Close tab (⌥⌘W)")
+            .help("Close tab — session keeps running (⌥⌘W)")
         }
-        .padding(.leading, 10).padding(.trailing, 6)
-        .frame(height: 30)
-        .background(
-            UnevenRoundedRectangle(topLeadingRadius: 8, topTrailingRadius: 8, style: .continuous)
-                .fill(selected ? SwiftUI.Color(nsColor: Theme.background) : (hovering ? .white.opacity(0.05) : .clear))
-        )
+        .padding(.leading, 12).padding(.trailing, 8)
+        .frame(height: topBarHeight)
+        .background(selected ? SwiftUI.Color(nsColor: Theme.background) : (hovering ? SwiftUI.Color.white.opacity(0.03) : .clear))
+        .overlay(alignment: .top) {
+            if selected { SwiftUI.Color.accentColor.frame(height: 1) }
+        }
+        // the active tab merges into the terminal below it
+        .overlay(alignment: .bottom) {
+            if selected { SwiftUI.Color(nsColor: Theme.background).frame(height: 1).offset(y: 1) }
+        }
+        .zIndex(selected ? 1 : 0)
         .contentShape(Rectangle())
         .onTapGesture { model.select(terminal) }
         .onHover { hovering = $0 }
@@ -381,12 +402,6 @@ struct DetailCard: View {
                 EmptyPane()
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(.white.opacity(0.06), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.35), radius: 8, y: 2)
     }
 }
 
@@ -397,18 +412,19 @@ struct TerminalPane: View {
     var body: some View {
         ZStack {
             TerminalHost(view: terminal.view)
-                .padding(.leading, 10).padding(.trailing, 4).padding(.vertical, 8)
+                .padding(.leading, 8).padding(.trailing, 8).padding(.vertical, 4)
             if !terminal.running {
                 VStack(spacing: 10) {
                     Text("Claude exited\(terminal.exitCode.map { " (code \($0))" } ?? "")")
                         .font(.headline)
                     HStack {
                         Button("Restart") { terminal.restart() }.keyboardShortcut(.defaultAction)
-                        Button("Close Tab") { model.close(terminal) }
+                        Button("Remove") { model.endSession(terminal) }
                     }
                 }
                 .padding(20)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+                .background(SwiftUI.Color(nsColor: Theme.chrome))
+                .overlay(Rectangle().stroke(SwiftUI.Color(nsColor: Theme.border)))
             }
         }
     }
