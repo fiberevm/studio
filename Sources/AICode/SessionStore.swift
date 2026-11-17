@@ -81,6 +81,7 @@ final class SessionStore: ObservableObject {
         // Map in-app terminals to their claude session via pid. Handles /clear and /resume inside the session too.
         for t in terminals where t.running {
             if let info = byPid[t.pid], t.sessionId != info.sessionId {
+                if let previous = t.sessionId { forgotten.insert(previous) }   // e.g. after /clear
                 t.sessionId = info.sessionId
                 persistTerminals()
             }
@@ -161,15 +162,20 @@ final class SessionStore: ObservableObject {
     // MARK: Actions
 
     /// Terminals opened in the app are remembered so quitting/relaunching brings them back.
-    /// Entries for projects whose window hasn't been reopened yet are kept as-is.
+    /// Merge, don't overwrite: entries this instance doesn't know about (another window's project,
+    /// another AICode instance) are kept; only sessions this instance ended are dropped.
+    private var forgotten: Set<String> = []
+
     private func persistTerminals() {
         // A --no-restore instance is a throwaway side-by-side copy: never touch the saved tab list.
         guard !CommandLine.arguments.contains("--no-restore") else { return }
         let current = terminals.compactMap { t in t.sessionId.map { ["sid": $0, "cwd": t.cwd] } }
-        let pending = savedTerminals().filter { e in
-            !restoredFolders.contains { isInside(e["cwd"] ?? "", $0) } && !current.contains { $0["sid"] == e["sid"] }
+        let currentIds = Set(current.compactMap { $0["sid"] })
+        let kept = savedTerminals().filter { e in
+            guard let sid = e["sid"] else { return false }
+            return !currentIds.contains(sid) && !forgotten.contains(sid)
         }
-        UserDefaults.standard.set(current + pending, forKey: "openTerminals")
+        UserDefaults.standard.set(kept + current, forKey: "openTerminals")
     }
 
     /// Project roots that have saved tabs not yet restored into a window.
@@ -198,8 +204,8 @@ final class SessionStore: ObservableObject {
         for e in savedTerminals() {
             guard let sid = e["sid"], let cwd = e["cwd"], isInside(cwd, folder),
                   live[sid] == nil,                                   // running elsewhere → leave it
-                  Self.transcriptExists(sid),                         // never prompted → nothing to resume
                   !terminals.contains(where: { $0.sessionId == sid }) else { continue }
+            guard Self.transcriptExists(sid) else { forgotten.insert(sid); continue } // never prompted
             let t = TerminalSession(cwd: cwd, claudeArgs: ["--resume", sid], sessionId: sid, fontSize: fontSize)
             add(t)
             out.append(t)
@@ -236,6 +242,7 @@ final class SessionStore: ObservableObject {
 
     func close(_ t: TerminalSession) {
         t.terminate()
+        if let sid = t.sessionId { forgotten.insert(sid) }
         terminals.removeAll { $0 === t }
         persistTerminals()
     }
