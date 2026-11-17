@@ -73,12 +73,7 @@ struct ProjectView: View {
                 Sidebar()
                     .frame(width: sidebarWidth)
                 Hairline(vertical: true)
-                VStack(spacing: 0) {
-                    TabStrip()
-                        .frame(height: topBarHeight)
-                    Hairline()
-                    DetailCard()
-                }
+                LayoutView(node: model.root)
             }
         }
         .overlay(alignment: .top) {
@@ -97,6 +92,10 @@ struct ProjectView: View {
         .onAppear {
             if LaunchArgs.pendingNewSession { LaunchArgs.pendingNewSession = false; model.newTab() }
             if let sid = LaunchArgs.pendingResume { LaunchArgs.pendingResume = nil; model.resume(sid) }
+            // debug/screenshot aid: split the last tab off to the right
+            if CommandLine.arguments.contains("--split-demo"), let t = model.tabs.last, model.tabs.count > 1 {
+                model.move(t.id, to: model.activeGroup, zone: .right)
+            }
             // debug/screenshot aid: open the palette on launch
             if let i = CommandLine.arguments.firstIndex(of: "--open-palette") {
                 model.palette = i + 1 < CommandLine.arguments.count ? CommandLine.arguments[i + 1] : ""
@@ -213,6 +212,13 @@ struct Sidebar: View {
                    selected: model.selection == item.key,
                    prs: item.sessionId.flatMap { model.store.prs[$0] } ?? [])
             .onTapGesture { model.selection = item.key }
+            .onDrag {
+                // in-app sessions can be dragged from the sidebar into a split, like tabs
+                if item.key.hasPrefix("t:"), let t = model.store.terminals.first(where: { "t:\($0.id)" == item.key }) {
+                    return TabDrag.provider(t)
+                }
+                return NSItemProvider()
+            }
             .contextMenu { menu(item) }
     }
 
@@ -258,7 +264,7 @@ struct Sidebar: View {
     @ViewBuilder private func menu(_ item: ActiveItem) -> some View {
         if let t = model.store.terminals.first(where: { "t:\($0.id)" == item.key }) {
             if !t.running { Button("Restart") { t.restart() } }
-            if model.tabIds.contains(t.id) { Button("Close Tab") { model.close(t) } }
+            if model.isOpen(t) { Button("Close Tab") { model.close(t) } }
             Button("End Session") { model.endSession(t) }
         } else if let sid = item.sessionId {
             Button("Open as Tab") { model.resume(sid) }
@@ -371,20 +377,167 @@ struct TitleBar: View {
     }
 }
 
+// MARK: - Split layout
+
+/// Renders the layout tree: groups, and splits with draggable dividers between them.
+struct LayoutView: View {
+    let node: LayoutNode
+
+    var body: some View {
+        switch node {
+        case .group(let g): GroupView(group: g)
+        case .split(let box): SplitBoxView(box: box)
+        }
+    }
+}
+
+struct SplitBoxView: View {
+    let box: SplitBox
+    @EnvironmentObject var model: ProjectModel
+    @State private var dragStart: [CGFloat]?
+
+    var body: some View {
+        GeometryReader { geo in
+            let horizontal = box.axis == .horizontal
+            let total = horizontal ? geo.size.width : geo.size.height
+            let avail = max(total - CGFloat(box.children.count - 1), 1)
+            let layout = horizontal ? AnyLayout(HStackLayout(spacing: 0)) : AnyLayout(VStackLayout(spacing: 0))
+            layout {
+                ForEach(Array(box.children.enumerated()), id: \.element.id) { i, child in
+                    LayoutView(node: child)
+                        .frame(width: horizontal ? avail * box.fractions[i] : nil,
+                               height: horizontal ? nil : avail * box.fractions[i])
+                    if i < box.children.count - 1 {
+                        divider(after: i, avail: avail, horizontal: horizontal)
+                    }
+                }
+            }
+        }
+    }
+
+    /// 1px line with a wider invisible grab area; dragging moves space between the two neighbours.
+    private func divider(after i: Int, avail: CGFloat, horizontal: Bool) -> some View {
+        Hairline(vertical: horizontal)
+            .overlay(
+                SwiftUI.Color.clear
+                    .frame(width: horizontal ? 7 : nil, height: horizontal ? nil : 7)
+                    .contentShape(Rectangle())
+                    .onHover { inside in
+                        if inside { (horizontal ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).push() }
+                        else { NSCursor.pop() }
+                    }
+                    .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                        .onChanged { v in
+                            let start = dragStart ?? box.fractions
+                            if dragStart == nil { dragStart = start }
+                            let delta = (horizontal ? v.translation.width : v.translation.height) / avail
+                            let minF: CGFloat = 0.08
+                            let pair = start[i] + start[i + 1]
+                            let a = min(max(start[i] + delta, minF), pair - minF)
+                            var f = start
+                            f[i] = a
+                            f[i + 1] = pair - a
+                            model.resize(box, fractions: f)
+                        }
+                        .onEnded { _ in dragStart = nil })
+            )
+            .zIndex(1)
+    }
+}
+
+/// One editor group: its own tab strip, pane and status bar. Accepts dropped tabs with VS Code-style snap zones.
+struct GroupView: View {
+    let group: GroupNode
+    @EnvironmentObject var model: ProjectModel
+    @State private var zone: DropZone?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            TabStrip(group: group)
+                .frame(height: topBarHeight)
+                .onDrop(of: [.text], delegate: TabDropDelegate(group: group, model: model, fixedZone: .center, zone: .constant(nil)))
+            Hairline()
+            GeometryReader { geo in
+                GroupPane(group: group)
+                    .overlay(alignment: .topLeading) {
+                        if let zone { dropPreview(zone, size: geo.size) }
+                    }
+                    .onDrop(of: [.text], delegate: TabDropDelegate(group: group, model: model, size: geo.size, zone: $zone))
+            }
+        }
+    }
+
+    /// Shaded area showing where the tab will land.
+    private func dropPreview(_ z: DropZone, size: CGSize) -> some View {
+        let w = size.width, h = size.height
+        let rect: CGRect
+        switch z {
+        case .center: rect = CGRect(x: 0, y: 0, width: w, height: h)
+        case .left: rect = CGRect(x: 0, y: 0, width: w / 2, height: h)
+        case .right: rect = CGRect(x: w / 2, y: 0, width: w / 2, height: h)
+        case .top: rect = CGRect(x: 0, y: 0, width: w, height: h / 2)
+        case .bottom: rect = CGRect(x: 0, y: h / 2, width: w, height: h / 2)
+        }
+        return SwiftUI.Color(nsColor: Theme.accent).opacity(0.18)
+            .overlay(Rectangle().stroke(SwiftUI.Color(nsColor: Theme.accent).opacity(0.6), lineWidth: 1))
+            .frame(width: rect.width, height: rect.height)
+            .offset(x: rect.minX, y: rect.minY)
+            .allowsHitTesting(false)
+            .animation(.easeOut(duration: 0.1), value: z)
+    }
+}
+
+/// Drag payload for a tab: "aicode-tab:<terminal uuid>".
+enum TabDrag {
+    static let prefix = "aicode-tab:"
+    static func provider(_ t: TerminalSession) -> NSItemProvider { NSItemProvider(object: (prefix + t.id.uuidString) as NSString) }
+}
+
+struct TabDropDelegate: DropDelegate {
+    let group: GroupNode
+    let model: ProjectModel
+    var size: CGSize = .zero
+    var fixedZone: DropZone? = nil
+    @Binding var zone: DropZone?
+
+    func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [.text]) }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        zone = fixedZone ?? DropZone.at(info.location, in: size)
+        return DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) { zone = nil }
+
+    func performDrop(info: DropInfo) -> Bool {
+        let target = fixedZone ?? DropZone.at(info.location, in: size)
+        zone = nil
+        guard let provider = info.itemProviders(for: [.text]).first else { return false }
+        _ = provider.loadObject(ofClass: NSString.self) { obj, _ in
+            guard let str = obj as? String, str.hasPrefix(TabDrag.prefix),
+                  let id = UUID(uuidString: String(str.dropFirst(TabDrag.prefix.count))) else { return }
+            DispatchQueue.main.async { model.move(id, to: group, zone: target) }
+        }
+        return true
+    }
+}
+
 // MARK: - Tabs
 
 struct TabStrip: View {
+    let group: GroupNode
     @EnvironmentObject var model: ProjectModel
 
     var body: some View {
+        let active = model.activeGroupId == group.id
         HStack(spacing: 0) {
-            ForEach(model.tabs) { t in
-                TabButton(terminal: t, item: model.item(for: t),
-                          selected: model.selection == "t:\(t.id)",
+            ForEach(model.tabs(in: group)) { t in
+                TabButton(terminal: t, group: group, item: model.item(for: t),
+                          selected: group.selection == "t:\(t.id)", groupActive: active,
                           attention: t.sessionId.map(model.store.attention.contains) ?? false)
                 Hairline(vertical: true)
             }
-            Button { model.newTab() } label: {
+            Button { model.activate(group); model.newTab() } label: {
                 Image(systemName: "plus").font(.system(size: 12)).frame(width: 30, height: topBarHeight)
             }
             .buttonStyle(.borderless)
@@ -394,11 +547,13 @@ struct TabStrip: View {
     }
 }
 
-/// VS Code-style tab: square, full height, active tab takes the editor color and a top accent line.
+/// VS Code-style tab: square, full height; the selected tab takes the editor color, with an accent line in the active group.
 struct TabButton: View {
     @ObservedObject var terminal: TerminalSession
+    let group: GroupNode
     let item: ActiveItem?
     let selected: Bool
+    let groupActive: Bool
     let attention: Bool
     @EnvironmentObject var model: ProjectModel
     @State private var hovering = false
@@ -413,7 +568,7 @@ struct TabButton: View {
             StatusDot(status: item?.status ?? (terminal.running ? .starting : .exited))
             Text(tabTitle)
                 .font(.system(size: 12))
-                .foregroundStyle(selected ? .primary : .secondary)
+                .foregroundStyle(selected && groupActive ? .primary : .secondary)
                 .lineLimit(1)
             Button { model.close(terminal) } label: {
                 Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)).frame(width: 16, height: 16)
@@ -427,36 +582,50 @@ struct TabButton: View {
         .background(selected ? SwiftUI.Color(nsColor: Theme.background) : (hovering ? SwiftUI.Color.primary.opacity(0.03) : .clear),
                     ignoresSafeAreaEdges: [])
         .overlay(alignment: .top) {
-            if selected { SwiftUI.Color(nsColor: Theme.accent).frame(height: 1) }
+            if selected && groupActive { SwiftUI.Color(nsColor: Theme.accent).frame(height: 1) }
         }
-        // the active tab merges into the terminal below it
+        // the selected tab merges into the pane below it
         .overlay(alignment: .bottom) {
             if selected { SwiftUI.Color(nsColor: Theme.background).frame(height: 1).offset(y: 1) }
         }
         .zIndex(selected ? 1 : 0)
         .contentShape(Rectangle())
-        .onTapGesture { model.select(terminal) }
+        .onTapGesture { model.select(terminal, in: group) }
         .onHover { hovering = $0 }
+        .onDrag { TabDrag.provider(terminal) }
+        .contextMenu {
+            Button("Split Right") { model.split(terminal, .right) }
+            Button("Split Left") { model.split(terminal, .left) }
+            Button("Split Down") { model.split(terminal, .bottom) }
+            Button("Split Up") { model.split(terminal, .top) }
+            Divider()
+            Button("Close Tab") { model.close(terminal) }
+            Button("End Session") { model.endSession(terminal) }
+        }
         .help(abbreviatePath(terminal.cwd))
     }
 }
 
 // MARK: - Detail
 
-struct DetailCard: View {
+/// What a group shows below its tabs: the selected session's terminal, an info pane, or the empty state.
+struct GroupPane: View {
+    let group: GroupNode
     @EnvironmentObject var model: ProjectModel
 
     var body: some View {
         ZStack {
             SwiftUI.Color(nsColor: Theme.background)
-            if let t = model.selectedTerminal {
+            if let t = model.selectedTerminal(in: group) {
                 TerminalPane(terminal: t).id(t.id)
-            } else if let sid = model.selectedSessionId {
-                SessionInfoPane(sid: sid)
+            } else if let sel = group.selection, sel.hasPrefix("s:") {
+                SessionInfoPane(sid: String(sel.dropFirst(2)))
             } else {
                 EmptyPane()
             }
         }
+        .contentShape(Rectangle())
+        .simultaneousGesture(TapGesture().onEnded { model.activate(group) })
     }
 }
 
@@ -599,7 +768,9 @@ struct TerminalHost: NSViewRepresentable {
     }
 
     func updateNSView(_ container: NSView, context: Context) {
-        if container.subviews.first !== view { attach(to: container) }
+        // Only adopt an orphaned view. When the layout changes, SwiftUI briefly keeps the old container alive;
+        // stealing the view back into it would leave the new pane blank.
+        if view.superview == nil { attach(to: container) }
     }
 
     private func attach(to container: NSView) {
@@ -613,7 +784,14 @@ struct TerminalHost: NSViewRepresentable {
             view.topAnchor.constraint(equalTo: container.topAnchor),
             view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
-        DispatchQueue.main.async { [view] in view.window?.makeFirstResponder(view) }
+        view.needsLayout = true
+        view.needsDisplay = true
+        DispatchQueue.main.async { [view] in
+            view.needsDisplay = true
+            if view.window?.firstResponder == nil || view.window?.firstResponder === view.window {
+                view.window?.makeFirstResponder(view)
+            }
+        }
     }
 }
 

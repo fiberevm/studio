@@ -32,6 +32,11 @@ a session sidebar on the left and the selected session's live terminal on the ri
 | ⇧⌘W | Close window |
 | ⌘+ / ⌘− / ⌘0 | Text size |
 
+**Split panes** (like VS Code editor groups): drag a tab (or an in-app session from the sidebar) onto a pane —
+the outer third of each side splits that way, the middle drops it in as a tab; a shaded preview shows where it'll land.
+Right-click a tab for Split Right / Left / Down / Up (a group's only tab splits off a fresh session instead).
+Drag the 1px dividers to resize. ⌘N, ⌘W, ⌘[ / ⌘] act on the focused group; clicking a pane focuses it.
+
 Themes (via the palette): Clear Dark, Dark Modern, Dark+, Light+, Monokai, Solarized Dark, One Dark Pro, GitHub Dark, Dracula.
 Each session tab has a status bar: git branch, uptime, model, tokens sent ↑ / received ↓, and its PRs.
 
