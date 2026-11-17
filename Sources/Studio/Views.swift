@@ -332,6 +332,7 @@ struct SessionRow: View {
                     ignoresSafeAreaEdges: [])
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
+        .modifier(PointingHandCursor())
         .help("\(item.title)\n\(item.status.label) · \(abbreviatePath(item.cwd))\(item.inApp ? "" : "\nRunning outside Studio (pid \(item.pid ?? 0))")")
     }
 }
@@ -911,6 +912,19 @@ struct HideTitlebarBackground: ViewModifier {
                 .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         } else {
             content.toolbarBackground(.hidden, for: .windowToolbar)
+        }
+    }
+}
+
+/// Pointing-hand cursor while hovering, to show a row is clickable.
+struct PointingHandCursor: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *) {
+            content.pointerStyle(.link)
+        } else {
+            content.onHover { inside in
+                if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+            }
         }
     }
 }
