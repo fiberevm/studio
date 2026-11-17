@@ -31,6 +31,8 @@ final class SessionStore: ObservableObject {
     }
 
     @Published private(set) var stats: [String: TranscriptStats] = [:]   // by sessionId
+    @Published private(set) var prs: [String: [PRInfo]] = [:]            // by sessionId
+    private let prMonitor = PRMonitor()
     /// Every past session on disk, loaded lazily for the command palette.
     @Published private(set) var history: [SessionRecord] = []
     /// Session to focus when a project window next looks (folder → session id). Used by the palette.
@@ -75,7 +77,19 @@ final class SessionStore: ObservableObject {
             DispatchQueue.main.async {
                 if self.records != dict { self.records = dict }
                 if self.stats != st { self.stats = st }
+                self.refreshPRs()
             }
+        }
+    }
+
+    /// Look up PRs for every running session (throttled per session inside PRMonitor).
+    func refreshPRs(force: Bool = false) {
+        let reqs: [PRMonitor.Request] = allActiveItems.compactMap { item in
+            guard let sid = item.sessionId, let st = stats[sid] else { return nil }
+            return .init(sessionId: sid, cwd: item.cwd, prURLs: st.prURLs, branch: st.gitBranch)
+        }
+        prMonitor.refresh(reqs, force: force) { sid, list in
+            if self.prs[sid] != list { self.prs[sid] = list }
         }
     }
 

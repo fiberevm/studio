@@ -33,6 +33,10 @@ a session sidebar on the left and the selected session's live terminal on the ri
 | ⌘+ / ⌘− / ⌘0 | Text size |
 
 Themes (via the palette): Clear Dark, Dark Modern, Dark+, Light+, Monokai, Solarized Dark, One Dark Pro, GitHub Dark, Dracula.
-Each session tab has a status bar: git branch, uptime, model, tokens sent ↑ / received ↓.
+Each session tab has a status bar: git branch, uptime, model, tokens sent ↑ / received ↓, and its PRs.
+
+**PR detection** (needs the `gh` CLI, logged in): PRs a session created are found from `gh pr create` output in its
+transcript; otherwise the session's branch is looked up (long-lived branches like main/staging are skipped). State
+(open/draft/merged/closed), CI checks and review are refreshed every minute. Set `AICODE_DEBUG_LOG=/path` to trace lookups.
 
 Built with SwiftUI + [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm).

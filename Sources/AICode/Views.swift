@@ -169,8 +169,10 @@ struct Sidebar: View {
 
     var body: some View {
         let items = model.items
-        let busy = items.filter { $0.status == .working }
-        let rest = items.filter { $0.status != .working }
+        // Working, or running a ! shell command, counts as busy.
+        let isBusy: (ActiveItem) -> Bool = { $0.status == .working || $0.status == .shell }
+        let busy = items.filter(isBusy)
+        let rest = items.filter { !isBusy($0) }
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text(model.name.uppercased())
@@ -201,25 +203,38 @@ struct Sidebar: View {
                 }
             }
 
-            if !busy.isEmpty { busyDrawer(busy) }
+            busyDrawer(busy)   // always shown, even at 0
         }
     }
 
     private func row(_ item: ActiveItem) -> some View {
         SessionRow(item: item,
                    attention: item.sessionId.map(model.store.attention.contains) ?? false,
-                   selected: model.selection == item.key)
+                   selected: model.selection == item.key,
+                   prs: item.sessionId.flatMap { model.store.prs[$0] } ?? [])
             .onTapGesture { model.selection = item.key }
             .contextMenu { menu(item) }
     }
 
     /// Sessions that are working right now, tucked into a collapsible drawer pinned to the bottom.
+    /// Busy sessions (working or in a shell command). The header stays pinned at the bottom, level with the
+    /// session status bar; expanding opens the list upward.
     private func busyDrawer(_ busy: [ActiveItem]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Hairline()
+            if busyExpanded && !busy.isEmpty {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(busy) { row($0) }
+                    }
+                }
+                .frame(maxHeight: 28 * 8)
+                .fixedSize(horizontal: false, vertical: true)
+                Hairline()
+            }
             Button { busyExpanded.toggle() } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: busyExpanded ? "chevron.down" : "chevron.right")
+                    Image(systemName: busyExpanded ? "chevron.down" : "chevron.up")
                         .font(.system(size: 9, weight: .semibold))
                         .frame(width: 10)
                     Text("BUSY").font(.system(size: 11, weight: .semibold))
@@ -228,6 +243,7 @@ struct Sidebar: View {
                         .padding(.horizontal, 5)
                         .background(SwiftUI.Color.primary.opacity(0.12))
                     Spacer()
+                    if !busy.isEmpty { ProgressView().controlSize(.mini).scaleEffect(0.7) }
                 }
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 12)
@@ -235,16 +251,7 @@ struct Sidebar: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-
-            if busyExpanded {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(busy) { row($0) }
-                    }
-                }
-                .frame(maxHeight: 28 * 8)
-                .fixedSize(horizontal: false, vertical: true)
-            }
+            .background(SwiftUI.Color(nsColor: Theme.chrome), ignoresSafeAreaEdges: [])
         }
     }
 
@@ -278,6 +285,7 @@ struct SessionRow: View {
     let item: ActiveItem
     let attention: Bool
     let selected: Bool
+    var prs: [PRInfo] = []
     @State private var hovering = false
 
     var body: some View {
@@ -288,6 +296,13 @@ struct SessionRow: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: 4)
+            // an open PR matters more than the newest one
+            if let pr = prs.last(where: { $0.state == .open || $0.state == .draft }) ?? prs.last {
+                Image(systemName: "arrow.triangle.pull")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(pr.state.color)
+                    .help("PR #\(pr.number) \(pr.state.rawValue): \(pr.title)")
+            }
             StatusDot(status: item.status)
         }
         .padding(.leading, 16).padding(.trailing, 12)
@@ -463,11 +478,12 @@ struct SessionStatusBar: View {
                     stat("arrow.up", formatTokens(st.tokensIn), help: "Tokens sent: \(st.tokensIn.formatted()) (incl. cache)")
                     stat("arrow.down", formatTokens(st.tokensOut), help: "Tokens received: \(st.tokensOut.formatted())")
                 }
+                ForEach(sid.flatMap { model.store.prs[$0] } ?? []) { PRChip(pr: $0) }
                 Spacer()
             }
         }
         .padding(.horizontal, 10)
-        .frame(height: 22)
+        .frame(height: 28)
         .background(SwiftUI.Color(nsColor: Theme.chrome), ignoresSafeAreaEdges: [])
     }
 
@@ -478,6 +494,68 @@ struct SessionStatusBar: View {
         }
         .foregroundStyle(.secondary)
         .help(help)
+    }
+}
+
+/// "⤴ #1115 ✓" — PR number tinted by state, plus CI result. Click opens it in the browser.
+struct PRChip: View {
+    let pr: PRInfo
+
+    var body: some View {
+        Button { if let u = URL(string: pr.url) { NSWorkspace.shared.open(u) } } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.triangle.pull").font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(pr.state.color)
+                Text("#\(pr.number)").font(.system(size: 11)).monospacedDigit()
+                if let icon = pr.checks.icon {
+                    Image(systemName: icon.name).font(.system(size: 10)).foregroundStyle(icon.color)
+                }
+                if pr.review == "APPROVED" {
+                    Image(systemName: "hand.thumbsup.fill").font(.system(size: 9)).foregroundStyle(.green)
+                } else if pr.review == "CHANGES_REQUESTED" {
+                    Image(systemName: "exclamationmark.bubble.fill").font(.system(size: 9)).foregroundStyle(.orange)
+                }
+            }
+            .foregroundStyle(.secondary)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(helpText)
+    }
+
+    private var helpText: String {
+        var parts = ["#\(pr.number) \(pr.title)", "State: \(pr.state.rawValue)"]
+        switch pr.checks {
+        case .passing: parts.append("Checks: passing")
+        case .failing: parts.append("Checks: failing")
+        case .pending: parts.append("Checks: running")
+        case .none: break
+        }
+        if let r = pr.review { parts.append("Review: \(r.replacingOccurrences(of: "_", with: " ").lowercased())") }
+        parts.append("Click to open")
+        return parts.joined(separator: "\n")
+    }
+}
+
+extension PRInfo.State {
+    var color: SwiftUI.Color {
+        switch self {
+        case .open: return .green
+        case .draft: return .gray
+        case .merged: return .purple
+        case .closed: return .red
+        }
+    }
+}
+
+extension PRInfo.Checks {
+    var icon: (name: String, color: SwiftUI.Color)? {
+        switch self {
+        case .passing: return ("checkmark.circle.fill", .green)
+        case .failing: return ("xmark.circle.fill", .red)
+        case .pending: return ("clock.fill", .yellow)
+        case .none: return nil
+        }
     }
 }
 

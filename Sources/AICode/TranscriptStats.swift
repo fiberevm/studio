@@ -6,12 +6,20 @@ struct TranscriptStats: Equatable {
     var tokensOut = 0
     var model: String?
     var gitBranch: String?
+    /// PRs this session created (from `gh pr create` output), oldest first.
+    var prURLs: [String] = []
 }
 
 /// Reads transcripts incrementally: remembers how far it got in each file and only parses new lines.
 /// Assistant messages are written once per content block with the same id, so usage is counted once per id.
 final class StatsReader {
-    private struct State { var offset: UInt64 = 0; var stats = TranscriptStats(); var seen = Set<String>() }
+    fileprivate struct State {
+        var offset: UInt64 = 0
+        var stats = TranscriptStats()
+        var seen = Set<String>()
+        var prCreateCalls = Set<String>()   // tool_use ids of `gh pr create` commands
+    }
+    fileprivate static let prURL = try! NSRegularExpression(pattern: #"https://github\.com/[\w.-]+/[\w.-]+/pull/\d+"#)
     private var states: [String: State] = [:]
 
     func stats(for path: String) -> TranscriptStats {
@@ -30,6 +38,7 @@ final class StatsReader {
         for line in complete.split(separator: 0x0A) {
             guard let o = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { continue }
             if let b = o["gitBranch"] as? String, !b.isEmpty, b != "HEAD" { st.stats.gitBranch = b }
+            Self.scanPRs(o, &st)
             guard o["type"] as? String == "assistant", o["isSidechain"] as? Bool != true,
                   let msg = o["message"] as? [String: Any] else { continue }
             if let m = msg["model"] as? String, m != "<synthetic>" { st.stats.model = m }
@@ -42,6 +51,34 @@ final class StatsReader {
         }
         states[path] = st
         return st.stats
+    }
+}
+
+extension StatsReader {
+    /// Remember `gh pr create` tool calls; pull the PR link out of their results.
+    fileprivate static func scanPRs(_ o: [String: Any], _ st: inout State) {
+        guard let blocks = (o["message"] as? [String: Any])?["content"] as? [[String: Any]] else { return }
+        for b in blocks {
+            switch b["type"] as? String {
+            case "tool_use":
+                if let id = b["id"] as? String, let cmd = (b["input"] as? [String: Any])?["command"] as? String,
+                   cmd.contains("gh pr create") {
+                    st.prCreateCalls.insert(id)
+                }
+            case "tool_result":
+                guard let id = b["tool_use_id"] as? String, st.prCreateCalls.contains(id) else { continue }
+                var text = b["content"] as? String ?? ""
+                if let arr = b["content"] as? [[String: Any]] {
+                    text = arr.compactMap { $0["text"] as? String }.joined(separator: "\n")
+                }
+                let ns = text as NSString
+                for m in prURL.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+                    let url = ns.substring(with: m.range)
+                    if !st.stats.prURLs.contains(url) { st.stats.prURLs.append(url) }
+                }
+            default: break
+            }
+        }
     }
 }
 
