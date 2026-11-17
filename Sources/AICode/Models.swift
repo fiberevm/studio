@@ -1,7 +1,7 @@
 import Foundation
 
 /// A Claude Code session discovered from a transcript in ~/.claude/projects.
-struct SessionRecord: Identifiable, Hashable {
+struct SessionRecord: Identifiable, Hashable, Equatable {
     let id: String              // sessionId
     var cwd: String
     var title: String?          // custom-title > agent-name > ai-title

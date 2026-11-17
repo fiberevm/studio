@@ -38,12 +38,19 @@ struct SessionCommands: Commands {
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
         }
+        CommandGroup(after: .toolbar) {
+            Button("Bigger Text") { store.fontSize = min(store.fontSize + 1, 24) }
+                .keyboardShortcut("+")
+            Button("Smaller Text") { store.fontSize = max(store.fontSize - 1, 9) }
+                .keyboardShortcut("-")
+            Button("Default Text Size") { store.fontSize = 12 }
+                .keyboardShortcut("0")
+        }
         CommandMenu("Session") {
             Button("Resume Selected") { if let sid = store.selectedSessionId { store.resume(sid) } }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
             Button("Close Terminal") { store.closeSelected() }
                 .keyboardShortcut("w", modifiers: [.command, .option])
-            Button("Rescan Sessions") { store.rescanTranscripts() }
             Divider()
             Button("Previous Active Session") { cycle(-1) }.keyboardShortcut("[", modifiers: [.command, .shift])
             Button("Next Active Session") { cycle(1) }.keyboardShortcut("]", modifiers: [.command, .shift])

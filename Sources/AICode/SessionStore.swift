@@ -17,13 +17,6 @@ struct ActiveItem: Identifiable, Hashable {
     var id: String { key }
 }
 
-struct HistoryGroup: Identifiable {
-    let project: String
-    let cwd: String
-    let sessions: [SessionRecord]
-    var id: String { project }
-}
-
 @MainActor
 final class SessionStore: ObservableObject {
     @Published private(set) var records: [String: SessionRecord] = [:]
@@ -31,13 +24,11 @@ final class SessionStore: ObservableObject {
     @Published private(set) var terminals: [TerminalSession] = []
     @Published var selection: String? { didSet { selectionChanged() } }
     @Published private(set) var attention: Set<String> = []          // session ids that finished while unviewed
-    @Published var search = ""
-    @Published private(set) var loaded = false
-    @Published var showTempSessions = false
-
-    /// Sessions run from scratch/temp dirs (subagent sandboxes etc.) are hidden from History by default.
-    static func isTemp(_ cwd: String) -> Bool {
-        cwd.hasPrefix("/private/tmp/") || cwd.hasPrefix("/tmp/") || cwd.hasPrefix("/private/var/folders/")
+    @Published var fontSize: CGFloat = UserDefaults.standard.object(forKey: "fontSize") as? CGFloat ?? 12 {
+        didSet {
+            UserDefaults.standard.set(fontSize, forKey: "fontSize")
+            terminals.forEach { $0.setFontSize(fontSize) }
+        }
     }
 
     private let scanner = TranscriptScanner()
@@ -53,7 +44,7 @@ final class SessionStore: ObservableObject {
         liveTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refreshLive() }
         }
-        scanTimer = Timer.scheduledTimer(withTimeInterval: 8.0, repeats: true) { [weak self] _ in
+        scanTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.rescanTranscripts() }
         }
         if Self.canNotify {
@@ -64,12 +55,12 @@ final class SessionStore: ObservableObject {
     // MARK: Scanning
 
     func rescanTranscripts() {
+        let ids = Set(live.keys).union(terminals.compactMap(\.sessionId))
         scanQueue.async { [scanner] in
-            let recs = scanner.scan()
+            let recs = scanner.scan(ids: ids)
             let dict = Dictionary(recs.map { ($0.id, $0) }, uniquingKeysWith: { a, b in a.lastActivity > b.lastActivity ? a : b })
             DispatchQueue.main.async {
-                self.records = dict
-                self.loaded = true
+                if self.records != dict { self.records = dict }
             }
         }
     }
@@ -89,6 +80,7 @@ final class SessionStore: ObservableObject {
             if let info = byPid[t.pid], t.sessionId != info.sessionId {
                 let old = t.sessionId
                 t.sessionId = info.sessionId
+                persistTerminals()
                 if selection == "t:\(t.id)" || (old != nil && selection == "s:\(old!)") {
                     selection = "s:\(info.sessionId)"
                 }
@@ -137,25 +129,7 @@ final class SessionStore: ObservableObject {
                 entrypoint: info.entrypoint, pid: info.pid,
                 startedAt: info.startedAt, updatedAt: info.updatedAt))
         }
-        let q = search.lowercased()
-        if !q.isEmpty { items = items.filter { $0.title.lowercased().contains(q) || $0.cwd.lowercased().contains(q) } }
         return items.sorted { $0.startedAt > $1.startedAt }
-    }
-
-    var historyGroups: [HistoryGroup] {
-        let activeIds = Set(activeItems.compactMap(\.sessionId)).union(live.keys)
-        let q = search.lowercased()
-        let recs = records.values.filter { r in
-            !activeIds.contains(r.id) && (showTempSessions || !Self.isTemp(r.cwd)) && (q.isEmpty
-                || r.displayTitle.lowercased().contains(q)
-                || r.cwd.lowercased().contains(q)
-                || (r.lastPrompt?.lowercased().contains(q) ?? false))
-        }
-        let grouped = Dictionary(grouping: recs, by: { projectName(for: $0.cwd) })
-        return grouped.map { name, list in
-            let sorted = list.sorted { $0.lastActivity > $1.lastActivity }
-            return HistoryGroup(project: name, cwd: sorted[0].cwd, sessions: sorted)
-        }.sorted { $0.sessions[0].lastActivity > $1.sessions[0].lastActivity }
     }
 
     private func title(rec: SessionRecord?, info: LiveInfo?, fallback: String) -> String {
@@ -193,23 +167,43 @@ final class SessionStore: ObservableObject {
     /// `AICode --new <dir>` starts a session in dir; `AICode --resume <sessionId>` resumes one.
     func handleLaunchArguments() {
         let args = CommandLine.arguments
+        if !args.contains("--no-restore") { restoreTerminals() }
         if let i = args.firstIndex(of: "--new"), i + 1 < args.count { newSession(in: args[i + 1]) }
         if let i = args.firstIndex(of: "--resume"), i + 1 < args.count { resume(args[i + 1]) }
+    }
+
+    /// Terminals opened in the app are remembered so quitting/relaunching brings them back.
+    private func persistTerminals() {
+        let saved = terminals.compactMap { t in t.sessionId.map { ["sid": $0, "cwd": t.cwd] } }
+        UserDefaults.standard.set(saved, forKey: "openTerminals")
+    }
+
+    private func restoreTerminals() {
+        guard let saved = UserDefaults.standard.array(forKey: "openTerminals") as? [[String: String]] else { return }
+        refreshLive()
+        for e in saved {
+            guard let sid = e["sid"], let cwd = e["cwd"], live[sid] == nil else { continue } // skip if running elsewhere
+            open(TerminalSession(cwd: cwd, claudeArgs: ["--resume", sid], sessionId: sid, fontSize: fontSize))
+        }
+        if selection == nil, let first = terminals.first { selection = first.sessionId.map { "s:\($0)" } }
+    }
+
+    private func open(_ t: TerminalSession) {
+        terminals.append(t)
+        observe(t)
+        persistTerminals()
     }
 
     func resume(_ sid: String) {
         if terminals.contains(where: { $0.sessionId == sid }) { selection = "s:\(sid)"; return }
         let cwd = records[sid]?.cwd ?? live[sid]?.cwd ?? NSHomeDirectory()
-        let t = TerminalSession(cwd: cwd, claudeArgs: ["--resume", sid], sessionId: sid)
-        terminals.append(t)
-        observe(t)
+        open(TerminalSession(cwd: cwd, claudeArgs: ["--resume", sid], sessionId: sid, fontSize: fontSize))
         selection = "s:\(sid)"
     }
 
     func newSession(in cwd: String) {
-        let t = TerminalSession(cwd: cwd, claudeArgs: [], sessionId: nil)
-        terminals.append(t)
-        observe(t)
+        let t = TerminalSession(cwd: cwd, claudeArgs: [], sessionId: nil, fontSize: fontSize)
+        open(t)
         selection = "t:\(t.id)"
     }
 
@@ -228,6 +222,7 @@ final class SessionStore: ObservableObject {
     func close(_ t: TerminalSession) {
         t.terminate()
         terminals.removeAll { $0 === t }
+        persistTerminals()
         if selection == "t:\(t.id)" { selection = nil }
     }
 
