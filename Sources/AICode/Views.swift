@@ -21,6 +21,7 @@ struct ContentView: View {
         }
         .background(VisualEffectBackground().ignoresSafeArea())
         .background(WindowConfigurator())
+        .modifier(HideTitlebarBackground())
         .ignoresSafeArea()
         .preferredColorScheme(.dark)
         .task { store.handleLaunchArguments() }
@@ -299,9 +300,15 @@ struct EmptyPane: View {
 struct VisualEffectBackground: NSViewRepresentable {
     func makeNSView(context: Context) -> NSVisualEffectView {
         let v = NSVisualEffectView()
-        v.material = .sidebar
+        v.material = .underWindowBackground
         v.blendingMode = .behindWindow
-        v.state = .followsWindowActiveState
+        v.state = .active
+        // Tint toward the terminal's slate so sidebar and card read as one surface.
+        let tint = NSView()
+        tint.wantsLayer = true
+        tint.layer?.backgroundColor = NSColor(srgbRed: 0.075, green: 0.09, blue: 0.125, alpha: 0.82).cgColor
+        tint.autoresizingMask = [.width, .height]
+        v.addSubview(tint)
         return v
     }
     func updateNSView(_ v: NSVisualEffectView, context: Context) {}
@@ -320,16 +327,30 @@ struct WindowDragArea: NSViewRepresentable {
 
 /// Hides the title bar and lets content extend under it, keeping the traffic lights.
 struct WindowConfigurator: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        let v = NSView()
-        DispatchQueue.main.async {
-            guard let w = v.window else { return }
+    final class Probe: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let w = window else { return }
             w.titleVisibility = .hidden
             w.titlebarAppearsTransparent = true
             w.styleMask.insert(.fullSizeContentView)
+            w.titlebarSeparatorStyle = .none
             w.toolbar = nil
+            w.isMovableByWindowBackground = false
         }
-        return v
     }
+    func makeNSView(context: Context) -> NSView { Probe() }
     func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+struct HideTitlebarBackground: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *) {
+            content
+                .toolbar(removing: .title)
+                .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        } else {
+            content.toolbarBackground(.hidden, for: .windowToolbar)
+        }
+    }
 }
