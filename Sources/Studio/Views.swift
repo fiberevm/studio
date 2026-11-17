@@ -394,6 +394,16 @@ struct ClaudeSpinner: View {
     }
 }
 
+/// The line between split panes: thicker and higher-contrast than chrome hairlines so panes read as separate.
+struct PaneDivider: View {
+    static let thickness: CGFloat = 2
+    var vertical = false
+    var body: some View {
+        SwiftUI.Color(nsColor: Theme.paneDivider)
+            .frame(width: vertical ? Self.thickness : nil, height: vertical ? nil : Self.thickness)
+    }
+}
+
 /// 1px divider in the chrome border color.
 struct Hairline: View {
     var vertical = false
@@ -470,7 +480,7 @@ struct SplitBoxView: View {
         GeometryReader { geo in
             let horizontal = box.axis == .horizontal
             let total = horizontal ? geo.size.width : geo.size.height
-            let avail = max(total - CGFloat(box.children.count - 1), 1)
+            let avail = max(total - CGFloat(box.children.count - 1) * PaneDivider.thickness, 1)
             let layout = horizontal ? AnyLayout(HStackLayout(spacing: 0)) : AnyLayout(VStackLayout(spacing: 0))
             layout {
                 ForEach(Array(box.children.enumerated()), id: \.element.id) { i, child in
@@ -487,7 +497,7 @@ struct SplitBoxView: View {
 
     /// 1px line with a wider invisible grab area; dragging moves space between the two neighbours.
     private func divider(after i: Int, avail: CGFloat, horizontal: Bool) -> some View {
-        Hairline(vertical: horizontal)
+        PaneDivider(vertical: horizontal)
             .overlay(
                 SwiftUI.Color.clear
                     .frame(width: horizontal ? 7 : nil, height: horizontal ? nil : 7)

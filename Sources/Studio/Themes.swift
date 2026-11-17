@@ -116,6 +116,11 @@ enum Theme {
     static var selection: NSColor { current.listSelection }
     static var border: NSColor { current.border }
     static var accent: NSColor { current.accent }
+    /// Pane separator: the theme's text color mixed into its background, so it shows on every theme.
+    static var paneDivider: NSColor {
+        let bg = current.background.usingColorSpace(.sRGB) ?? current.background
+        return bg.blended(withFraction: 0.2, of: current.foreground.usingColorSpace(.sRGB) ?? .gray) ?? current.border
+    }
 
     static func font(_ size: CGFloat) -> NSFont {
         NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
