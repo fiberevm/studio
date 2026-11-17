@@ -382,6 +382,9 @@ struct StatusDot: View {
     let status: SessionStatus
     /// Finished while you weren't looking: shows an unread dot instead of nothing.
     var attention = false
+
+    /// Ready-and-read sessions show nothing; callers can drop the dot's space entirely.
+    static func isVisible(_ s: SessionStatus, attention: Bool) -> Bool { !(s == .idle && !attention) }
     var body: some View {
         Group {
             switch status {
@@ -710,6 +713,8 @@ struct TabButton: View {
     @EnvironmentObject var model: ProjectModel
     @State private var hovering = false
 
+    private var tabStatus: SessionStatus { item?.status ?? (terminal.running ? .starting : .exited) }
+
     private var tabTitle: String {
         let t = terminal.isShell ? shellTitle : (item?.title ?? "New session")
         return t.count > 28 ? String(t.prefix(27)) + "…" : t
@@ -727,8 +732,9 @@ struct TabButton: View {
         HStack(spacing: 8) {
             if terminal.isShell {
                 Image(systemName: "terminal").font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 12)
-            } else {
-                StatusDot(status: item?.status ?? (terminal.running ? .starting : .exited), attention: attention)
+            } else if StatusDot.isVisible(tabStatus, attention: attention) {
+                StatusDot(status: tabStatus, attention: attention)
+                    .transition(.scale(scale: 0.3).combined(with: .opacity))
             }
             Text(tabTitle)
                 .font(.system(size: 12))
@@ -741,6 +747,8 @@ struct TabButton: View {
             .opacity(hovering || selected ? 1 : 0)
             .help(model.sidebarVisible ? "Close tab — session keeps running (⌘W)" : "Close tab and end the session (⌘W)")
         }
+        // the title slides over when the dot comes and goes
+        .animation(.easeInOut(duration: 0.22), value: StatusDot.isVisible(tabStatus, attention: attention))
         .padding(.leading, 16).padding(.trailing, 10)
         .frame(height: topBarHeight)
         .background(selected ? SwiftUI.Color(nsColor: Theme.background) : (hovering ? SwiftUI.Color.primary.opacity(0.03) : .clear),
