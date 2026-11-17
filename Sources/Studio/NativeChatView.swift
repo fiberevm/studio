@@ -33,10 +33,8 @@ struct NativeChatView: View {
                 .onChange(of: chat.streaming) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
                 .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
             }
+            Hairline()
             composer
-                .padding(.horizontal, 16).padding(.bottom, 12).padding(.top, 4)
-                .frame(maxWidth: 892)
-                .frame(maxWidth: .infinity)
         }
         .font(mono)
         .background(SwiftUI.Color(nsColor: Theme.background))
@@ -123,9 +121,10 @@ struct NativeChatView: View {
                 .help(chat.busy && draft.isEmpty ? "Stop (esc)" : "Send (↵)")
             }
         }
-        .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 8)
-        .background(RoundedRectangle(cornerRadius: 12).fill(SwiftUI.Color(nsColor: Theme.chrome)))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(SwiftUI.Color(nsColor: Theme.paneDivider), lineWidth: 1))
+        // flat, edge to edge, in the chrome color — like VS Code's panels
+        .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SwiftUI.Color(nsColor: Theme.chrome))
     }
 
     private func send() {
@@ -335,7 +334,8 @@ struct MarkdownView: View {
     let text: String
     let size: CGFloat
 
-    enum Block: Hashable { case para(String), heading(String, Int), code(String, String), bullet(String, Int), rule }
+    enum Block: Hashable { case para(String), heading(String, Int), code(String, String), bullet(String, Int), rule,
+                           table(header: [String], rows: [[String]]) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -372,6 +372,34 @@ struct MarkdownView: View {
             .padding(.leading, CGFloat(indent) * 14)
         case .rule:
             SwiftUI.Color(nsColor: Theme.paneDivider).frame(height: 1)
+        case .table(let header, let rows):
+            let line = SwiftUI.Color(nsColor: Theme.paneDivider)
+            let cols = max(header.count, rows.map(\.count).max() ?? 0)
+            ScrollView(.horizontal, showsIndicators: false) {
+                Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
+                    GridRow {
+                        ForEach(0..<cols, id: \.self) { c in
+                            Text(inline(c < header.count ? header[c] : "")).bold()
+                                .padding(.horizontal, 10).padding(.vertical, 5)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(SwiftUI.Color(nsColor: Theme.foreground).opacity(0.06))
+                        }
+                    }
+                    line.frame(height: 1).gridCellUnsizedAxes(.horizontal)
+                    ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
+                        GridRow {
+                            ForEach(0..<cols, id: \.self) { c in
+                                Text(inline(c < row.count ? row[c] : ""))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .padding(.horizontal, 10).padding(.vertical, 5)
+                            }
+                        }
+                        if i < rows.count - 1 { line.opacity(0.6).frame(height: 1).gridCellUnsizedAxes(.horizontal) }
+                    }
+                }
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(line))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
         }
     }
 
@@ -385,6 +413,11 @@ struct MarkdownView: View {
         var code: [String]? = nil
         var lang = ""
         func flushPara() { if !para.isEmpty { out.append(.para(para.joined(separator: "\n"))); para = [] } }
+        var tableRows: [[String]]? = nil
+        func flushTable() {
+            if let t = tableRows, let h = t.first { out.append(.table(header: h, rows: Array(t.dropFirst()))) }
+            tableRows = nil
+        }
         for raw in text.components(separatedBy: "\n") {
             let line = raw
             let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -394,7 +427,17 @@ struct MarkdownView: View {
                 continue
             }
             if code != nil { code!.append(line); continue }
-            if trimmed.isEmpty { flushPara(); continue }
+            if trimmed.isEmpty { flushPara(); flushTable(); continue }
+            // GitHub tables: | a | b |, then |---|---|, then rows
+            if trimmed.hasPrefix("|") {
+                flushPara()
+                let cells = Self.cells(trimmed)
+                if tableRows == nil { tableRows = [cells] }
+                else if cells.allSatisfy({ $0.range(of: #"^:?-{2,}:?$"#, options: .regularExpression) != nil }) { continue }
+                else { tableRows!.append(cells) }
+                continue
+            }
+            flushTable()
             if trimmed.hasPrefix("#") {
                 let level = trimmed.prefix(while: { $0 == "#" }).count
                 flushPara(); out.append(.heading(trimmed.dropFirst(level).trimmingCharacters(in: .whitespaces), level)); continue
@@ -412,7 +455,15 @@ struct MarkdownView: View {
         }
         if let c = code { out.append(.code(lang, c.joined(separator: "\n"))) }
         flushPara()
+        flushTable()
         return out
+    }
+
+    private static func cells(_ row: String) -> [String] {
+        var r = row
+        if r.hasPrefix("|") { r.removeFirst() }
+        if r.hasSuffix("|") { r.removeLast() }
+        return r.components(separatedBy: "|").map { $0.trimmingCharacters(in: .whitespaces) }
     }
 }
 
