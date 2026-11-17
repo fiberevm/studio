@@ -92,6 +92,15 @@ struct ProjectView: View {
                 }
             }
         }
+        .overlay(alignment: .top) {
+            if model.quickPrompt {
+                ZStack(alignment: .top) {
+                    SwiftUI.Color.black.opacity(0.001)
+                        .onTapGesture { model.quickPrompt = false; model.focusTerminal() }
+                    QuickPrompt().padding(.top, 34)
+                }
+            }
+        }
         .overlay(alignment: .bottom) {
             if let toast = model.toast {
                 Text(toast).font(.system(size: 12))
@@ -117,6 +126,10 @@ struct ProjectView: View {
             // debug/screenshot aid: split the last tab off to the right
             if CommandLine.arguments.contains("--split-demo"), let t = model.tabs.last, model.tabs.count > 1 {
                 model.move(t.id, to: model.activeGroup, zone: .right)
+            }
+            // debug: open ⌘K once a Claude session is running in this window
+            if CommandLine.arguments.contains("--quick-demo") {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 9) { if !model.tabs.isEmpty { model.quickPrompt = true } }
             }
             // debug/screenshot aid: keep the first tab's peek card open
             if CommandLine.arguments.contains("--peek-demo") {

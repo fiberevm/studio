@@ -132,6 +132,21 @@ final class ProjectModel: ObservableObject {
 
     func newTab() { select(store.newSession(in: folder)) }
 
+    /// ⌘K quick prompt is open.
+    @Published var quickPrompt = false
+
+    /// Sessions ⌘K can message: the current one first, then this window's tabs, then other projects'.
+    var quickTargets: [TerminalSession] {
+        let claude = store.terminals.filter { !$0.isShell && $0.running }
+        let mine = tabs.filter { !$0.isShell && $0.running }
+        var out: [TerminalSession] = []
+        if let cur = selectedTerminal, !cur.isShell, cur.running { out.append(cur) }
+        for t in mine + claude where !out.contains(where: { $0 === t }) { out.append(t) }
+        return out
+    }
+
+    func title(of t: TerminalSession) -> String { item(for: t)?.title ?? "New session" }
+
     /// Short message shown at the bottom of the window ("All caught up").
     @Published var toast: String?
     /// Tab whose peek card is showing (hover).
@@ -431,8 +446,13 @@ final class ProjectModel: ObservableObject {
         func encode(_ n: LayoutNode) -> SavedLayout? {
             switch n {
             case .group(let g):
-                let sids = g.tabIds.compactMap { terminal($0)?.sessionId }
-                let sel = selectedTerminal(in: g)?.sessionId
+                // Claude tabs are saved by session id; plain terminals as "shell:<cwd>" and reopened fresh.
+                func token(_ t: TerminalSession?) -> String? {
+                    guard let t else { return nil }
+                    return t.isShell ? "shell:" + t.cwd : t.sessionId
+                }
+                let sids = g.tabIds.compactMap { token(terminal($0)) }
+                let sel = token(selectedTerminal(in: g))
                 return .group(tabs: sids, selected: sel, active: g.id == activeGroupId)
             case .split(let box):
                 let kids = zip(box.children, box.fractions).compactMap { c, f in encode(c).map { ($0, Double(f)) } }
@@ -460,11 +480,21 @@ final class ProjectModel: ObservableObject {
         func build(_ s: SavedLayout) -> LayoutNode? {
             switch s {
             case .group(let sids, let sel, let isActive):
-                let ts = sids.compactMap { sid in mine.first { $0.sessionId == sid && !used.contains($0.id) } }
-                guard !ts.isEmpty else { return nil }
+                var selected: TerminalSession?
+                let ts: [TerminalSession] = sids.compactMap { sid in
+                    let t: TerminalSession?
+                    if sid.hasPrefix("shell:") {
+                        let cwd = String(sid.dropFirst(6))
+                        t = store.newShell(in: FileManager.default.fileExists(atPath: cwd) ? cwd : folder)
+                    } else {
+                        t = mine.first { $0.sessionId == sid && !used.contains($0.id) }
+                    }
+                    if let t, sid == sel, selected == nil { selected = t }
+                    return t
+                }
                 ts.forEach { used.insert($0.id) }
-                let selected = ts.first { $0.sessionId == sel } ?? ts[0]
-                let g = GroupNode(tabIds: ts.map(\.id), selection: "t:\(selected.id)")
+                // an empty pane was kept on purpose (closing its last tab leaves it), so it comes back empty
+                let g = GroupNode(tabIds: ts.map(\.id), selection: (selected ?? ts.first).map { "t:\($0.id)" })
                 if isActive { active = g.id }
                 return .group(g)
             case .split(let horizontal, let fractions, let children):

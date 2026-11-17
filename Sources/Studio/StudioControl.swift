@@ -195,6 +195,13 @@ final class StudioControl {
             t.type(cmd + ((p["press_enter"] as? Bool ?? true) ? "\r" : ""))
             return "sent"
 
+        case "send_to_session":
+            let t = try tab(defaultToCaller: false)
+            guard !t.isShell else { throw ControlError(message: "send_to_session is for Claude sessions; use run_in_terminal for terminals") }
+            guard let text = p["text"] as? String, !text.isEmpty else { throw ControlError(message: "text is required") }
+            t.submit(text)
+            return "sent"
+
         case "split_tab":
             let t = try tab()
             guard let z = try zone("direction"), z != .center else { throw ControlError(message: "direction must be right, left, up or down") }

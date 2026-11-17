@@ -76,6 +76,16 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     /// Type text into the terminal as if the user had (used by the Studio MCP's run_in_terminal).
     func type(_ text: String) { view.send(txt: text) }
 
+    /// Type a message into Claude's prompt and press Return. The Return goes a beat later so Claude
+    /// doesn't treat it as part of a paste (which would add a newline instead of sending).
+    func submit(_ text: String) {
+        guard running else { return }
+        // Bracketed paste: Claude takes the whole text as one input, and characters like ! # ? / at the
+        // start aren't read as its shortcuts.
+        view.pasteText(text)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in self?.view.send(txt: "\r") }
+    }
+
     func terminate() {
         if running, pid > 0 { kill(pid, SIGHUP) }
     }

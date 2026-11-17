@@ -196,6 +196,7 @@ struct CommandPalette: View {
             cmd("Session: New Session", "⌘N", "plus") { m.newTab() },
             cmd("Terminal: New Terminal", "⌃`", "terminal") { m.newShellTab() },
             cmd("Session: Next Up (waiting for you)", "⌘J", "arrow.turn.down.right") { m.goToNextUp() },
+            cmd("Session: Quick Prompt…", "⌘K", "text.bubble") { m.quickPrompt = true },
             cmd("Session: Close Tab", "⌘W", "xmark") { m.closeSelectedTab() },
             cmd("View: Next Tab", "⌘]", "arrow.right") { m.cycleTab(1) },
             cmd("View: Previous Tab", "⌘[", "arrow.left") { m.cycleTab(-1) },
@@ -212,6 +213,14 @@ struct CommandPalette: View {
         if let t = m.selectedTerminal {
             list.insert(cmd("Session: End Session", "", "stop.circle") { m.endSession(t) }, at: 3)
         }
+        // Snippets go to the current session in one step; ⌘K offers them for any session or a broadcast.
+        if let t = m.selectedTerminal, !t.isShell {
+            for sn in Snippets.all {
+                list.append(Item(id: "snip:\(sn.name)", title: "Snippet: #\(sn.name)", subtitle: sn.text,
+                                 leading: .icon("text.quote"), run: { t.submit(sn.text) }))
+            }
+        }
+        list.append(cmd("Snippets: Edit…", "", "square.and.pencil") { NSWorkspace.shared.open(Snippets.file) })
         for r in RecentProjects.list() where r != m.folder {
             list.append(cmd("Project: Open \(projectName(for: r))", "", "folder") { openWindow(value: r) })
         }
