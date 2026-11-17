@@ -117,6 +117,8 @@ final class ProjectModel: ObservableObject {
 
     func newTab() { select(store.newSession(in: folder)) }
 
+    func newShellTab() { select(store.newShell(in: folder)) }
+
     func resume(_ sid: String) { select(store.resume(sid)) }
 
     func select(_ t: TerminalSession) { selection = "t:\(t.id)" }
@@ -129,17 +131,19 @@ final class ProjectModel: ObservableObject {
     }
 
     /// Close the tab only; the session keeps running and stays in the sidebar.
+    /// A plain terminal has nowhere else to live, so closing its tab ends it.
     func close(_ t: TerminalSession) {
         guard let g = group(containing: t.id) else { return }
         detach(t.id, from: g)
         if g.tabIds.isEmpty, groups.count > 1 { remove(g) }
+        if t.isShell { store.close(t) }
         changed()
     }
 
     /// Stop the claude process for good (it can still be resumed later with `claude --resume`).
     func endSession(_ t: TerminalSession) {
         close(t)
-        store.close(t)
+        if !t.isShell { store.close(t) }   // close() already ended a shell
     }
 
     func closeSelectedTab() { if let t = selectedTerminal { close(t) } }

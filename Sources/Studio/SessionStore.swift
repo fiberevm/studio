@@ -131,7 +131,7 @@ final class SessionStore: ObservableObject {
         }
 
         // Map in-app terminals to their claude session via pid. Handles /clear and /resume inside the session too.
-        for t in terminals where t.running {
+        for t in terminals where t.running && !t.isShell {
             if let info = byPid[t.pid], t.sessionId != info.sessionId {
                 if let previous = t.sessionId { forgotten.insert(previous) }   // e.g. after /clear
                 t.sessionId = info.sessionId
@@ -166,7 +166,7 @@ final class SessionStore: ObservableObject {
     var allActiveItems: [ActiveItem] {
         var items: [ActiveItem] = []
         var covered = Set<String>()
-        for t in terminals {
+        for t in terminals where !t.isShell {   // plain terminals aren't Claude sessions
             let sid = t.sessionId
             if let sid { covered.insert(sid) }
             let info = sid.flatMap { live[$0] }
@@ -288,6 +288,13 @@ final class SessionStore: ObservableObject {
 
     func newSession(in cwd: String) -> TerminalSession {
         let t = TerminalSession(cwd: cwd, claudeArgs: [], sessionId: nil, fontSize: fontSize)
+        add(t)
+        return t
+    }
+
+    /// A plain terminal (⌃`) in the folder; not a Claude session, so it isn't listed or restored.
+    func newShell(in cwd: String) -> TerminalSession {
+        let t = TerminalSession(cwd: cwd, claudeArgs: [], sessionId: nil, fontSize: fontSize, kind: .shell)
         add(t)
         return t
     }

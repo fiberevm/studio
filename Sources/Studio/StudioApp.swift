@@ -49,6 +49,9 @@ struct AppCommands: Commands {
             Button("New Session") { project?.newTab() }
                 .keyboardShortcut("n")
                 .disabled(project == nil)
+            Button("New Terminal") { project?.newShellTab() }
+                .keyboardShortcut("`", modifiers: .control)
+                .disabled(project == nil)
             Button("Open Project…") {
                 if let f = pickFolder(prompt: "Open", startingAt: project.map { ($0.folder as NSString).deletingLastPathComponent }) {
                     openWindow(value: f)

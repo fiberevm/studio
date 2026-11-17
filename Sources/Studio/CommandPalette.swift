@@ -174,6 +174,7 @@ struct CommandPalette: View {
             Item(id: "cmd:theme", title: "Preferences: Color Theme", detail: Theme.current.name,
                  leading: .icon("paintpalette"), run: { enterThemes() }),
             cmd("Session: New Session", "⌘N", "plus") { m.newTab() },
+            cmd("Terminal: New Terminal", "⌃`", "terminal") { m.newShellTab() },
             cmd("Session: Close Tab", "⌘W", "xmark") { m.closeSelectedTab() },
             cmd("View: Next Tab", "⌘]", "arrow.right") { m.cycleTab(1) },
             cmd("View: Previous Tab", "⌘[", "arrow.left") { m.cycleTab(-1) },

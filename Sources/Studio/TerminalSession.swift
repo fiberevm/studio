@@ -15,8 +15,13 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     let view: LocalProcessTerminalView
     private(set) var pid: Int32 = 0
     private let claudeArgs: [String]
+    /// .claude runs a Claude Code session; .shell is a plain terminal (⌃`), like VS Code's integrated terminal.
+    enum Kind { case claude, shell }
+    let kind: Kind
+    var isShell: Bool { kind == .shell }
 
-    init(cwd: String, claudeArgs: [String], sessionId: String?, fontSize: CGFloat = 12) {
+    init(cwd: String, claudeArgs: [String], sessionId: String?, fontSize: CGFloat = 12, kind: Kind = .claude) {
+        self.kind = kind
         self.cwd = cwd
         self.claudeArgs = claudeArgs
         self.sessionId = sessionId
@@ -31,13 +36,24 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
         view.font = Theme.font(size)
     }
 
-    private func start() { launch(claudeArgs) }
+    private func start() { if isShell { launchShell() } else { launch(claudeArgs) } }
+
+    /// The user's login shell, interactive (it's on a pty), in the project folder.
+    private func launchShell() {
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        let dir = FileManager.default.fileExists(atPath: cwd) ? cwd : NSHomeDirectory()
+        view.startProcess(executable: shell, args: ["-l"], environment: Self.childEnvironment(),
+                          execName: "-" + (shell as NSString).lastPathComponent, currentDirectory: dir)
+        pid = view.process.shellPid
+        running = true
+        exitCode = nil
+    }
 
     /// Restart after the process exited (e.g. user quit claude). Resumes the same conversation.
     func restart() {
         guard !running else { return }
         view.resetToInitialState()
-        launch(sessionId.map { ["--resume", $0] } ?? claudeArgs)
+        if isShell { launchShell() } else { launch(sessionId.map { ["--resume", $0] } ?? claudeArgs) }
     }
 
     private func launch(_ args: [String]) {

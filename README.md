@@ -27,6 +27,7 @@ Icon: `Resources/AppIcon.svg` → `scripts/make-icon.sh` regenerates `Resources/
 | ⌘P | Go to session: search running and past sessions in every project (type `>` for commands) |
 | ⇧⌘P | Command palette (incl. Preferences: Color Theme) |
 | ⌘N | New Claude session in this window's folder |
+| ⌃` | New terminal tab: your login shell in the folder, no Claude (closing it ends the shell) |
 | ⇧⌘N | Open another project window |
 | ⌘[ / ⌘] | Previous / next tab |
 | ⌘1…⌘9 | Jump to tab |

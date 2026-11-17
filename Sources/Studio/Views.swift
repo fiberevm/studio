@@ -92,6 +92,7 @@ struct ProjectView: View {
         .onAppear {
             if LaunchArgs.pendingNewSession { LaunchArgs.pendingNewSession = false; model.newTab() }
             if let sid = LaunchArgs.pendingResume { LaunchArgs.pendingResume = nil; model.resume(sid) }
+            if CommandLine.arguments.contains("--new-terminal") { model.newShellTab() }
             // debug/screenshot aid: split the last tab off to the right
             if CommandLine.arguments.contains("--split-demo"), let t = model.tabs.last, model.tabs.count > 1 {
                 model.move(t.id, to: model.activeGroup, zone: .right)
@@ -574,13 +575,25 @@ struct TabButton: View {
     @State private var hovering = false
 
     private var tabTitle: String {
-        let t = item?.title ?? "New session"
+        let t = terminal.isShell ? shellTitle : (item?.title ?? "New session")
         return t.count > 28 ? String(t.prefix(27)) + "…" : t
+    }
+
+    /// Shell tabs use the title the shell sets (OSC 0/2), else "zsh — folder".
+    private var shellTitle: String {
+        let t = terminal.terminalTitle.trimmingCharacters(in: .whitespaces)
+        if !t.isEmpty { return t }
+        let sh = ((ProcessInfo.processInfo.environment["SHELL"] ?? "zsh") as NSString).lastPathComponent
+        return "\(sh) — \(projectName(for: terminal.cwd))"
     }
 
     var body: some View {
         HStack(spacing: 8) {
-            StatusDot(status: item?.status ?? (terminal.running ? .starting : .exited))
+            if terminal.isShell {
+                Image(systemName: "terminal").font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 12)
+            } else {
+                StatusDot(status: item?.status ?? (terminal.running ? .starting : .exited))
+            }
             Text(tabTitle)
                 .font(.system(size: 12))
                 .foregroundStyle(selected && groupActive ? .primary : .secondary)
@@ -653,6 +666,7 @@ struct SessionStatusBar: View {
         let sid = terminal.sessionId
         let st = sid.flatMap { model.store.stats[$0] }
         HStack(spacing: 14) {
+            if terminal.isShell { stat("folder", abbreviatePath(terminal.cwd), help: "Started in") }
             if let b = st?.gitBranch { stat("arrow.triangle.branch", b, help: "Git branch") }
             if let m = st?.model { stat("cpu", prettyModel(m), help: "Model: \(m)") }
             if let st {
@@ -749,7 +763,7 @@ struct TerminalPane: View {
                 .padding(.leading, 8).padding(.trailing, 8).padding(.vertical, 4)
             if !terminal.running {
                 VStack(spacing: 10) {
-                    Text("Claude exited\(terminal.exitCode.map { " (code \($0))" } ?? "")")
+                    Text("\(terminal.isShell ? "Shell" : "Claude") exited\(terminal.exitCode.map { " (code \($0))" } ?? "")")
                         .font(.headline)
                     HStack {
                         Button("Restart") { terminal.restart() }.keyboardShortcut(.defaultAction)
@@ -768,40 +782,59 @@ struct TerminalPane: View {
 }
 
 /// Hosts a long-lived SwiftTerm view inside SwiftUI without recreating it.
+///
+/// SwiftUI may create a pane's container more than once and discard some, and during a re-layout the old
+/// container lingers briefly. So a container takes the terminal when it's created, and reclaims it later only
+/// if the terminal isn't on screen (orphaned or left inside a discarded container). Never steal from a live one.
 struct TerminalHost: NSViewRepresentable {
     let view: LocalProcessTerminalView
 
-    func makeNSView(context: Context) -> NSView {
-        let container = NSView()
-        attach(to: container)
-        return container
-    }
+    final class Container: NSView {
+        weak var terminal: LocalProcessTerminalView?
 
-    func updateNSView(_ container: NSView, context: Context) {
-        // Only adopt an orphaned view. When the layout changes, SwiftUI briefly keeps the old container alive;
-        // stealing the view back into it would leave the new pane blank.
-        if view.superview == nil { attach(to: container) }
-    }
-
-    private func attach(to container: NSView) {
-        container.subviews.forEach { $0.removeFromSuperview() }
-        view.removeFromSuperview()
-        view.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(view)
-        NSLayoutConstraint.activate([
-            view.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            view.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            view.topAnchor.constraint(equalTo: container.topAnchor),
-            view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-        ])
-        view.needsLayout = true
-        view.needsDisplay = true
-        DispatchQueue.main.async { [view] in
-            view.needsDisplay = true
-            if view.window?.firstResponder == nil || view.window?.firstResponder === view.window {
-                view.window?.makeFirstResponder(view)
+        func adopt() {
+            guard let t = terminal, t.superview !== self else { return }
+            subviews.forEach { $0.removeFromSuperview() }
+            t.removeFromSuperview()
+            t.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(t)
+            NSLayoutConstraint.activate([
+                t.leadingAnchor.constraint(equalTo: leadingAnchor),
+                t.trailingAnchor.constraint(equalTo: trailingAnchor),
+                t.topAnchor.constraint(equalTo: topAnchor),
+                t.bottomAnchor.constraint(equalTo: bottomAnchor),
+            ])
+            t.needsLayout = true
+            t.needsDisplay = true
+            DispatchQueue.main.async { [weak t] in
+                guard let t, let w = t.window else { return }
+                t.needsDisplay = true
+                if w.firstResponder == nil || w.firstResponder === w { w.makeFirstResponder(t) }
             }
         }
+
+        /// Reclaim the terminal if it isn't on screen anywhere.
+        func adoptIfOrphaned() {
+            guard window != nil, let t = terminal, t.superview !== self else { return }
+            if t.superview == nil || t.window == nil { adopt() }
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            adoptIfOrphaned()
+        }
+    }
+
+    func makeNSView(context: Context) -> Container {
+        let c = Container()
+        c.terminal = view
+        c.adopt()
+        return c
+    }
+
+    func updateNSView(_ c: Container, context: Context) {
+        if c.terminal !== view { c.terminal = view; c.adopt() }
+        else { c.adoptIfOrphaned() }
     }
 }
 
@@ -898,6 +931,8 @@ struct WindowConfigurator: NSViewRepresentable {
             w.titlebarSeparatorStyle = .none
             w.toolbar = nil
             w.tabbingMode = .disallowed
+            // preview/screenshot aid: show the window without activating the app (keyboard focus stays put)
+            if CommandLine.arguments.contains("--order-front") { w.orderFrontRegardless() }
         }
     }
     func makeNSView(context: Context) -> NSView { Probe() }
