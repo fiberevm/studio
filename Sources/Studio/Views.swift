@@ -426,20 +426,33 @@ struct NeedsYouDot: View {
     }
 }
 
-/// Claude Code's "thinking" glyph: a star that grows and shrinks through dingbat frames, in Claude orange.
+/// Studio's working indicator: a 2×2 grid of panes with the focus walking around it clockwise,
+/// leaving a fading trail, like focus moving between split panes.
 struct ClaudeSpinner: View {
     var size: CGFloat = 12
-    // \u{FE0E} keeps ✳ from rendering as an emoji.
-    private static let frames = ["·", "✢", "✳\u{FE0E}", "✶", "✻", "✽", "✻", "✶", "✳\u{FE0E}", "✢"]
-    static let orange = SwiftUI.Color(red: 0.85, green: 0.47, blue: 0.34)
+    static let orange = SwiftUI.Color(red: 0.91, green: 0.53, blue: 0.33)
+    private static let order = [0, 1, 3, 2]   // top-left → top-right → bottom-right → bottom-left
+    private static let step = 0.16
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 0.11)) { ctx in
-            let i = Int(ctx.date.timeIntervalSinceReferenceDate / 0.11) % Self.frames.count
-            Text(Self.frames[i])
-                .font(.system(size: size, weight: .semibold))
-                .foregroundStyle(Self.orange)
-                .frame(width: size, height: size)
+        TimelineView(.periodic(from: .now, by: Self.step)) { ctx in
+            let tick = Int(ctx.date.timeIntervalSinceReferenceDate / Self.step)
+            let cell = (size - 2) / 2
+            let base = SwiftUI.Color(nsColor: Theme.foreground)
+            VStack(spacing: 2) {
+                ForEach(0..<2) { r in
+                    HStack(spacing: 2) {
+                        ForEach(0..<2) { c in
+                            let pos = Self.order.firstIndex(of: r * 2 + c)!
+                            let age = (tick - pos) % 4 + (tick - pos < 0 ? 4 : 0)   // 0 = lit now
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(age == 0 ? Self.orange : age == 1 ? Self.orange.opacity(0.45) : base.opacity(0.16))
+                                .frame(width: cell, height: cell)
+                        }
+                    }
+                }
+            }
+            .frame(width: size, height: size)
         }
     }
 }
