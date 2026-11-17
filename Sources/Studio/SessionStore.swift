@@ -257,10 +257,15 @@ final class SessionStore: ObservableObject {
         var seen: [String] = []
         for e in savedTerminals() {
             guard let cwd = e["cwd"] else { continue }
-            let root = projectRoot(cwd)
+            let root = home(of: e, cwd: cwd)
             if !seen.contains(root) && !restoredFolders.contains(root) { seen.append(root) }
         }
         return seen
+    }
+
+    /// The window a saved tab reopens in: the one whose saved layout lists it, else its project root.
+    private func home(of e: [String: String], cwd: String) -> String {
+        e["sid"].flatMap(SavedLayout.owner(of:)) ?? projectRoot(cwd)
     }
 
     private func savedTerminals() -> [[String: String]] {
@@ -276,7 +281,8 @@ final class SessionStore: ObservableObject {
         refreshLive()
         var out: [TerminalSession] = []
         for e in savedTerminals() {
-            guard let sid = e["sid"], let cwd = e["cwd"], isInside(cwd, folder),
+            // Only this window's own sessions: a window for ~ must not swallow every project under it.
+            guard let sid = e["sid"], let cwd = e["cwd"], home(of: e, cwd: cwd) == folder,
                   live[sid] == nil,                                   // running elsewhere → leave it
                   !terminals.contains(where: { $0.sessionId == sid }) else { continue }
             guard Self.transcriptExists(sid) else { forgotten.insert(sid); continue } // never prompted

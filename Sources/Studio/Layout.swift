@@ -80,6 +80,23 @@ indirect enum SavedLayout: Codable {
         return try? JSONDecoder().decode(SavedLayout.self, from: data)
     }
 
+    /// Every tab token in this layout (session ids, and "shell:<cwd>" for terminals).
+    var tabs: [String] {
+        switch self {
+        case .group(let t, _, _): return t
+        case .split(_, _, let children): return children.flatMap(\.tabs)
+        }
+    }
+
+    /// Which window a saved session belongs to: the folder whose saved layout lists it, if any.
+    static func owner(of sid: String) -> String? {
+        for (k, v) in UserDefaults.standard.dictionaryRepresentation() where k.hasPrefix("layout:") {
+            guard let data = v as? Data, let l = try? JSONDecoder().decode(SavedLayout.self, from: data) else { continue }
+            if l.tabs.contains(sid) { return String(k.dropFirst("layout:".count)) }
+        }
+        return nil
+    }
+
     func save(_ folder: String) {
         if let data = try? JSONEncoder().encode(self) { UserDefaults.standard.set(data, forKey: Self.key(folder)) }
     }
