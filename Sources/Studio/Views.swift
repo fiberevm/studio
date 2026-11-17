@@ -800,7 +800,56 @@ struct TerminalHost: NSViewRepresentable {
     let view: LocalProcessTerminalView
 
     @MainActor final class Container: NSView {
-        weak var terminal: LocalProcessTerminalView?
+        weak var terminal: LocalProcessTerminalView? {
+            didSet { registerForDraggedTypes([.fileURL, .png, .tiff]) }
+        }
+
+        // MARK: File & image drops — type the paths like Terminal.app, so Claude Code attaches images.
+        // (Tab drags carry plain text, which this doesn't accept, so they still reach the split drop zones.)
+
+        override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+            Self.hasDroppable(sender.draggingPasteboard) ? .copy : []
+        }
+
+        override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+            Self.hasDroppable(sender.draggingPasteboard) ? .copy : []
+        }
+
+        override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+            let paths = Self.droppedPaths(sender.draggingPasteboard)
+            guard let t = terminal, !paths.isEmpty else { return false }
+            // As a paste (bracketed when the app asked for it), like Terminal.app, so Claude Code turns an
+            // image path into an attachment instead of seeing typed characters.
+            t.pasteText(paths.map(Self.escapePath).joined(separator: " ") + " ")
+            window?.makeFirstResponder(t)
+            return true
+        }
+
+        private static func hasDroppable(_ pb: NSPasteboard) -> Bool {
+            pb.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
+                || pb.canReadObject(forClasses: [NSImage.self], options: nil)
+        }
+
+        /// File URLs as-is; raw image data (e.g. dragged from a browser) is written to a temp PNG first.
+        private static func droppedPaths(_ pb: NSPasteboard) -> [String] {
+            if let urls = pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL],
+               !urls.isEmpty {
+                return urls.map(\.path)
+            }
+            guard let img = (pb.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage])?.first,
+                  let tiff = img.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff),
+                  let png = rep.representation(using: .png, properties: [:]) else { return [] }
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("StudioDrops", isDirectory: true)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let url = dir.appendingPathComponent("dropped-\(Int(Date().timeIntervalSince1970 * 1000)).png")
+            return (try? png.write(to: url)) != nil ? [url.path] : []
+        }
+
+        /// Backslash-escape shell-special characters, as Terminal.app does for dropped paths.
+        private static func escapePath(_ p: String) -> String {
+            let special = Set(" \t\\'\"()[]{}&;|<>*?$`!#~")
+            return String(p.flatMap { special.contains($0) ? ["\\", $0] : [$0] })
+        }
         private static var owners: [ObjectIdentifier: WeakContainer] = [:]
         private struct WeakContainer { weak var c: Container? }
 
