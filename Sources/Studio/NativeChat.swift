@@ -31,6 +31,14 @@ final class NativeChat: ObservableObject {
     @Published private(set) var streaming = ""
 
     var pendingPermission: Bool { items.contains { if case .permission = $0.kind { return $0.decided == nil }; return false } }
+    /// What Claude is doing right now (for the tab icon).
+    var activity: Activity? {
+        guard busy else { return nil }
+        if !streaming.isEmpty { return .writing }
+        if let last = items.last, case .tool(_, let name, _) = last.kind, last.output == nil { return .tool(name) }
+        return .thinking
+    }
+
     var status: SessionStatus { exited ? .exited : pendingPermission ? .waiting : busy ? .working : .idle }
 
     let cwd: String

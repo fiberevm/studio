@@ -14,6 +14,7 @@ struct ActiveItem: Identifiable, Hashable {
     let pid: Int32?
     let startedAt: Date
     let updatedAt: Date
+    var activity: Activity? = nil
     var id: String { key }
 }
 
@@ -201,7 +202,8 @@ final class SessionStore: ObservableObject {
                 title: title(rec: rec, info: info, fallback: "New session"),
                 cwd: info?.cwd ?? rec?.cwd ?? t.cwd,
                 status: status, inApp: true, entrypoint: "studio", pid: t.pid,
-                startedAt: t.createdAt, updatedAt: info?.updatedAt ?? t.createdAt))
+                startedAt: t.createdAt, updatedAt: info?.updatedAt ?? t.createdAt,
+                activity: t.native.map { $0.activity } ?? Self.activity(status, rec)))
         }
         for (sid, info) in live where !covered.contains(sid) {
             let rec = records[sid]
@@ -210,9 +212,19 @@ final class SessionStore: ObservableObject {
                 title: title(rec: rec, info: info, fallback: "New session"),
                 cwd: info.cwd, status: SessionStatus(raw: info.status), inApp: false,
                 entrypoint: info.entrypoint, pid: info.pid,
-                startedAt: info.startedAt, updatedAt: info.updatedAt))
+                startedAt: info.startedAt, updatedAt: info.updatedAt,
+                activity: Self.activity(SessionStatus(raw: info.status), rec)))
         }
         return items.sorted { $0.startedAt > $1.startedAt }
+    }
+
+    /// Only a working session has an activity; "shell" status means Claude is running a command.
+    static func activity(_ s: SessionStatus, _ rec: SessionRecord?) -> Activity? {
+        switch s {
+        case .shell: return .tool("Bash")
+        case .working: return rec?.activity ?? .thinking
+        default: return nil
+        }
     }
 
     func title(rec: SessionRecord?, info: LiveInfo?, fallback: String) -> String {

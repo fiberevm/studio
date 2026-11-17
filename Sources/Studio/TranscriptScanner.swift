@@ -51,6 +51,8 @@ final class TranscriptScanner {
         var cwd: String?
         var aiTitle: String?, customTitle: String?, agentName: String?
         var firstPrompt: String?, lastPrompt: String?, lastReply: String?
+        var activity: Activity?
+        var openTools: [(id: String, name: String)] = []   // tool calls still waiting for their result
         var lastTimestamp: Date?
 
         func visit(_ data: Data, isHead: Bool) {
@@ -69,9 +71,27 @@ final class TranscriptScanner {
                         lastPrompt = text
                         lastReply = nil   // a reply older than the latest prompt is stale
                     }
+                    // a prompt or a tool result just went in: Claude is thinking about it
+                    if obj["isMeta"] as? Bool != true { activity = .thinking }
+                    if let blocks = (obj["message"] as? [String: Any])?["content"] as? [[String: Any]] {
+                        let done = Set(blocks.compactMap { $0["tool_use_id"] as? String })
+                        openTools.removeAll { done.contains($0.id) }
+                    }
+                    if promptText(obj) != nil { openTools.removeAll() }
                 case "assistant":
                     if obj["isSidechain"] as? Bool == true { break }
                     if let text = replyText(obj) { lastReply = text }
+                    if let blocks = (obj["message"] as? [String: Any])?["content"] as? [[String: Any]], let last = blocks.last {
+                        switch last["type"] as? String {
+                        case "tool_use":
+                            let name = last["name"] as? String ?? "tool"
+                            activity = .tool(name)
+                            if let id = last["id"] as? String { openTools.append((id, name)) }
+                        case "text": activity = .writing
+                        case "thinking": activity = .thinking
+                        default: break
+                        }
+                    }
                 default: break
                 }
                 if let ts = obj["timestamp"] as? String, let d = Self.iso.date(from: ts) { lastTimestamp = d }
@@ -79,6 +99,9 @@ final class TranscriptScanner {
         }
         visit(head, isHead: true)
         if !tail.isEmpty { visit(tail, isHead: false) }
+        // Parallel tool calls: results are recorded in call order, so the oldest unfinished call is the one
+        // holding things up (e.g. a long Bash while a quick Read already returned).
+        if let open = openTools.first { activity = .tool(open.name) }
 
         guard let cwd else { return nil }
         // Skip sessions that never had a real prompt (e.g. aborted startups)
@@ -86,7 +109,7 @@ final class TranscriptScanner {
         return SessionRecord(
             id: sessionId, cwd: cwd,
             title: customTitle ?? agentName ?? aiTitle,
-            firstPrompt: firstPrompt, lastPrompt: lastPrompt, lastReply: lastReply,
+            firstPrompt: firstPrompt, lastPrompt: lastPrompt, lastReply: lastReply, activity: activity,
             lastActivity: lastTimestamp ?? mtime,
             transcriptPath: path)
     }

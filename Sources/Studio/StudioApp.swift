@@ -3,7 +3,8 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)   // needed when run as a bare SwiftPM executable
-        NSApp.activate(ignoringOtherApps: true)
+        // A background preview copy (--order-front, launched with `open -g`) must never take focus.
+        if !CommandLine.arguments.contains("--order-front") { NSApp.activate(ignoringOtherApps: true) }
         NSWindow.allowsAutomaticWindowTabbing = false
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }

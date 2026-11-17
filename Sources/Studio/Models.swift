@@ -8,6 +8,7 @@ struct SessionRecord: Identifiable, Hashable, Equatable {
     var firstPrompt: String?
     var lastPrompt: String?
     var lastReply: String?      // Claude's last text message, for the tab peek
+    var activity: Activity?     // what the transcript's last entry says Claude is doing
     var lastActivity: Date
     var transcriptPath: String
 
@@ -29,6 +30,41 @@ struct LiveInfo: Hashable {
     let entrypoint: String?     // cli | claude-desktop | ...
     let startedAt: Date
     let updatedAt: Date
+}
+
+/// What a working session is doing right now, shown as its tab icon.
+enum Activity: Hashable {
+    case thinking
+    case writing
+    case tool(String)
+
+    /// SF Symbol for the activity.
+    var symbol: String {
+        switch self {
+        case .thinking: return "sparkles"
+        case .writing: return "text.cursor"
+        case .tool(let name):
+            if name.hasPrefix("mcp__") { return "powerplug" }
+            switch name {
+            case "Bash", "BashOutput", "KillShell", "Monitor": return "terminal"
+            case "Edit", "Write", "MultiEdit", "NotebookEdit": return "pencil"
+            case "Read", "NotebookRead": return "doc.text"
+            case "Grep", "Glob", "LSP": return "magnifyingglass"
+            case "WebFetch", "WebSearch": return "globe"
+            case "Task", "Agent": return "person.2"
+            case "TodoWrite": return "checklist"
+            default: return "wrench.and.screwdriver"
+            }
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .thinking: return "Thinking"
+        case .writing: return "Writing"
+        case .tool(let n): return n.hasPrefix("mcp__") ? "Using " + (n.split(separator: "_").last.map(String.init) ?? n) : "Running \(n)"
+        }
+    }
 }
 
 enum SessionStatus: Hashable {

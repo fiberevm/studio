@@ -170,7 +170,7 @@ struct QuickPrompt: View {
                 .foregroundStyle(on ? SwiftUI.Color(nsColor: Theme.accent) : .secondary)
                 .onTapGesture { toggle(t.id) }
             StatusDot(status: item?.status ?? .starting,
-                      attention: t.sessionId.map(model.store.attention.contains) ?? false)
+                      attention: t.sessionId.map(model.store.attention.contains) ?? false, activity: item?.activity)
             Text(model.title(of: t)).font(.system(size: 13)).lineLimit(1)
             if t.id == model.selectedTerminal?.id {
                 Text("current").font(.system(size: 11)).foregroundStyle(.secondary)

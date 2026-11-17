@@ -365,7 +365,7 @@ struct SessionRow: View {
                     .foregroundStyle(pr.state.color)
                     .help("PR #\(pr.number) \(pr.state.rawValue): \(pr.title)")
             }
-            StatusDot(status: item.status, attention: attention)
+            StatusDot(status: item.status, attention: attention, activity: item.activity)
         }
         .padding(.leading, 16).padding(.trailing, 12)
         .frame(height: 28)
@@ -385,22 +385,39 @@ struct StatusDot: View {
 
     /// Ready-and-read sessions show nothing; callers can drop the dot's space entirely.
     static func isVisible(_ s: SessionStatus, attention: Bool) -> Bool { !(s == .idle && !attention) }
+    /// What it's doing when working (thinking, a tool…): shown as an icon instead of a dot.
+    var activity: Activity? = nil
+
     var body: some View {
         Group {
             switch status {
-            case .working, .starting:
+            case .starting:
                 ClaudeSpinner()
+            case .working, .shell:
+                icon(activity?.symbol ?? (status == .shell ? "terminal" : "sparkles"), ClaudeSpinner.orange, pulse: true)
+                    .help(activity?.label ?? status.label)
             case .waiting:
-                NeedsYouDot()
+                icon("hand.raised.fill", NeedsYouDot.red, pulse: true).help("Needs you")
             case .idle:
-                if attention { Circle().fill(SwiftUI.Color(nsColor: Theme.accent)).frame(width: 7, height: 7) }
-                else { SwiftUI.Color.clear }   // ready is the quiet default: no dot
+                if attention { icon("checkmark", SwiftUI.Color(nsColor: Theme.accent)).help("Finished while you were away") }
+                else { SwiftUI.Color.clear }   // ready and read: nothing
+            case .exited:
+                icon("stop.circle", .gray).help("Exited")
             default:
                 Circle().fill(color).frame(width: 7, height: 7)
             }
         }
-        .frame(width: 12, height: 12)
+        .frame(width: 14, height: 12)
     }
+
+    private func icon(_ name: String, _ color: SwiftUI.Color, pulse: Bool = false) -> some View {
+        Image(systemName: name)
+            .font(.system(size: 10.5, weight: .semibold))
+            .foregroundStyle(color)
+            .symbolEffect(.pulse, options: .repeating, isActive: pulse)
+            .contentTransition(.symbolEffect(.replace))
+    }
+
     var color: SwiftUI.Color {
         switch status {
         case .idle: return .green
@@ -733,7 +750,7 @@ struct TabButton: View {
             if terminal.isShell {
                 Image(systemName: "terminal").font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 12)
             } else if StatusDot.isVisible(tabStatus, attention: attention) {
-                StatusDot(status: tabStatus, attention: attention)
+                StatusDot(status: tabStatus, attention: attention, activity: item?.activity)
                     .transition(.scale(scale: 0.3).combined(with: .opacity))
             }
             Text(tabTitle)
@@ -815,7 +832,7 @@ struct PeekCard: View {
         let status = item?.status ?? (terminal.running ? .starting : .exited)
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                StatusDot(status: status, attention: sid.map(model.store.attention.contains) ?? false)
+                StatusDot(status: status, attention: sid.map(model.store.attention.contains) ?? false, activity: item?.activity)
                 Text(item?.title ?? "New session").font(.system(size: 12, weight: .semibold)).lineLimit(1)
                 Spacer(minLength: 8)
                 Text(statusLine(status, info: info)).font(.system(size: 11))
