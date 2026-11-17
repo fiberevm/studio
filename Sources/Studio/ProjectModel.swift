@@ -172,6 +172,15 @@ final class ProjectModel: ObservableObject {
 
     func newShellTab() { select(store.newShell(in: folder)) }
 
+    /// ⌘/: switch the session between Claude's terminal UI and Studio's native view.
+    func toggleNative(_ t: TerminalSession? = nil) {
+        guard let t = t ?? selectedTerminal, !t.isShell else { showToast("Select a Claude session"); return }
+        guard t.sessionId != nil else { showToast("Send a message first, then switch views"); return }
+        let goingNative = !t.isNative
+        t.toggleNative()
+        showToast(goingNative ? "Native view" : "Terminal view")
+    }
+
     /// ⌘E: fork a session into a new pane beside it, so you can try another direction without losing this one.
     func fork(_ t: TerminalSession? = nil, zone: DropZone = .right) {
         guard let t = t ?? selectedTerminal, !t.isShell else { showToast("Select a Claude session to fork"); return }

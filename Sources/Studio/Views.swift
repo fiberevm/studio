@@ -777,6 +777,7 @@ struct TabButton: View {
         .onDrag { model.peekTab = nil; return TabDrag.provider(terminal) }
         .contextMenu {
             if !terminal.isShell {
+                Button(terminal.isNative ? "Switch to Terminal View" : "Switch to Native View") { model.toggleNative(terminal) }
                 Button("Fork Session to the Right") { model.fork(terminal) }
                 Button("Fork Session Below") { model.fork(terminal, zone: .bottom) }
                 Divider()
@@ -974,6 +975,9 @@ struct TerminalPane: View {
 
     var body: some View {
         VStack(spacing: 0) {
+        if let chat = terminal.native {
+            NativeChatView(chat: chat).id(ObjectIdentifier(chat))
+        } else {
         ZStack {
             TerminalHost(view: terminal.view)
                 .padding(.leading, 8).padding(.trailing, 8).padding(.vertical, 4)
@@ -990,6 +994,7 @@ struct TerminalPane: View {
                 .background(SwiftUI.Color(nsColor: Theme.chrome))
                 .overlay(Rectangle().stroke(SwiftUI.Color(nsColor: Theme.border)))
             }
+        }
         }
             Hairline()
             SessionStatusBar(terminal: terminal)

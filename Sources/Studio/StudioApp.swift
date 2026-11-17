@@ -11,8 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Quit only once every session has actually exited. Otherwise a quick relaunch sees them still running,
     /// takes them for sessions running elsewhere, and doesn't reopen their tabs.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        let pids = MainActor.assumeIsolated { SessionStore.current?.terminals.filter(\.running).map(\.pid) ?? [] }
-            .filter { $0 > 0 }
+        let pids = MainActor.assumeIsolated { SessionStore.current?.terminals.flatMap(\.livePids) ?? [] }
         guard !pids.isEmpty else { return .terminateNow }
         pids.forEach { kill($0, SIGHUP) }
         let deadline = Date().addingTimeInterval(6)
@@ -75,6 +74,9 @@ struct AppCommands: Commands {
                 .disabled(project == nil)
             Button("Fork Session to the Right") { project?.fork() }
                 .keyboardShortcut("e")
+                .disabled(project == nil)
+            Button("Toggle Native View") { project?.toggleNative() }
+                .keyboardShortcut("/")
                 .disabled(project == nil)
             Button("New Terminal") { project?.newShellTab() }
                 .keyboardShortcut("`", modifiers: .control)

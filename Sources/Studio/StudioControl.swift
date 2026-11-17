@@ -202,6 +202,14 @@ final class StudioControl {
             t.submit(text)
             return "sent"
 
+        case "set_view":
+            let t = try tab()
+            guard !t.isShell else { throw ControlError(message: "terminals have no native view") }
+            guard t.sessionId != nil else { throw ControlError(message: "the session needs a first message before switching views") }
+            let wantNative = (p["view"] as? String ?? "native") == "native"
+            if wantNative != t.isNative { t.toggleNative() }
+            return wantNative ? "switching to native view" : "switching to terminal view"
+
         case "fork_session":
             let t = try tab()
             guard !t.isShell, let sid = t.sessionId else { throw ControlError(message: "that tab isn't a Claude session with a conversation yet") }

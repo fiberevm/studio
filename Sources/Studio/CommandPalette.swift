@@ -198,6 +198,7 @@ struct CommandPalette: View {
             cmd("Session: Next Up (waiting for you)", "⌘J", "arrow.turn.down.right") { m.goToNextUp() },
             cmd("Session: Quick Prompt…", "⌘K", "text.bubble") { m.quickPrompt = true },
             cmd("Session: Fork to the Right", "⌘E", "arrow.triangle.branch") { m.fork() },
+            cmd("View: Toggle Native View (Studio rendering instead of the terminal UI)", "⌘/", "text.alignleft") { m.toggleNative() },
             cmd("Session: Close Tab", "⌘W", "xmark") { m.closeSelectedTab() },
             cmd("View: Next Tab", "⌘]", "arrow.right") { m.cycleTab(1) },
             cmd("View: Previous Tab", "⌘[", "arrow.left") { m.cycleTab(-1) },

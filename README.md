@@ -54,6 +54,7 @@ Everything here is about one thing: spending your attention only where a session
 | 🔴 | **Needs-you badge** | A pulsing red dot means Claude is blocked on you (permission, question). A blue dot means it finished while you were looking elsewhere. A walking pane-grid means it's working. Idle sessions stay quiet. |
 | 💬 | **Quick prompt** <kbd>⌘K</kbd> | Type a message and send it to any session without leaving the pane you're in. ↑↓ picks the session; the current one is first. |
 | 📣 | **Broadcast** | In <kbd>⌘K</kbd>, press <kbd>⇥</kbd> to tick several sessions and send them all the same message (*"rebase on main"*, *"run the tests"*). |
+| 🖋 | **Native view** <kbd>⌘/</kbd> | Swap any session from Claude Code's terminal UI to Studio's own rendering (`claude -p` streaming JSON): monospace conversation, tool calls with folded output, inline **Allow / Deny** for permissions, a real multi-line input (↵ send, ⇧↵ newline, esc interrupts). Same conversation, one process; the choice is remembered per session. Also in <kbd>⌘P</kbd> and the tab menu. |
 | 🍴 | **Fork** <kbd>⌘E</kbd> | Copy the current conversation into a new session in a split beside it, then take it a different direction. The original keeps going untouched. Also in the tab right-click menu (right or below). |
 | ✨ | **Start from a prompt** | <kbd>⌘↵</kbd> in <kbd>⌘K</kbd> starts a new session with your message already sent. |
 | 🧩 | **Snippets** | Reusable prompts: type `#` in <kbd>⌘K</kbd> (`#tests`, `#review`, `#pr`, `#rebase`, `#summary`, `#continue`), pick one in <kbd>⌘P</kbd> to send it to the current session, or press <kbd>⌘S</kbd> to save what you typed. Stored as plain JSON you can edit. |
@@ -103,6 +104,7 @@ open build/Studio.app --args --resume <session-id>        # resume a specific se
 | <kbd>⌘J</kbd> | Next up: the session that has waited longest for you |
 | <kbd>⌘K</kbd> | Quick prompt: message any session (or several) without switching |
 | <kbd>⌘E</kbd> | Fork the current session into a new pane to the right |
+| <kbd>⌘/</kbd> | Toggle native view (Studio renders the session) / terminal view |
 | <kbd>⌘T</kbd> or <kbd>⌘N</kbd> | New tab with a Claude session in this project |
 | <kbd>⌃`</kbd> | New terminal tab |
 | <kbd>⇧⌘N</kbd> | Open another project window |
@@ -122,7 +124,7 @@ watcher"*, or *"lay these out as a 2×2 grid"*.
 | Area | Tools |
 |---|---|
 | Inspect | `get_state`, `list_themes` |
-| Sessions & terminals | `new_session` (prompt, split, folder), `fork_session`, `new_terminal` (command, split), `run_in_terminal`, `send_to_session` |
+| Sessions & terminals | `new_session` (prompt, split, folder), `fork_session`, `set_view` (native / terminal), `new_terminal` (command, split), `run_in_terminal`, `send_to_session` |
 | Tabs | `split_tab`, `move_tab`, `focus_tab`, `close_tab`, `reorder_tab` |
 | Layout | `set_layout` (single / columns / rows / grid), `resize_pane`, `set_split_sizes`, `equalize_layout`, `merge_pane`, `focus_pane`, `set_sidebar` |
 | Appearance & navigation | `set_theme`, `set_font_size`, `open_palette`, `open_project` |

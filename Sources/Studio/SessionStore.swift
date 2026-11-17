@@ -193,7 +193,8 @@ final class SessionStore: ObservableObject {
             if let sid { covered.insert(sid) }
             let info = sid.flatMap { live[$0] }
             let rec = sid.flatMap { records[$0] }
-            let status: SessionStatus = !t.running ? .exited : (info.map { SessionStatus(raw: $0.status) } ?? .starting)
+            let status: SessionStatus = t.native?.status
+                ?? (!t.running ? .exited : (info.map { SessionStatus(raw: $0.status) } ?? .starting))
             items.append(ActiveItem(
                 key: "t:\(t.id)",
                 sessionId: sid,
@@ -286,7 +287,8 @@ final class SessionStore: ObservableObject {
                   live[sid] == nil,                                   // running elsewhere → leave it
                   !terminals.contains(where: { $0.sessionId == sid }) else { continue }
             guard Self.transcriptExists(sid) else { forgotten.insert(sid); continue } // never prompted
-            let t = TerminalSession(cwd: cwd, claudeArgs: ["--resume", sid], sessionId: sid, fontSize: fontSize)
+            let t = TerminalSession(cwd: cwd, claudeArgs: ["--resume", sid], sessionId: sid, fontSize: fontSize,
+                                    native: TerminalSession.nativeSessions.contains(sid))
             add(t)
             out.append(t)
         }
@@ -309,7 +311,8 @@ final class SessionStore: ObservableObject {
     func resume(_ sid: String) -> TerminalSession {
         if let t = terminals.first(where: { $0.sessionId == sid }) { return t }
         let cwd = records[sid]?.cwd ?? live[sid]?.cwd ?? NSHomeDirectory()
-        let t = TerminalSession(cwd: cwd, claudeArgs: ["--resume", sid], sessionId: sid, fontSize: fontSize)
+        let t = TerminalSession(cwd: cwd, claudeArgs: ["--resume", sid], sessionId: sid, fontSize: fontSize,
+                                native: TerminalSession.nativeSessions.contains(sid))
         add(t)
         return t
     }

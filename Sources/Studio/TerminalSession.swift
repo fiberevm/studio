@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftTerm
 
 /// One embedded terminal running a `claude` process. Kept alive while the app runs,
@@ -20,7 +21,8 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     let kind: Kind
     var isShell: Bool { kind == .shell }
 
-    init(cwd: String, claudeArgs: [String], sessionId: String?, fontSize: CGFloat = 12, kind: Kind = .claude) {
+    init(cwd: String, claudeArgs: [String], sessionId: String?, fontSize: CGFloat = 12, kind: Kind = .claude,
+         native: Bool = false) {
         self.kind = kind
         self.cwd = cwd
         self.claudeArgs = claudeArgs
@@ -29,7 +31,51 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
         super.init()
         Theme.apply(to: view, fontSize: fontSize)
         view.processDelegate = self
-        start()
+        if native, kind == .claude, let sid = sessionId { startNative(sid) } else { start() }
+    }
+
+    // MARK: Native (non-TUI) mode
+
+    /// When set, this tab shows Studio's own rendering of the conversation (`claude -p`) instead of the TUI.
+    @Published private(set) var native: NativeChat?
+    private var switchingToNative = false
+    var isNative: Bool { native != nil }
+
+    /// Sessions the user switched to native mode, remembered across launches.
+    static var nativeSessions: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: "nativeSessions") ?? []) }
+        set { UserDefaults.standard.set(Array(newValue), forKey: "nativeSessions") }
+    }
+
+    /// ⌘\: swap between Claude's terminal UI and the native view. Only one claude process ever runs
+    /// for the conversation: the old one is stopped and the new one resumes it.
+    func toggleNative() {
+        guard !isShell else { return }
+        if let n = native {
+            n.stop()
+            native = nil
+            if let sid = n.sessionId ?? sessionId { sessionId = sid; Self.nativeSessions.remove(sid) }
+            running = false
+            restart()
+        } else {
+            guard let sid = sessionId else { return }
+            Self.nativeSessions.insert(sid)
+            if running { switchingToNative = true; kill(pid, SIGHUP) } else { startNative(sid) }
+        }
+    }
+
+    private func startNative(_ sid: String) {
+        let chat = NativeChat(cwd: cwd, tab: id, resume: sid)
+        chat.onSessionId = { [weak self] s in self?.sessionId = s }
+        native = chat
+        nativeObserver = chat.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
+    }
+    private var nativeObserver: Any?
+
+    /// Process ids this tab owns right now (for quitting cleanly).
+    var livePids: [Int32] {
+        if let n = native { return n.exited || n.pid <= 0 ? [] : [n.pid] }
+        return running && pid > 0 ? [pid] : []
     }
 
     func setFontSize(_ size: CGFloat) {
@@ -79,6 +125,7 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     /// Type a message into Claude's prompt and press Return. The Return goes a beat later so Claude
     /// doesn't treat it as part of a paste (which would add a newline instead of sending).
     func submit(_ text: String) {
+        if let n = native { n.send(text); return }
         guard running else { return }
         // Bracketed paste: Claude takes the whole text as one input, and characters like ! # ? / at the
         // start aren't read as its shortcuts.
@@ -87,6 +134,7 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     }
 
     func terminate() {
+        native?.stop()
         if running, pid > 0 { kill(pid, SIGHUP) }
     }
 
@@ -114,6 +162,10 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
         DispatchQueue.main.async {
             self.running = false
             self.exitCode = exitCode
+            if self.switchingToNative, let sid = self.sessionId {
+                self.switchingToNative = false
+                self.startNative(sid)
+            }
         }
     }
 }
