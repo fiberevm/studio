@@ -1,58 +1,183 @@
+<div align="center">
+
+<img src="Resources/AppIcon.svg" width="128" height="128" alt="Studio icon">
+
 # Studio
 
-A native macOS app for working with many Claude Code sessions at once, laid out like VS Code:
-a session sidebar on the left and the selected session's live terminal on the right.
+**A native macOS workspace for running many Claude Code sessions at once.**
 
-- **One window per project folder**; the sidebar lists sessions running in that folder (and its worktrees).
-- **Sessions**: every running `claude` process (read from `~/.claude/sessions/<pid>.json`),
-  with live status (Working / Idle / Shell / Needs input), plus terminals opened in the app.
-  Sessions running elsewhere are tagged `terminal` / `desktop`.
-- **History**: every transcript in `~/.claude/projects`, grouped by project. Double-click (or Return) to
-  `claude --resume` it in an embedded terminal.
-- Terminals stay alive while you switch between them. When a session finishes working while you're looking
-  elsewhere, it gets a blue dot, a Dock badge, and a notification.
+Tabs, split panes and a command palette, like VS Code, except every pane is a live Claude Code session or terminal.
+Studio tells you which session needs you next, so you can keep six agents busy without losing your place.
 
-**Studio MCP**: every Claude session Studio starts or resumes gets `--mcp-config` pointing at the bundled
-`studio-mcp`, so its AI can drive the editor: `get_state`, `set_theme`, `set_font_size`, `new_session` (prompt, split),
-`new_terminal` (command, split), `run_in_terminal` (plain terminals only), `split_tab`, `move_tab`, `focus_tab`,
-`close_tab`, `open_palette`, `open_project`, and layout: `set_layout` (single / columns / rows / grid), `resize_pane`,
-`set_split_sizes`, `equalize_layout`, `merge_pane`, `focus_pane`, `reorder_tab`, `set_sidebar` (show/hide, width). The app listens on 127.0.0.1 only, with a random token in a 0600 file
-(`~/Library/Application Support/Studio/control-<bundle id>.json`); sessions get `STUDIO_TAB` so the AI knows its tab.
+[![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)](#install)
+[![Swift 6](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)](Package.swift)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Built with SwiftTerm](https://img.shields.io/badge/terminal-SwiftTerm-555)](https://github.com/migueldeicaza/SwiftTerm)
 
-Icon: `Resources/AppIcon.svg` → `scripts/make-icon.sh` regenerates `Resources/AppIcon.icns`.
+[Features](#features) · [Install](#install) · [Shortcuts](#keyboard-shortcuts) · [Studio MCP](#studio-mcp) · [How it works](#how-it-works) · [Contributing](#contributing)
 
-## Build & run
+<!-- Screenshot: add docs/screenshot.png and uncomment
+<img src="docs/screenshot.png" alt="Studio with three panes: two Claude Code sessions and a terminal" width="900">
+-->
 
-    ./build-app.sh --open          # builds build/Studio.app (release) and opens it
-    open build/Studio.app --args --new ~/code/foo      # start a session in a folder
-    open build/Studio.app --args --resume <sessionId>  # resume a session
+</div>
 
-## Shortcuts
+---
+
+## Why Studio?
+
+Running several Claude Code sessions in parallel is powerful but noisy: terminal windows pile up, you forget which
+agent is waiting on a permission prompt, and every check-in means scanning tabs and scrolling back to see what
+happened. Studio is built around one idea: **you should only look at a session when it needs you.**
+
+- **One window per project.** Open `~/code/api` and `~/code/web` side by side; each window holds that repo's sessions and worktrees.
+- **Know who's waiting.** Tabs show a working indicator, a pulsing red dot when Claude is blocked on you, and an unread dot when it finished while you were elsewhere.
+- **Jump, don't scan.** <kbd>⌘J</kbd> takes you to the session that has waited longest; press it again for the next one. It's inbox zero for agents.
+- **Talk without switching.** <kbd>⌘K</kbd> sends a message to any session, or to several at once, without leaving the pane you're in.
+
+## Features
+
+### Sessions
+- **Embedded Claude Code** in real terminals ([SwiftTerm](https://github.com/migueldeicaza/SwiftTerm)): it's the real `claude` CLI, so slash commands, hooks, MCP servers and settings all work unchanged.
+- **Imports what's already running.** Studio reads Claude Code's own session files, so sessions started in other terminals show up too.
+- **Closing a tab never ends a conversation.** Tabs are for quick access; the session keeps running and comes back with <kbd>⌘P</kbd>.
+- **Restores your workspace.** Tabs, splits, pane sizes and terminal tabs come back after a restart (Claude sessions are resumed with `claude --resume`).
+- **Plain terminals** with <kbd>⌃`</kbd>, next to your sessions, just like VS Code.
+- **Drag and drop** files or images onto a session to paste their paths.
+
+### Staying in flow
+- **Next up (<kbd>⌘J</kbd>):** jumps to the session that needs you, blocked ones first, across every project window.
+- **Hover peek:** rest on a tab to see the session's status and Claude's last message without switching to it.
+- **Quick prompt (<kbd>⌘K</kbd>):** type a message, pick the session with ↑↓ and press Return. Tick several sessions with <kbd>⇥</kbd> to broadcast, or press <kbd>⌘↵</kbd> to start a new session with it.
+- **Snippets:** reusable prompts (`#tests`, `#review`, `#pr`, …) you can insert in <kbd>⌘K</kbd>, send from <kbd>⌘P</kbd>, or save with <kbd>⌘S</kbd>. They're plain JSON you can edit.
+- **Notifications that matter:** sent only while you're in another app, only when a session is blocked on you or has finished 30+ seconds of work. Each one shows Claude's last words, and clicking it opens the session.
+
+### Workspace
+- **Split panes** with drag-to-snap: drop a tab on any edge of a pane to split it, or right-click for Split Right / Left / Up / Down. Unfocused panes dim slightly.
+- **Command palette** (<kbd>⌘P</kbd> / <kbd>⇧⌘P</kbd>): fuzzy-search running and past sessions in every project, plus every command.
+- **Themes** with live preview: Clear Dark, Dark Modern, Dark+, Light+, Monokai, Solarized Dark, One Dark Pro, GitHub Dark, Dracula.
+- **Status bar per session:** git branch, model, and tokens in/out.
+- **PR detection:** finds the PR each session opened (or its branch's PR) through the `gh` CLI, with state, CI checks and review status.
+
+### Built for agents, too
+- **Studio MCP:** every session Studio starts can drive the editor itself: open splits, start sessions, run commands in terminals, rearrange the layout, change themes. [See the tools ↓](#studio-mcp)
+
+## Install
+
+Requirements: **macOS 14+**, **Xcode 16+ / Swift 6 toolchain**, and [Claude Code](https://docs.claude.com/en/docs/claude-code) installed and logged in. The [`gh` CLI](https://cli.github.com) is optional, for PR detection.
+
+```bash
+git clone https://github.com/fiberevm/studio.git
+cd studio
+./build-app.sh --open      # builds build/Studio.app (release) and launches it
+```
+
+Copy `build/Studio.app` to `/Applications` if you like. It's signed ad hoc for local use.
+
+Launch options:
+
+```bash
+open build/Studio.app --args --new ~/code/my-project      # open a project with a new session
+open build/Studio.app --args --resume <session-id>        # resume a specific session
+```
+
+## Keyboard shortcuts
 
 | Keys | Action |
 |---|---|
-| ⌘P | Go to session: search running and past sessions in every project (type `>` for commands) |
-| ⇧⌘P | Command palette (incl. Preferences: Color Theme) |
-| ⌘N | New Claude session in this window's folder |
-| ⌃` | New terminal tab: your login shell in the folder, no Claude (closing it ends the shell) |
-| ⇧⌘N | Open another project window |
-| ⌘[ / ⌘] | Previous / next tab |
-| ⌘1…⌘9 | Jump to tab |
-| ⌘W | Close tab (session keeps running; click it in the sidebar to reopen) — closes the window if no tab is open |
-| ⇧⌘W | Close window |
-| ⌘B | Toggle the sidebar (drag its edge to resize) |
-| ⌘+ / ⌘− / ⌘0 | Text size |
+| <kbd>⌘P</kbd> | Go to session: search running and past sessions in every project (type `>` for commands) |
+| <kbd>⇧⌘P</kbd> | Command palette, including Color Theme |
+| <kbd>⌘J</kbd> | Next up: the session that has waited longest for you |
+| <kbd>⌘K</kbd> | Quick prompt: message any session (or several) without switching |
+| <kbd>⌘N</kbd> | New Claude session in this project |
+| <kbd>⌃`</kbd> | New terminal tab |
+| <kbd>⇧⌘N</kbd> | Open another project window |
+| <kbd>⌘[</kbd> / <kbd>⌘]</kbd> | Previous / next tab |
+| <kbd>⌘1</kbd>…<kbd>⌘9</kbd> | Jump to tab |
+| <kbd>⌘W</kbd> | Close tab (the session keeps running); in an empty pane, close the pane |
+| <kbd>⇧⌘W</kbd> | Close window |
+| <kbd>⌘B</kbd> | Toggle the session sidebar |
+| <kbd>⌘+</kbd> / <kbd>⌘−</kbd> / <kbd>⌘0</kbd> | Text size |
 
-**Split panes** (like VS Code editor groups): drag a tab (or an in-app session from the sidebar) onto a pane —
-the outer third of each side splits that way, the middle drops it in as a tab; a shaded preview shows where it'll land.
-Right-click a tab for Split Right / Left / Down / Up (a group's only tab splits off a fresh session instead).
-Drag the 1px dividers to resize. ⌘N, ⌘W, ⌘[ / ⌘] act on the focused group; clicking a pane focuses it.
+## Studio MCP
 
-Themes (via the palette): Clear Dark, Dark Modern, Dark+, Light+, Monokai, Solarized Dark, One Dark Pro, GitHub Dark, Dracula.
-Each session tab has a status bar: git branch, uptime, model, tokens sent ↑ / received ↓, and its PRs.
+Every Claude session Studio starts or resumes is launched with an MCP server, `studio-mcp`, that talks to the app.
+That lets the agent in any pane drive the editor. For example: *"split a terminal to the right and run the test
+watcher"*, or *"lay these out as a 2×2 grid"*.
 
-**PR detection** (needs the `gh` CLI, logged in): PRs a session created are found from `gh pr create` output in its
-transcript; otherwise the session's branch is looked up (long-lived branches like main/staging are skipped). State
-(open/draft/merged/closed), CI checks and review are refreshed every minute. Set `STUDIO_DEBUG_LOG=/path` to trace lookups.
+| Area | Tools |
+|---|---|
+| Inspect | `get_state`, `list_themes` |
+| Sessions & terminals | `new_session` (prompt, split, folder), `new_terminal` (command, split), `run_in_terminal`, `send_to_session` |
+| Tabs | `split_tab`, `move_tab`, `focus_tab`, `close_tab`, `reorder_tab` |
+| Layout | `set_layout` (single / columns / rows / grid), `resize_pane`, `set_split_sizes`, `equalize_layout`, `merge_pane`, `focus_pane`, `set_sidebar` |
+| Appearance & navigation | `set_theme`, `set_font_size`, `open_palette`, `open_project` |
 
-Built with SwiftUI + [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm).
+**Security:** the control server listens on `127.0.0.1` only and requires a random token stored in a `0600` file
+(`~/Library/Application Support/Studio/control-<bundle-id>.json`). `run_in_terminal` only works on plain terminal tabs.
+Each session gets `STUDIO_TAB`, so the agent knows which tab is its own.
+
+## How it works
+
+```
+┌──────────────────────────── Studio.app (SwiftUI + AppKit) ────────────────────────────┐
+│  ProjectModel (one per window)  ── tabs, split tree, focus, saved layout               │
+│  SessionStore (shared)          ── sessions, live status, transcripts, PRs, attention  │
+│  TerminalSession                ── SwiftTerm view running `claude` / your shell         │
+│  StudioControl                  ── localhost JSON control server  ◄──┐                 │
+└──────────────────────────────────────────────────────────────────────┼─────────────────┘
+        reads ▲                                                         │ JSON lines + token
+              │                                                         │
+  ~/.claude/sessions/<pid>.json   (live status: busy / idle / waiting)  │
+  ~/.claude/projects/**/<id>.jsonl (titles, prompts, replies, tokens)   │
+                                                                        │
+  claude --resume … --mcp-config studio.json  ──►  studio-mcp (stdio MCP server) ──┘
+```
+
+- **No API keys, no proxy.** Studio runs the `claude` binary you already use, in a real PTY, through your login shell.
+- **Read-only on Claude's data.** Session status and transcripts are read from `~/.claude`; Studio never writes there.
+- **State** (open tabs, layouts, theme) lives in the app's `UserDefaults`; snippets live in `~/Library/Application Support/Studio/snippets.json`.
+
+### Project layout
+
+```
+Sources/Studio/          the app
+  StudioApp.swift          scenes, menus and shortcuts
+  ProjectModel.swift       per-window tabs, splits, focus, layout persistence
+  SessionStore.swift       shared session state, live status, notifications, next up
+  Views.swift              window, tab strip, panes, peek card, status bar
+  CommandPalette.swift     ⌘P / ⇧⌘P
+  QuickPrompt.swift        ⌘K and snippets
+  StudioControl.swift      control server behind the MCP tools
+  TranscriptScanner.swift  reads titles, prompts and replies from transcripts
+Sources/StudioMCP/       the stdio MCP server bundled next to the app
+Resources/               app icon (SVG source + generated .icns)
+scripts/make-icon.sh     regenerates AppIcon.icns from AppIcon.svg
+```
+
+## Roadmap
+
+- [ ] Sessions that survive app restarts (a small background host owns the processes)
+- [ ] Changes pane: a live git diff of what the session is editing
+- [ ] Worktree-per-session with one click
+- [ ] Search across every transcript
+- [ ] Usage and cost overview per session and project
+
+## Contributing
+
+Issues and pull requests are welcome. To hack on Studio:
+
+```bash
+swift build                 # debug build
+./build-app.sh              # release .app bundle in build/
+STUDIO_DEBUG_LOG=/tmp/studio.log open build/Studio.app   # trace PR lookups and palette actions
+```
+
+Keep the UI flat and quiet (straight lines, no shadows on chrome, VS Code-like density), and keep Claude Code itself
+unmodified: Studio should work with whatever version of `claude` is on your PATH.
+
+## License
+
+[MIT](LICENSE)
+
+<sub>Studio is an independent project and is not affiliated with or endorsed by Anthropic. Claude and Claude Code are trademarks of Anthropic.</sub>
