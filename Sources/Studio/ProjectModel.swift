@@ -486,7 +486,9 @@ final class ProjectModel: ObservableObject {
     /// Rebuild the saved split layout from this folder's restored sessions. Returns false if there was nothing to restore.
     private func restoreLayout() -> Bool {
         guard let saved = SavedLayout.load(folder) else { return false }
-        let mine = store.terminals(in: folder)
+        // Match by session id across all terminals: a session listed in this layout belongs here even if
+        // Claude recorded it under another folder (e.g. one first started in ~).
+        let mine = store.terminals
         var used = Set<UUID>()
         var active: UUID?
 
@@ -524,7 +526,7 @@ final class ProjectModel: ObservableObject {
         guard let node = build(saved) else { return false }
         root = node
         // sessions that were restored but missing from the saved layout go into the first group
-        let leftovers = mine.filter { !used.contains($0.id) && $0.sessionId != nil && !$0.isShell }
+        let leftovers = store.terminals(in: folder).filter { !used.contains($0.id) && $0.sessionId != nil && !$0.isShell }
         if let g = root.groups.first { g.tabIds += leftovers.map(\.id) }
         activeGroupId = active ?? root.groups.first?.id ?? activeGroupId
         return true
