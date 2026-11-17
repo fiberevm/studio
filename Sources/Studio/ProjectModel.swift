@@ -13,6 +13,10 @@ final class ProjectModel: ObservableObject {
     @Published private(set) var activeGroupId: UUID
     /// Command palette: nil when closed, otherwise the text it opened with ("" for sessions, ">" for commands).
     @Published var palette: String?
+    /// Where a tab being dragged would land (drives the shaded snap preview). One per window, so a preview can
+    /// never linger in a group the drag already left.
+    @Published private(set) var dropTarget: (group: UUID, zone: DropZone)?
+    private var dropWatch: Timer?
     private var bag: Set<AnyCancellable> = []
     private var clickMonitor: Any?
 
@@ -155,6 +159,28 @@ final class ProjectModel: ObservableObject {
     func windowClosed() {
         store.endViewing(window: windowId)
         if let m = clickMonitor { NSEvent.removeMonitor(m); clickMonitor = nil }
+    }
+
+    // MARK: Drop preview
+
+    func setDropTarget(_ g: GroupNode, _ zone: DropZone) {
+        if dropTarget?.group != g.id || dropTarget?.zone != zone { dropTarget = (g.id, zone) }
+        // SwiftUI doesn't always report a drag leaving (drop on another target, outside the window, Esc).
+        // While a preview shows, check the mouse button; once it's up the drag is over.
+        if dropWatch == nil {
+            dropWatch = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
+                Task { @MainActor in
+                    if NSEvent.pressedMouseButtons & 1 == 0 { self?.clearDropTarget() }
+                }
+            }
+        }
+    }
+
+    func clearDropTarget(_ g: GroupNode? = nil) {
+        if let g, dropTarget?.group != g.id { return }
+        if dropTarget != nil { dropTarget = nil }
+        dropWatch?.invalidate()
+        dropWatch = nil
     }
 
     // MARK: Splits

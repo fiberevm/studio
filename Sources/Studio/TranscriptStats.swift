@@ -98,12 +98,3 @@ func prettyModel(_ id: String) -> String {
     let nums = parts.dropFirst(2).filter { Int($0) != nil && $0.count <= 2 }
     return nums.isEmpty ? name : "\(name) \(nums.joined(separator: "."))"
 }
-
-func formatDuration(_ s: TimeInterval) -> String {
-    let m = Int(s / 60)
-    if m < 1 { return "<1m" }
-    if m < 60 { return "\(m)m" }
-    let h = m / 60
-    if h < 24 { return "\(h)h \(m % 60)m" }
-    return "\(h / 24)d \(h % 24)h"
-}

@@ -189,6 +189,7 @@ struct Sidebar: View {
             .frame(height: 30)
             .help(abbreviatePath(model.folder))
 
+            sectionHeader("Waiting for you", count: rest.count)
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(rest) { row($0) }
@@ -204,6 +205,20 @@ struct Sidebar: View {
 
             busyDrawer(busy)   // always shown, even at 0
         }
+    }
+
+    private func sectionHeader(_ title: String, count: Int) -> some View {
+        HStack(spacing: 6) {
+            Text(title.uppercased()).font(.system(size: 10, weight: .semibold))
+            Text("\(count)")
+                .font(.system(size: 10, weight: .semibold)).monospacedDigit()
+                .padding(.horizontal, 5)
+                .background(SwiftUI.Color.primary.opacity(0.12))
+            Spacer()
+        }
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 16)
+        .frame(height: 24)
     }
 
     private func row(_ item: ActiveItem) -> some View {
@@ -449,20 +464,19 @@ struct SplitBoxView: View {
 struct GroupView: View {
     let group: GroupNode
     @EnvironmentObject var model: ProjectModel
-    @State private var zone: DropZone?
 
     var body: some View {
         VStack(spacing: 0) {
             TabStrip(group: group)
                 .frame(height: topBarHeight)
-                .onDrop(of: [.text], delegate: TabDropDelegate(group: group, model: model, fixedZone: .center, zone: .constant(nil)))
+                .onDrop(of: [.text], delegate: TabDropDelegate(group: group, model: model, fixedZone: .center))
             Hairline()
             GeometryReader { geo in
                 GroupPane(group: group)
                     .overlay(alignment: .topLeading) {
-                        if let zone { dropPreview(zone, size: geo.size) }
+                        if let t = model.dropTarget, t.group == group.id { dropPreview(t.zone, size: geo.size) }
                     }
-                    .onDrop(of: [.text], delegate: TabDropDelegate(group: group, model: model, size: geo.size, zone: $zone))
+                    .onDrop(of: [.text], delegate: TabDropDelegate(group: group, model: model, size: geo.size))
             }
         }
     }
@@ -498,20 +512,20 @@ struct TabDropDelegate: DropDelegate {
     let model: ProjectModel
     var size: CGSize = .zero
     var fixedZone: DropZone? = nil
-    @Binding var zone: DropZone?
 
     func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [.text]) }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
-        zone = fixedZone ?? DropZone.at(info.location, in: size)
+        // the tab strip (fixedZone) drops into the group, so it previews the whole pane too
+        model.setDropTarget(group, fixedZone ?? DropZone.at(info.location, in: size))
         return DropProposal(operation: .move)
     }
 
-    func dropExited(info: DropInfo) { zone = nil }
+    func dropExited(info: DropInfo) { model.clearDropTarget(group) }
 
     func performDrop(info: DropInfo) -> Bool {
         let target = fixedZone ?? DropZone.at(info.location, in: size)
-        zone = nil
+        model.clearDropTarget()
         guard let provider = info.itemProviders(for: [.text]).first else { return false }
         _ = provider.loadObject(ofClass: NSString.self) { obj, _ in
             guard let str = obj as? String, str.hasPrefix(TabDrag.prefix),
@@ -629,7 +643,7 @@ struct GroupPane: View {
     }
 }
 
-/// Bottom strip under a session: branch, uptime, model, tokens sent/received. Icons only; hover for labels.
+/// Bottom strip under a session: branch, model, tokens sent/received, PRs. Icons only; hover for labels.
 struct SessionStatusBar: View {
     @ObservedObject var terminal: TerminalSession
     @EnvironmentObject var model: ProjectModel
@@ -637,19 +651,15 @@ struct SessionStatusBar: View {
     var body: some View {
         let sid = terminal.sessionId
         let st = sid.flatMap { model.store.stats[$0] }
-        let started = sid.flatMap { model.store.live[$0]?.startedAt } ?? terminal.createdAt
-        TimelineView(.periodic(from: .now, by: 30)) { ctx in
-            HStack(spacing: 14) {
-                if let b = st?.gitBranch { stat("arrow.triangle.branch", b, help: "Git branch") }
-                stat("clock", formatDuration(ctx.date.timeIntervalSince(started)), help: "Running for")
-                if let m = st?.model { stat("cpu", prettyModel(m), help: "Model: \(m)") }
-                if let st {
-                    stat("arrow.up", formatTokens(st.tokensIn), help: "Tokens sent: \(st.tokensIn.formatted()) (incl. cache)")
-                    stat("arrow.down", formatTokens(st.tokensOut), help: "Tokens received: \(st.tokensOut.formatted())")
-                }
-                ForEach(sid.flatMap { model.store.prs[$0] } ?? []) { PRChip(pr: $0) }
-                Spacer()
+        HStack(spacing: 14) {
+            if let b = st?.gitBranch { stat("arrow.triangle.branch", b, help: "Git branch") }
+            if let m = st?.model { stat("cpu", prettyModel(m), help: "Model: \(m)") }
+            if let st {
+                stat("arrow.up", formatTokens(st.tokensIn), help: "Tokens sent: \(st.tokensIn.formatted()) (incl. cache)")
+                stat("arrow.down", formatTokens(st.tokensOut), help: "Tokens received: \(st.tokensOut.formatted())")
             }
+            ForEach(sid.flatMap { model.store.prs[$0] } ?? []) { PRChip(pr: $0) }
+            Spacer()
         }
         .padding(.horizontal, 10)
         .frame(height: 28)
