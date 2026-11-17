@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftTerm
 
-private let topBarHeight: CGFloat = 30
+private let topBarHeight: CGFloat = 35
 private let sidebarWidth: CGFloat = 250
 
 // MARK: - Window root
