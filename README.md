@@ -22,6 +22,8 @@ a session sidebar on the left and the selected session's live terminal on the ri
 
 | Keys | Action |
 |---|---|
+| ⌘P | Go to session: search running and past sessions in every project (type `>` for commands) |
+| ⇧⌘P | Command palette (incl. Preferences: Color Theme) |
 | ⌘N | New Claude session in this window's folder |
 | ⇧⌘N | Open another project window |
 | ⌘[ / ⌘] | Previous / next tab |
@@ -29,5 +31,8 @@ a session sidebar on the left and the selected session's live terminal on the ri
 | ⌘W | Close tab (session keeps running; click it in the sidebar to reopen) — closes the window if no tab is open |
 | ⇧⌘W | Close window |
 | ⌘+ / ⌘− / ⌘0 | Text size |
+
+Themes (via the palette): Clear Dark, Dark Modern, Dark+, Light+, Monokai, Solarized Dark, One Dark Pro, GitHub Dark, Dracula.
+Each session tab has a status bar: git branch, uptime, model, tokens sent ↑ / received ↓.
 
 Built with SwiftUI + [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm).

@@ -30,7 +30,15 @@ final class SessionStore: ObservableObject {
         }
     }
 
+    @Published private(set) var stats: [String: TranscriptStats] = [:]   // by sessionId
+    /// Every past session on disk, loaded lazily for the command palette.
+    @Published private(set) var history: [SessionRecord] = []
+    /// Session to focus when a project window next looks (folder → session id). Used by the palette.
+    private(set) var pendingFocus: [String: String] = [:]
+
     private let scanner = TranscriptScanner()
+    private let historyScanner = TranscriptScanner()
+    private let statsReader = StatsReader()
     private let scanQueue = DispatchQueue(label: "aicode.scan", qos: .utility)
     private var liveTimer: Timer?
     private var scanTimer: Timer?
@@ -59,13 +67,43 @@ final class SessionStore: ObservableObject {
 
     func rescanTranscripts() {
         let ids = Set(live.keys).union(terminals.compactMap(\.sessionId))
-        scanQueue.async { [scanner] in
+        scanQueue.async { [scanner, statsReader] in
             let recs = scanner.scan(ids: ids)
             let dict = Dictionary(recs.map { ($0.id, $0) }, uniquingKeysWith: { a, b in a.lastActivity > b.lastActivity ? a : b })
+            var st: [String: TranscriptStats] = [:]
+            for r in dict.values { st[r.id] = statsReader.stats(for: r.transcriptPath) }
             DispatchQueue.main.async {
                 if self.records != dict { self.records = dict }
+                if self.stats != st { self.stats = st }
             }
         }
+    }
+
+    func loadHistory() {
+        scanQueue.async { [historyScanner] in
+            let all = historyScanner.scan(ids: nil).sorted { $0.lastActivity > $1.lastActivity }
+            DispatchQueue.main.async { self.history = all }
+        }
+    }
+
+    // MARK: Theme
+
+    func setTheme(_ t: AppTheme, persist: Bool = true) {
+        Theme.current = t
+        for term in terminals { Theme.apply(to: term.view, fontSize: fontSize) }
+        if persist { UserDefaults.standard.set(t.id, forKey: "theme") }
+        objectWillChange.send()
+    }
+
+    // MARK: Cross-window focus
+
+    func requestFocus(sessionId: String, in folder: String) {
+        pendingFocus[folder] = sessionId
+        objectWillChange.send()
+    }
+
+    func takePendingFocus(for folder: String) -> String? {
+        pendingFocus.removeValue(forKey: folder)
     }
 
     func refreshLive() {

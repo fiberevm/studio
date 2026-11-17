@@ -24,7 +24,7 @@ struct ProjectWindow: View {
         .background(WindowConfigurator())
         .modifier(HideTitlebarBackground())
         .ignoresSafeArea()
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(Theme.current.isLight ? .light : .dark)
         .navigationTitle(folder.map { projectName(for: $0) } ?? "AICode")
         .onAppear(perform: handleLaunchArguments)
     }
@@ -81,11 +81,26 @@ struct ProjectView: View {
                 }
             }
         }
+        .overlay(alignment: .top) {
+            if let initial = model.palette {
+                ZStack(alignment: .top) {
+                    // click outside closes it
+                    SwiftUI.Color.black.opacity(0.001)
+                        .onTapGesture { model.palette = nil; model.focusTerminal() }
+                    CommandPalette(initial: initial)
+                        .padding(.top, 34)
+                }
+            }
+        }
         .environmentObject(model)
         .focusedSceneObject(model)
         .onAppear {
             if LaunchArgs.pendingNewSession { LaunchArgs.pendingNewSession = false; model.newTab() }
             if let sid = LaunchArgs.pendingResume { LaunchArgs.pendingResume = nil; model.resume(sid) }
+            // debug/screenshot aid: open the palette on launch
+            if let i = CommandLine.arguments.firstIndex(of: "--open-palette") {
+                model.palette = i + 1 < CommandLine.arguments.count ? CommandLine.arguments[i + 1] : ""
+            }
         }
         .onDisappear { model.windowClosed() }
     }
@@ -142,7 +157,7 @@ struct ProjectPicker: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(SwiftUI.Color.white.opacity(0.04))
+        .background(SwiftUI.Color.primary.opacity(0.04))
     }
 }
 
@@ -211,7 +226,7 @@ struct Sidebar: View {
                     Text("\(busy.count)")
                         .font(.system(size: 10, weight: .semibold)).monospacedDigit()
                         .padding(.horizontal, 5)
-                        .background(SwiftUI.Color.white.opacity(0.12))
+                        .background(SwiftUI.Color.primary.opacity(0.12))
                     Spacer()
                 }
                 .foregroundStyle(.secondary)
@@ -277,7 +292,7 @@ struct SessionRow: View {
         }
         .padding(.leading, 16).padding(.trailing, 12)
         .frame(height: 28)
-        .background(selected ? SwiftUI.Color(nsColor: Theme.selection) : (hovering ? SwiftUI.Color.white.opacity(0.04) : .clear),
+        .background(selected ? SwiftUI.Color(nsColor: Theme.selection) : (hovering ? SwiftUI.Color.primary.opacity(0.04) : .clear),
                     ignoresSafeAreaEdges: [])
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
@@ -394,10 +409,10 @@ struct TabButton: View {
         }
         .padding(.leading, 16).padding(.trailing, 10)
         .frame(height: topBarHeight)
-        .background(selected ? SwiftUI.Color(nsColor: Theme.background) : (hovering ? SwiftUI.Color.white.opacity(0.03) : .clear),
+        .background(selected ? SwiftUI.Color(nsColor: Theme.background) : (hovering ? SwiftUI.Color.primary.opacity(0.03) : .clear),
                     ignoresSafeAreaEdges: [])
         .overlay(alignment: .top) {
-            if selected { SwiftUI.Color.accentColor.frame(height: 1) }
+            if selected { SwiftUI.Color(nsColor: Theme.accent).frame(height: 1) }
         }
         // the active tab merges into the terminal below it
         .overlay(alignment: .bottom) {
@@ -430,11 +445,48 @@ struct DetailCard: View {
     }
 }
 
+/// Bottom strip under a session: branch, uptime, model, tokens sent/received. Icons only; hover for labels.
+struct SessionStatusBar: View {
+    @ObservedObject var terminal: TerminalSession
+    @EnvironmentObject var model: ProjectModel
+
+    var body: some View {
+        let sid = terminal.sessionId
+        let st = sid.flatMap { model.store.stats[$0] }
+        let started = sid.flatMap { model.store.live[$0]?.startedAt } ?? terminal.createdAt
+        TimelineView(.periodic(from: .now, by: 30)) { ctx in
+            HStack(spacing: 14) {
+                if let b = st?.gitBranch { stat("arrow.triangle.branch", b, help: "Git branch") }
+                stat("clock", formatDuration(ctx.date.timeIntervalSince(started)), help: "Running for")
+                if let m = st?.model { stat("cpu", prettyModel(m), help: "Model: \(m)") }
+                if let st {
+                    stat("arrow.up", formatTokens(st.tokensIn), help: "Tokens sent: \(st.tokensIn.formatted()) (incl. cache)")
+                    stat("arrow.down", formatTokens(st.tokensOut), help: "Tokens received: \(st.tokensOut.formatted())")
+                }
+                Spacer()
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 22)
+        .background(SwiftUI.Color(nsColor: Theme.chrome), ignoresSafeAreaEdges: [])
+    }
+
+    private func stat(_ icon: String, _ value: String, help: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon).font(.system(size: 10))
+            Text(value).font(.system(size: 11)).monospacedDigit().lineLimit(1)
+        }
+        .foregroundStyle(.secondary)
+        .help(help)
+    }
+}
+
 struct TerminalPane: View {
     @ObservedObject var terminal: TerminalSession
     @EnvironmentObject var model: ProjectModel
 
     var body: some View {
+        VStack(spacing: 0) {
         ZStack {
             TerminalHost(view: terminal.view)
                 .padding(.leading, 8).padding(.trailing, 8).padding(.vertical, 4)
@@ -451,6 +503,9 @@ struct TerminalPane: View {
                 .background(SwiftUI.Color(nsColor: Theme.chrome))
                 .overlay(Rectangle().stroke(SwiftUI.Color(nsColor: Theme.border)))
             }
+        }
+            Hairline()
+            SessionStatusBar(terminal: terminal)
         }
     }
 }

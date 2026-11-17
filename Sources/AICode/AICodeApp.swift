@@ -70,6 +70,15 @@ struct AppCommands: Commands {
             Button("Default Text Size") { store.fontSize = 12 }
                 .keyboardShortcut("0")
         }
+        CommandGroup(before: .toolbar) {
+            Button("Go to Session…") { project?.palette = "" }
+                .keyboardShortcut("p")
+                .disabled(project == nil)
+            Button("Command Palette…") { project?.palette = ">" }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+                .disabled(project == nil)
+            Divider()
+        }
         CommandMenu("Tab") {
             Button("Previous Tab") { project?.cycleTab(-1) }
                 .keyboardShortcut("[", modifiers: .command)

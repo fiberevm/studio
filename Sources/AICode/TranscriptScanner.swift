@@ -7,14 +7,14 @@ final class TranscriptScanner {
     private let chunk = 256 * 1024
 
     /// Parses only the transcripts for the given session ids (the ones shown in the sidebar).
-    func scan(ids: Set<String>) -> [SessionRecord] {
+    func scan(ids: Set<String>?) -> [SessionRecord] {
         let fm = FileManager.default
         guard let dirs = try? fm.contentsOfDirectory(at: Paths.projects, includingPropertiesForKeys: nil) else { return [] }
         var out: [SessionRecord] = []
         var seen = Set<String>()
         for dir in dirs {
             guard let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { continue }
-            for f in files where f.pathExtension == "jsonl" && ids.contains(f.deletingPathExtension().lastPathComponent) {
+            for f in files where f.pathExtension == "jsonl" && (ids?.contains(f.deletingPathExtension().lastPathComponent) ?? true) {
                 let path = f.path
                 seen.insert(path)
                 let vals = try? f.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey])

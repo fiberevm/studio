@@ -20,6 +20,8 @@ final class ProjectModel: ObservableObject {
     }
     /// Tabs are just quick access: closing one hides it, the claude process keeps running.
     @Published private(set) var tabIds: [UUID] = []
+    /// Command palette: nil when closed, otherwise the text it opened with ("" for sessions, ">" for commands).
+    @Published var palette: String?
     private var bag: Set<AnyCancellable> = []
 
     init(folder: String, store: SessionStore) {
@@ -27,10 +29,14 @@ final class ProjectModel: ObservableObject {
         self.store = store
         RecentProjects.add(folder)
         // Re-render this window whenever global session state changes.
-        store.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &bag)
+        store.objectWillChange.sink { [weak self] in
+            self?.objectWillChange.send()
+            DispatchQueue.main.async { self?.consumePendingFocus() }
+        }.store(in: &bag)
         let restored = store.restoreTerminals(in: folder)
         tabIds = restored.map(\.id)
         selection = restored.first.map { "t:\($0.id)" }
+        consumePendingFocus()   // opened from another window's palette
     }
 
     var name: String { projectName(for: folder) }
@@ -54,6 +60,22 @@ final class ProjectModel: ObservableObject {
     func item(for t: TerminalSession) -> ActiveItem? { store.allActiveItems.first { $0.key == "t:\(t.id)" } }
 
     // MARK: Actions
+
+    /// Show a session in this window: its tab if it runs here, the info pane if it runs elsewhere, else resume it.
+    func open(sessionId sid: String) {
+        if let t = store.terminals.first(where: { $0.sessionId == sid }) { select(t) }
+        else if store.live[sid] != nil { selection = "s:\(sid)" }
+        else { resume(sid) }
+    }
+
+    private func consumePendingFocus() {
+        if let sid = store.takePendingFocus(for: folder) { open(sessionId: sid) }
+    }
+
+    func focusTerminal() {
+        guard let v = selectedTerminal?.view else { return }
+        DispatchQueue.main.async { v.window?.makeFirstResponder(v) }
+    }
 
     func newTab() { select(store.newSession(in: folder)) }
 

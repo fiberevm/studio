@@ -87,36 +87,3 @@ func shellQuote(_ s: String) -> String {
     return "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
 }
 
-/// Matches Terminal.app's "Clear Dark" profile: SF Mono, slate background, soft ANSI palette.
-enum Theme {
-    static let background = NSColor(srgbRed: 0.130, green: 0.153, blue: 0.203, alpha: 1)
-    static let foreground = NSColor(srgbRed: 0.902, green: 0.902, blue: 0.902, alpha: 1)
-    static let selection = NSColor(srgbRed: 0.201, green: 0.305, blue: 0.370, alpha: 1)
-    /// Sidebar / tab bar: a step darker than the terminal, like VS Code's chrome.
-    static let chrome = NSColor(srgbRed: 0.098, green: 0.114, blue: 0.153, alpha: 1)
-    static let border = NSColor(white: 1, alpha: 0.08)
-
-    // black, red, green, yellow, blue, magenta, cyan, white, then bright variants
-    static let ansi: [(Double, Double, Double)] = [
-        (0.208, 0.259, 0.296), (0.705, 0.336, 0.281), (0.424, 0.667, 0.442), (0.769, 0.675, 0.384),
-        (0.427, 0.588, 0.706), (0.741, 0.482, 0.804), (0.485, 0.795, 0.806), (0.869, 0.900, 0.922),
-        (0.276, 0.363, 0.426), (0.876, 0.424, 0.353), (0.474, 0.743, 0.492), (0.898, 0.784, 0.447),
-        (0.404, 0.710, 0.929), (0.827, 0.537, 0.898), (0.518, 0.868, 0.880), (0.900, 0.935, 0.962),
-    ]
-
-    static func font(_ size: CGFloat) -> NSFont {
-        NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
-    }
-
-    static func apply(to view: LocalProcessTerminalView, fontSize: CGFloat) {
-        view.font = font(fontSize)
-        view.nativeBackgroundColor = background
-        view.nativeForegroundColor = foreground
-        view.selectedTextBackgroundColor = selection
-        view.caretColor = NSColor(srgbRed: 0.85, green: 0.47, blue: 0.34, alpha: 1)
-        view.optionAsMetaKey = true
-        view.installColors(ansi.map {
-            SwiftTerm.Color(red: UInt16($0.0 * 65535), green: UInt16($0.1 * 65535), blue: UInt16($0.2 * 65535))
-        })
-    }
-}
