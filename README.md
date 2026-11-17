@@ -12,6 +12,12 @@ a session sidebar on the left and the selected session's live terminal on the ri
 - Terminals stay alive while you switch between them. When a session finishes working while you're looking
   elsewhere, it gets a blue dot, a Dock badge, and a notification.
 
+**Studio MCP**: every Claude session Studio starts or resumes gets `--mcp-config` pointing at the bundled
+`studio-mcp`, so its AI can drive the editor: `get_state`, `set_theme`, `set_font_size`, `new_session` (prompt, split),
+`new_terminal` (command, split), `run_in_terminal` (plain terminals only), `split_tab`, `move_tab`, `focus_tab`,
+`close_tab`, `open_palette`, `open_project`. The app listens on 127.0.0.1 only, with a random token in a 0600 file
+(`~/Library/Application Support/Studio/control-<bundle id>.json`); sessions get `STUDIO_TAB` so the AI knows its tab.
+
 Icon: `Resources/AppIcon.svg` → `scripts/make-icon.sh` regenerates `Resources/AppIcon.icns`.
 
 ## Build & run

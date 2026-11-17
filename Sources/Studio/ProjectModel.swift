@@ -37,6 +37,7 @@ final class ProjectModel: ObservableObject {
         first.selection = restored.first.map { "t:\($0.id)" }
         consumePendingFocus()   // opened from another window's palette
         watchClicks()
+        StudioControl.shared.register(self)
     }
 
     var name: String { projectName(for: folder) }
@@ -88,6 +89,7 @@ final class ProjectModel: ObservableObject {
 
     private func changed() {
         objectWillChange.send()
+        StudioControl.shared.noteActive(self)
         store.setViewing(window: windowId, sessionId: selectedSessionId)
     }
 
@@ -162,6 +164,7 @@ final class ProjectModel: ObservableObject {
 
     func windowClosed() {
         store.endViewing(window: windowId)
+        StudioControl.shared.unregister(self)
         if let m = clickMonitor { NSEvent.removeMonitor(m); clickMonitor = nil }
     }
 
@@ -230,6 +233,21 @@ final class ProjectModel: ObservableObject {
             changed()
             focusTerminal()
         }
+    }
+
+    /// Show a new terminal: as a tab in `g` (zone nil/center), or in a new group split off `g` on that side.
+    func place(_ t: TerminalSession, beside g: GroupNode, zone: DropZone?) {
+        if let zone, zone != .center {
+            let ng = GroupNode(tabIds: [t.id], selection: "t:\(t.id)")
+            insert(ng, beside: g, zone: zone)
+            activeGroupId = ng.id
+        } else {
+            g.tabIds.append(t.id)
+            g.selection = "t:\(t.id)"
+            activeGroupId = g.id
+        }
+        changed()
+        focusTerminal()
     }
 
     func resize(_ box: SplitBox, fractions: [CGFloat]) {

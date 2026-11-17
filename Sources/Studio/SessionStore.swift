@@ -52,6 +52,7 @@ final class SessionStore: ObservableObject {
     private var bag: Set<AnyCancellable> = []
 
     init() {
+        StudioControl.shared.start(store: self)
         refreshLive()
         rescanTranscripts()
         liveTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
@@ -286,8 +287,8 @@ final class SessionStore: ObservableObject {
         return t
     }
 
-    func newSession(in cwd: String) -> TerminalSession {
-        let t = TerminalSession(cwd: cwd, claudeArgs: [], sessionId: nil, fontSize: fontSize)
+    func newSession(in cwd: String, prompt: String? = nil) -> TerminalSession {
+        let t = TerminalSession(cwd: cwd, claudeArgs: prompt.map { [$0] } ?? [], sessionId: nil, fontSize: fontSize)
         add(t)
         return t
     }

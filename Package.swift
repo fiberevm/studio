@@ -13,5 +13,10 @@ let package = Package(
             dependencies: ["SwiftTerm"],
             path: "Sources/Studio"
         ),
+        // MCP server injected into every Claude session Studio starts; forwards tool calls to the app.
+        .executableTarget(
+            name: "studio-mcp",
+            path: "Sources/StudioMCP"
+        ),
     ]
 )

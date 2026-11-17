@@ -26,7 +26,10 @@ struct ProjectWindow: View {
         .ignoresSafeArea()
         .preferredColorScheme(Theme.current.isLight ? .light : .dark)
         .navigationTitle(folder.map { projectName(for: $0) } ?? "Studio")
-        .onAppear(perform: handleLaunchArguments)
+        .onAppear {
+            handleLaunchArguments()
+            StudioControl.shared.openWindow = { folder in openWindow(value: folder) }
+        }
     }
 
     /// `Studio --new <dir>` opens a window on dir with a fresh session; `--resume <id>` resumes into its project.

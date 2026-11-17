@@ -42,7 +42,7 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     private func launchShell() {
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let dir = FileManager.default.fileExists(atPath: cwd) ? cwd : NSHomeDirectory()
-        view.startProcess(executable: shell, args: ["-l"], environment: Self.childEnvironment(),
+        view.startProcess(executable: shell, args: ["-l"], environment: Self.childEnvironment(tab: id),
                           execName: "-" + (shell as NSString).lastPathComponent, currentDirectory: dir)
         pid = view.process.shellPid
         running = true
@@ -59,22 +59,32 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     private func launch(_ args: [String]) {
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let dir = FileManager.default.fileExists(atPath: cwd) ? cwd : NSHomeDirectory()
+        // Every session gets the Studio MCP so its AI can drive the editor. --mcp-config is variadic,
+        // so it goes last (after any prompt or --resume).
+        var args = args
+        if let cfg = StudioControl.mcpConfigPath { args += ["--mcp-config", cfg] }
         let cmd = (["exec", "claude"] + args).map(shellQuote).joined(separator: " ")
         // Login + interactive shell so the user's PATH (and therefore `claude`) resolves like in Terminal.
         // `exec` keeps the pid, so ~/.claude/sessions/<pid>.json maps back to this terminal.
         view.startProcess(executable: shell, args: ["-l", "-i", "-c", cmd],
-                          environment: Self.childEnvironment(), execName: nil, currentDirectory: dir)
+                          environment: Self.childEnvironment(tab: id), execName: nil, currentDirectory: dir)
         pid = view.process.shellPid
         running = true
         exitCode = nil
     }
 
+    /// Type text into the terminal as if the user had (used by the Studio MCP's run_in_terminal).
+    func type(_ text: String) { view.send(txt: text) }
+
     func terminate() {
         if running, pid > 0 { kill(pid, SIGHUP) }
     }
 
-    static func childEnvironment() -> [String] {
+    static func childEnvironment(tab: UUID? = nil) -> [String] {
         var env = ProcessInfo.processInfo.environment
+        // Lets the Studio MCP (and scripts) know which tab they run in and how to reach the app.
+        if let tab { env["STUDIO_TAB"] = tab.uuidString }
+        env["STUDIO_CONTROL_FILE"] = StudioControl.controlFilePath
         // If the app was launched from inside a Claude Code session, don't leak its markers.
         for k in env.keys where k == "CLAUDECODE" || k.hasPrefix("CLAUDE_CODE_") { env.removeValue(forKey: k) }
         env["TERM"] = "xterm-256color"

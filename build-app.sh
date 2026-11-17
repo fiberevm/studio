@@ -8,6 +8,7 @@ APP=build/Studio.app
 # New files are written next to the old ones and renamed over them, so a running copy keeps its old binary.
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/Studio "$APP/Contents/MacOS/.Studio.new" && mv -f "$APP/Contents/MacOS/.Studio.new" "$APP/Contents/MacOS/Studio"
+cp .build/release/studio-mcp "$APP/Contents/MacOS/.studio-mcp.new" && mv -f "$APP/Contents/MacOS/.studio-mcp.new" "$APP/Contents/MacOS/studio-mcp"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/.AppIcon.new" && mv -f "$APP/Contents/Resources/.AppIcon.new" "$APP/Contents/Resources/AppIcon.icns"
 cat > "$APP/Contents/.Info.plist.new" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
