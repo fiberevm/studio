@@ -66,15 +66,19 @@ struct ProjectView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            Sidebar()
-                .frame(width: sidebarWidth)
-            Hairline(vertical: true)
-            VStack(spacing: 0) {
-                TabStrip()
-                    .frame(height: topBarHeight)
-                Hairline()
-                DetailCard()
+        VStack(spacing: 0) {
+            TitleBar(title: model.name, subtitle: abbreviatePath(model.folder))
+            Hairline()
+            HStack(spacing: 0) {
+                Sidebar()
+                    .frame(width: sidebarWidth)
+                Hairline(vertical: true)
+                VStack(spacing: 0) {
+                    TabStrip()
+                        .frame(height: topBarHeight)
+                    Hairline()
+                    DetailCard()
+                }
             }
         }
         .environmentObject(model)
@@ -153,9 +157,6 @@ struct Sidebar: View {
         let busy = items.filter { $0.status == .working }
         let rest = items.filter { $0.status != .working }
         VStack(alignment: .leading, spacing: 0) {
-            // Traffic lights sit in this row; keep it draggable.
-            SwiftUI.Color.clear.frame(height: topBarHeight).background(WindowDragArea())
-
             HStack {
                 Text(model.name.uppercased())
                     .font(.system(size: 11, weight: .semibold))
@@ -276,7 +277,8 @@ struct SessionRow: View {
         }
         .padding(.leading, 16).padding(.trailing, 12)
         .frame(height: 28)
-        .background(selected ? SwiftUI.Color(nsColor: Theme.selection) : (hovering ? SwiftUI.Color.white.opacity(0.04) : .clear))
+        .background(selected ? SwiftUI.Color(nsColor: Theme.selection) : (hovering ? SwiftUI.Color.white.opacity(0.04) : .clear),
+                    ignoresSafeAreaEdges: [])
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .help("\(item.title)\n\(item.status.label) · \(abbreviatePath(item.cwd))\(item.inApp ? "" : "\nRunning outside AICode (pid \(item.pid ?? 0))")")
@@ -314,6 +316,28 @@ struct Hairline: View {
     var body: some View {
         SwiftUI.Color(nsColor: Theme.border)
             .frame(width: vertical ? 1 : nil, height: vertical ? nil : 1)
+    }
+}
+
+// MARK: - Title bar
+
+/// Full-width title bar holding the traffic lights, with the project name centered (like VS Code).
+struct TitleBar: View {
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(title).font(.system(size: 13, weight: .semibold))
+            Text("—").foregroundStyle(.tertiary)
+            Text(subtitle).font(.system(size: 12)).foregroundStyle(.secondary)
+                .lineLimit(1).truncationMode(.head)
+        }
+        .allowsHitTesting(false)    // let clicks fall through to the drag area
+        .padding(.horizontal, 90)   // clear the traffic lights on the left
+        .frame(maxWidth: .infinity)
+        .frame(height: 28)
+        .background(WindowDragArea())
     }
 }
 
@@ -370,7 +394,8 @@ struct TabButton: View {
         }
         .padding(.leading, 16).padding(.trailing, 10)
         .frame(height: topBarHeight)
-        .background(selected ? SwiftUI.Color(nsColor: Theme.background) : (hovering ? SwiftUI.Color.white.opacity(0.03) : .clear))
+        .background(selected ? SwiftUI.Color(nsColor: Theme.background) : (hovering ? SwiftUI.Color.white.opacity(0.03) : .clear),
+                    ignoresSafeAreaEdges: [])
         .overlay(alignment: .top) {
             if selected { SwiftUI.Color.accentColor.frame(height: 1) }
         }
