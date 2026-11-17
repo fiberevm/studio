@@ -7,6 +7,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSWindow.allowsAutomaticWindowTabbing = false
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    /// Quit only once every session has actually exited. Otherwise a quick relaunch sees them still running,
+    /// takes them for sessions running elsewhere, and doesn't reopen their tabs.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let pids = MainActor.assumeIsolated { SessionStore.current?.terminals.filter(\.running).map(\.pid) ?? [] }
+            .filter { $0 > 0 }
+        guard !pids.isEmpty else { return .terminateNow }
+        pids.forEach { kill($0, SIGHUP) }
+        let deadline = Date().addingTimeInterval(6)
+        func check() {
+            let alive = pids.filter { kill($0, 0) == 0 }
+            if alive.isEmpty || Date() > deadline {
+                alive.forEach { kill($0, SIGKILL) }
+                sender.reply(toApplicationShouldTerminate: true)
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: check)
+            }
+        }
+        check()
+        return .terminateLater
+    }
 }
 
 @main

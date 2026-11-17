@@ -54,7 +54,11 @@ final class SessionStore: ObservableObject {
     private var restoredFolders: Set<String> = []
     private var bag: Set<AnyCancellable> = []
 
+    /// The app's single store, for the app delegate (quit handling).
+    static weak var current: SessionStore?
+
     init() {
+        Self.current = self
         StudioControl.shared.start(store: self)
         refreshLive()
         rescanTranscripts()
