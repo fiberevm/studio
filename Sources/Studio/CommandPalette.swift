@@ -12,6 +12,7 @@ struct CommandPalette: View {
     @State private var themeBeforePreview: AppTheme?
     @State private var keepIndexOnce = false
     @FocusState private var focused: Bool
+    @StateObject private var keys = KeyMonitor()
 
     enum Mode { case main, themes }
 
@@ -41,10 +42,6 @@ struct CommandPalette: View {
                 .overlay(Rectangle().stroke(SwiftUI.Color(nsColor: Theme.accent), lineWidth: 1))
                 .padding(6)
                 .focused($focused)
-                .onSubmit { activate(items) }
-                .onKeyPress(.downArrow) { move(1, items); return .handled }
-                .onKeyPress(.upArrow) { move(-1, items); return .handled }
-                .onKeyPress(.escape) { dismiss(cancel: true); return .handled }
                 .onChange(of: query) { _, _ in
                     if keepIndexOnce { keepIndexOnce = false; return }
                     index = 0
@@ -56,20 +53,22 @@ struct CommandPalette: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 12).frame(height: 26)
             } else {
+                // Plain VStack (≤ 80 rows) with real identities: a LazyVStack keyed by position kept showing stale
+                // rows when the list switched from sessions to themes. Rebuilt per mode for the same reason.
                 ScrollViewReader { proxy in
                     ScrollView {
-                        LazyVStack(spacing: 0) {
+                        VStack(spacing: 0) {
                             ForEach(Array(items.enumerated()), id: \.element.id) { i, item in
                                 row(item, selected: i == index)
-                                    .id(i)
                                     .onTapGesture { index = i; activate(items) }
                             }
                         }
                     }
                     .frame(maxHeight: 26 * 14)
                     .fixedSize(horizontal: false, vertical: true)
-                    .onChange(of: index) { _, i in proxy.scrollTo(i) }
+                    .onChange(of: index) { _, i in if i < items.count { proxy.scrollTo(items[i].id) } }
                 }
+                .id(mode)
             }
         }
         .padding(.bottom, 4)
@@ -80,12 +79,29 @@ struct CommandPalette: View {
         .onAppear {
             focused = true
             if model.store.history.isEmpty { model.store.loadHistory() }
+            // The text field's editor swallows ↑/↓ before SwiftUI sees them, so catch keys at the window level.
+            keys.start { e in
+                let ctrl = e.modifierFlags.contains(.control)
+                switch e.keyCode {
+                case 125: move(1, results); return true                     // ↓
+                case 126: move(-1, results); return true                    // ↑
+                case 45 where ctrl: move(1, results); return true           // ⌃N
+                case 35 where ctrl: move(-1, results); return true          // ⌃P
+                case 121: move(10, results); return true                    // page down
+                case 116: move(-10, results); return true                   // page up
+                case 53: escape(); return true                              // esc
+                case 36, 76: activate(results); return true                 // return / enter
+                // (Return is handled here, not with onSubmit: the field also "submits" when it merely loses focus)
+                default: return false
+                }
+            }
         }
+        .onDisappear { keys.stop() }
     }
 
     private var placeholder: String {
         switch mode {
-        case .themes: return "Select Color Theme (↑↓ to preview)"
+        case .themes: return "Select Color Theme  ·  ↑↓ preview  ·  ⏎ keep  ·  esc back"
         case .main: return "Search sessions by name or project, or type > for commands"
         }
     }
@@ -130,9 +146,11 @@ struct CommandPalette: View {
             if query.hasPrefix(">") {
                 return filter(commandItems, by: String(query.dropFirst()).trimmingCharacters(in: .whitespaces))
             }
-            let sessions = filter(sessionItems, by: query)
-            let cmds = query.isEmpty ? [] : filter(commandItems, by: query)
-            return Array(sessions.prefix(60)) + cmds
+            if query.isEmpty { return Array(sessionItems.prefix(80)) }
+            // Rank sessions and commands together: substring hits of either kind beat loose letter matches,
+            // so "theme" finds Change Theme before a session that merely contains t…h…e…m…e.
+            let pool = sessionItems.filter { $0.id != "cmd:theme-entry" } + commandItems
+            return Array(filter(pool, by: query).prefix(80))
         }
     }
 
@@ -153,6 +171,8 @@ struct CommandPalette: View {
                             section: out.isEmpty ? "running" : nil,
                             run: { open(sid: sid, cwd: item.cwd) }))
         }
+        out.append(Item(id: "cmd:theme-entry", title: "Change Theme…", detail: Theme.current.name,
+                        leading: .icon("paintpalette"), run: { enterThemes() }))
         var first = true
         for r in store.history where !seen.contains(r.id) {
             out.append(Item(id: "past:\(r.id)", title: r.displayTitle, subtitle: projectName(for: r.cwd),
@@ -171,7 +191,7 @@ struct CommandPalette: View {
             Item(id: "cmd:\(title)", title: title, detail: key, leading: .icon(icon), run: run)
         }
         var list = [
-            Item(id: "cmd:theme", title: "Preferences: Color Theme", detail: Theme.current.name,
+            Item(id: "cmd:theme", title: "Change Theme…", subtitle: "Preferences: Color Theme", detail: Theme.current.name,
                  leading: .icon("paintpalette"), run: { enterThemes() }),
             cmd("Session: New Session", "⌘N", "plus") { m.newTab() },
             cmd("Terminal: New Terminal", "⌃`", "terminal") { m.newShellTab() },
@@ -233,7 +253,11 @@ struct CommandPalette: View {
 
     private func move(_ d: Int, _ items: [Item]) {
         guard !items.isEmpty else { return }
-        index = (index + d + items.count) % items.count
+        if abs(d) == 1 {
+            index = (index + d + items.count) % items.count        // single steps wrap around
+        } else {
+            index = min(max(index + d, 0), items.count - 1)        // page jumps stop at the ends
+        }
         items[index].preview?()
     }
 
@@ -244,7 +268,8 @@ struct CommandPalette: View {
     private func activate(_ items: [Item]) {
         guard index < items.count else { return }
         let item = items[index]
-        if item.id == "cmd:theme" { item.run(); return }   // switches mode, palette stays open
+        debugLog("palette activate \(item.id) mode=\(mode) query=\(query)")
+        if item.id == "cmd:theme" || item.id == "cmd:theme-entry" { item.run(); return }   // opens the theme step
         dismiss(cancel: false)
         item.run()
     }
@@ -255,6 +280,17 @@ struct CommandPalette: View {
         keepIndexOnce = !query.isEmpty   // the query reset below shouldn't move the highlight
         query = ""
         index = AppTheme.all.firstIndex(of: Theme.current) ?? 0
+    }
+
+    /// Esc in the theme picker reverts the preview and steps back to the main list; otherwise it closes.
+    private func escape() {
+        guard mode == .themes else { dismiss(cancel: true); return }
+        if let original = themeBeforePreview { model.store.setTheme(original, persist: false) }
+        themeBeforePreview = nil
+        mode = .main
+        keepIndexOnce = !query.isEmpty
+        query = ""
+        index = 0
     }
 
     private func dismiss(cancel: Bool) {
@@ -273,4 +309,20 @@ struct CommandPalette: View {
             openWindow(value: root)
         }
     }
+}
+
+/// Local key-down monitor that lives while the palette is open; the handler returns true to swallow the event.
+final class KeyMonitor: ObservableObject {
+    private var monitor: Any?
+
+    func start(_ handler: @escaping (NSEvent) -> Bool) {
+        stop()
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { e in handler(e) ? nil : e }
+    }
+
+    func stop() {
+        if let m = monitor { NSEvent.removeMonitor(m); monitor = nil }
+    }
+
+    deinit { stop() }
 }
