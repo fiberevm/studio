@@ -276,7 +276,7 @@ struct Sidebar: View {
                         .padding(.horizontal, 5)
                         .background(SwiftUI.Color.primary.opacity(0.12))
                     Spacer()
-                    if !busy.isEmpty { ProgressView().controlSize(.mini).scaleEffect(0.7) }
+                    if !busy.isEmpty { ClaudeSpinner() }
                 }
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 12)
@@ -355,7 +355,9 @@ struct StatusDot: View {
         Group {
             switch status {
             case .working, .starting:
-                ProgressView().controlSize(.mini).scaleEffect(0.7)
+                ClaudeSpinner()
+            case .idle:
+                SwiftUI.Color.clear   // ready is the quiet default: no dot
             default:
                 Circle().fill(color).frame(width: 7, height: 7)
             }
@@ -370,6 +372,24 @@ struct StatusDot: View {
         case .exited: return .gray
         case .inactive: return .gray.opacity(0.4)
         default: return .orange
+        }
+    }
+}
+
+/// Claude Code's "thinking" glyph: a star that grows and shrinks through dingbat frames, in Claude orange.
+struct ClaudeSpinner: View {
+    var size: CGFloat = 12
+    // \u{FE0E} keeps ✳ from rendering as an emoji.
+    private static let frames = ["·", "✢", "✳\u{FE0E}", "✶", "✻", "✽", "✻", "✶", "✳\u{FE0E}", "✢"]
+    static let orange = SwiftUI.Color(red: 0.85, green: 0.47, blue: 0.34)
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.11)) { ctx in
+            let i = Int(ctx.date.timeIntervalSinceReferenceDate / 0.11) % Self.frames.count
+            Text(Self.frames[i])
+                .font(.system(size: size, weight: .semibold))
+                .foregroundStyle(Self.orange)
+                .frame(width: size, height: size)
         }
     }
 }
