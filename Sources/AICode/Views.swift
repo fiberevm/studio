@@ -390,7 +390,7 @@ struct TabButton: View {
             }
             .buttonStyle(.borderless)
             .opacity(hovering || selected ? 1 : 0)
-            .help("Close tab — session keeps running (⌥⌘W)")
+            .help("Close tab — session keeps running (⌘W)")
         }
         .padding(.leading, 16).padding(.trailing, 10)
         .frame(height: topBarHeight)

@@ -48,12 +48,19 @@ struct AppCommands: Commands {
                     Button(abbreviatePath(f)) { openWindow(value: f) }
                 }
             }
-            Divider()
-            Button("Close Tab") { project?.closeSelectedTab() }
-                .keyboardShortcut("w", modifiers: [.command, .option])
-                .disabled(project?.selectedTerminal == nil)
+
             Button("End Session") { if let t = project?.selectedTerminal { project?.endSession(t) } }
                 .disabled(project?.selectedTerminal == nil)
+        }
+        // ⌘W closes the tab (the session keeps running); with no tab open it closes the window, like VS Code.
+        CommandGroup(replacing: .saveItem) {
+            Button("Close Tab") {
+                if let p = project, p.selectedTerminal != nil { p.closeSelectedTab() }
+                else { NSApp.keyWindow?.performClose(nil) }
+            }
+            .keyboardShortcut("w")
+            Button("Close Window") { NSApp.keyWindow?.performClose(nil) }
+                .keyboardShortcut("w", modifiers: [.command, .shift])
         }
         CommandGroup(after: .toolbar) {
             Button("Bigger Text") { store.fontSize = min(store.fontSize + 1, 24) }

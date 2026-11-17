@@ -3,7 +3,8 @@
 A native macOS app for working with many Claude Code sessions at once, laid out like VS Code:
 a session sidebar on the left and the selected session's live terminal on the right.
 
-- **Active**: every running `claude` process on this machine (read from `~/.claude/sessions/<pid>.json`),
+- **One window per project folder**; the sidebar lists sessions running in that folder (and its worktrees).
+- **Sessions**: every running `claude` process (read from `~/.claude/sessions/<pid>.json`),
   with live status (Working / Idle / Shell / Needs input), plus terminals opened in the app.
   Sessions running elsewhere are tagged `terminal` / `desktop`.
 - **History**: every transcript in `~/.claude/projects`, grouped by project. Double-click (or Return) to
@@ -21,10 +22,12 @@ a session sidebar on the left and the selected session's live terminal on the ri
 
 | Keys | Action |
 |---|---|
-| ⌘N / ⇧⌘N | New session (pick folder) / in same folder |
-| ⌘1…⌘9 | Jump to active session |
-| ⇧⌘[ / ⇧⌘] | Previous / next active session |
-| ⇧⌘R | Resume selected |
-| ⌥⌘W | Close terminal |
+| ⌘N | New Claude session in this window's folder |
+| ⇧⌘N | Open another project window |
+| ⌘[ / ⌘] | Previous / next tab |
+| ⌘1…⌘9 | Jump to tab |
+| ⌘W | Close tab (session keeps running; click it in the sidebar to reopen) — closes the window if no tab is open |
+| ⇧⌘W | Close window |
+| ⌘+ / ⌘− / ⌘0 | Text size |
 
 Built with SwiftUI + [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm).
