@@ -77,6 +77,15 @@ struct AppCommands: Commands {
             Button("Close Window") { NSApp.keyWindow?.performClose(nil) }
                 .keyboardShortcut("w", modifiers: [.command, .shift])
         }
+        CommandGroup(before: .sidebar) {
+            Button("Toggle Sidebar") { project?.sidebarVisible.toggle() }
+                .keyboardShortcut("b")
+                .disabled(project == nil)
+            Button("Equalize Pane Sizes") { project?.equalize() }
+                .disabled(project == nil)
+            Button("Single Pane") { project?.applyPreset(.single) }
+                .disabled(project == nil)
+        }
         CommandGroup(after: .toolbar) {
             Button("Bigger Text") { store.fontSize = min(store.fontSize + 1, 24) }
                 .keyboardShortcut("+")

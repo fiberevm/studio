@@ -219,7 +219,57 @@ final class StudioControl {
             model.close(t)
             return t.isShell ? "terminal closed" : "tab closed (session keeps running)"
 
-        case "open_palette":
+        case "resize_pane":
+            let g = try group(p, model, fallback: callerGroup)
+            guard let share = (p["size"] as? NSNumber)?.doubleValue, share > 0, share < 1 else {
+                throw ControlError(message: "size is the pane's share of its split, between 0 and 1 (e.g. 0.7)")
+            }
+            guard model.resize(g, share: CGFloat(share)) else { throw ControlError(message: "that pane isn't in a split") }
+            return "resized"
+
+        case "set_split_sizes":
+            guard let sid = p["split"] as? String, let id = UUID(uuidString: sid), let box = model.split(byId: id) else {
+                throw ControlError(message: "unknown split — get_state lists split ids")
+            }
+            guard let sizes = (p["sizes"] as? [NSNumber])?.map({ CGFloat($0.doubleValue) }), sizes.count == box.children.count else {
+                throw ControlError(message: "sizes needs \(box.children.count) numbers (relative; they're normalized)")
+            }
+            model.setSizes(box, sizes)
+            return "sizes set"
+
+        case "equalize_layout":
+            model.equalize()
+            return "all splits equalized"
+
+        case "set_layout":
+            guard let name = p["preset"] as? String, let preset = ProjectModel.Preset(rawValue: name) else {
+                throw ControlError(message: "preset must be single, columns, rows or grid")
+            }
+            model.applyPreset(preset, panes: (p["panes"] as? NSNumber)?.intValue ?? 2)
+            return "layout: \(name)"
+
+        case "merge_pane":
+            let g = try group(p, model, fallback: callerGroup)
+            guard model.groups.count > 1 else { throw ControlError(message: "there's only one pane") }
+            model.merge(g)
+            return "merged"
+
+        case "focus_pane":
+            model.focus(try group(p, model, fallback: nil))
+            return "focused"
+
+        case "reorder_tab":
+            let t = try tab()
+            guard let i = (p["index"] as? NSNumber)?.intValue else { throw ControlError(message: "index is required (0 = first)") }
+            model.reorder(t, to: i)
+            return "moved to position \(i)"
+
+        case "set_sidebar":
+            if let v = p["visible"] as? Bool { model.sidebarVisible = v }
+            if let w = (p["width"] as? NSNumber)?.doubleValue { model.sidebarWidth = CGFloat(min(max(w, 160), 520)) }
+            return ["visible": model.sidebarVisible, "width": Int(model.sidebarWidth)]
+
+                case "open_palette":
             model.palette = p["text"] as? String ?? ""
             return "palette open"
 
@@ -234,6 +284,13 @@ final class StudioControl {
         default:
             throw ControlError(message: "unknown method \(method)")
         }
+    }
+
+    private func group(_ p: [String: Any], _ m: ProjectModel, fallback: GroupNode?) throws -> GroupNode {
+        if let s = p["group"] as? String, let id = UUID(uuidString: s), let g = m.groups.first(where: { $0.id == id }) { return g }
+        if let s = p["tab"] as? String, let id = UUID(uuidString: s), let g = m.group(containing: id) { return g }
+        if let fallback { return fallback }
+        throw ControlError(message: "unknown group — get_state lists group ids")
     }
 
     private func state(store: SessionStore, focus: ProjectModel, callerTab: UUID?) -> [String: Any] {
@@ -261,6 +318,7 @@ final class StudioControl {
                     ]
                 case .split(let box):
                     return ["split": box.axis == .horizontal ? "side-by-side" : "stacked",
+                            "split_id": box.id.uuidString,
                             "sizes": box.fractions.map { Double(($0 * 100).rounded()) / 100 },
                             "children": box.children.map(layout)]
                 }
@@ -268,6 +326,7 @@ final class StudioControl {
             return [
                 "project": m.folder,
                 "focused": m === focus,
+                "sidebar": ["visible": m.sidebarVisible, "width": Int(m.sidebarWidth)],
                 "layout": layout(m.root),
                 "sessions_in_sidebar": m.items.map { ["title": $0.title, "status": $0.status.label, "in_studio": $0.inApp] },
             ]

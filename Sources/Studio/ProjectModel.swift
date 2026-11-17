@@ -13,6 +13,13 @@ final class ProjectModel: ObservableObject {
     @Published private(set) var activeGroupId: UUID
     /// Command palette: nil when closed, otherwise the text it opened with ("" for sessions, ">" for commands).
     @Published var palette: String?
+    /// Sidebar visibility and width (⌘B, drag its edge, or the Studio MCP). Shared by all windows.
+    @Published var sidebarVisible: Bool = UserDefaults.standard.object(forKey: "sidebarVisible") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(sidebarVisible, forKey: "sidebarVisible") }
+    }
+    @Published var sidebarWidth: CGFloat = UserDefaults.standard.object(forKey: "sidebarWidth") as? CGFloat ?? 250 {
+        didSet { UserDefaults.standard.set(sidebarWidth, forKey: "sidebarWidth") }
+    }
     /// Where a tab being dragged would land (drives the shaded snap preview). One per window, so a preview can
     /// never linger in a group the drag already left.
     @Published private(set) var dropTarget: (group: UUID, zone: DropZone)?
@@ -263,6 +270,124 @@ final class ProjectModel: ObservableObject {
         box.fractions = fractions
         objectWillChange.send()
         saveLayoutSoon()
+    }
+
+    // MARK: Layout operations (menus + Studio MCP)
+
+    func split(byId id: UUID) -> SplitBox? {
+        func find(_ n: LayoutNode) -> SplitBox? {
+            guard case .split(let b) = n else { return nil }
+            if b.id == id { return b }
+            for c in b.children { if let r = find(c) { return r } }
+            return nil
+        }
+        return find(root)
+    }
+
+    var splits: [SplitBox] {
+        func all(_ n: LayoutNode) -> [SplitBox] {
+            guard case .split(let b) = n else { return [] }
+            return [b] + b.children.flatMap(all)
+        }
+        return all(root)
+    }
+
+    /// Give a pane `share` (0–1) of its split; its siblings keep their proportions in the rest.
+    @discardableResult
+    func resize(_ g: GroupNode, share: CGFloat) -> Bool {
+        guard let (box, i) = parent(of: g.id) else { return false }
+        let share = min(max(share, 0.05), 0.95)
+        let others = box.fractions.enumerated().filter { $0.offset != i }.map(\.element).reduce(0, +)
+        box.fractions = box.fractions.enumerated().map { j, f in
+            j == i ? share : (others > 0 ? f / others * (1 - share) : (1 - share) / CGFloat(box.fractions.count - 1))
+        }
+        changed()
+        return true
+    }
+
+    func setSizes(_ box: SplitBox, _ sizes: [CGFloat]) {
+        let total = sizes.reduce(0, +)
+        guard sizes.count == box.children.count, total > 0 else { return }
+        box.fractions = sizes.map { max($0 / total, 0.05) }
+        let t2 = box.fractions.reduce(0, +)
+        box.fractions = box.fractions.map { $0 / t2 }
+        changed()
+    }
+
+    func equalize() {
+        for b in splits { b.fractions = Array(repeating: 1 / CGFloat(b.children.count), count: b.children.count) }
+        changed()
+    }
+
+    func focus(_ g: GroupNode) {
+        activeGroupId = g.id
+        changed()
+        focusTerminal()
+    }
+
+    /// Fold a pane's tabs into a neighbouring pane and remove it.
+    func merge(_ g: GroupNode) {
+        guard groups.count > 1 else { return }
+        let target = siblingGroup(of: g) ?? groups.first { $0 !== g }!
+        target.tabIds += g.tabIds
+        if target.selection == nil { target.selection = g.selection }
+        g.tabIds = []
+        remove(g)
+        activeGroupId = target.id
+        changed()
+    }
+
+    private func siblingGroup(of g: GroupNode) -> GroupNode? {
+        guard let (box, i) = parent(of: g.id) else { return nil }
+        let near = i > 0 ? box.children[i - 1] : box.children[min(i + 1, box.children.count - 1)]
+        return near.groups.first
+    }
+
+    func reorder(_ t: TerminalSession, to index: Int) {
+        guard let g = group(containing: t.id), let from = g.tabIds.firstIndex(of: t.id) else { return }
+        g.tabIds.remove(at: from)
+        g.tabIds.insert(t.id, at: min(max(index, 0), g.tabIds.count))
+        changed()
+    }
+
+    enum Preset: String { case single, columns, rows, grid }
+
+    /// Rearrange every open tab: one pane, N columns, N rows, or a 2×2 grid. Tabs keep their order.
+    func applyPreset(_ preset: Preset, panes requested: Int = 2) {
+        let all = groups.flatMap(\.tabIds)
+        let selected = Set(groups.compactMap { selectedTerminal(in: $0)?.id })
+        let activeTab = selectedTerminal?.id
+        let n: Int
+        switch preset {
+        case .single: n = 1
+        case .grid: n = 4
+        case .columns, .rows: n = max(1, min(requested, 6))
+        }
+        let count = max(1, min(n, all.count))
+        // contiguous chunks, as even as possible
+        var chunks: [[UUID]] = []
+        var start = 0
+        for k in 0..<count {
+            let size = all.count / count + (k < all.count % count ? 1 : 0)
+            chunks.append(Array(all[start..<start + size]))
+            start += size
+        }
+        let gs = chunks.map { ids -> GroupNode in
+            let sel = ids.first { selected.contains($0) } ?? ids.first
+            return GroupNode(tabIds: ids, selection: sel.map { "t:\($0)" })
+        }
+        if gs.count == 1 {
+            root = .group(gs[0])
+        } else if preset == .grid && gs.count == 4 {
+            let top = SplitBox(axis: .horizontal, children: [.group(gs[0]), .group(gs[1])])
+            let bottom = SplitBox(axis: .horizontal, children: [.group(gs[2]), .group(gs[3])])
+            root = .split(SplitBox(axis: .vertical, children: [.split(top), .split(bottom)]))
+        } else {
+            root = .split(SplitBox(axis: preset == .rows ? .vertical : .horizontal, children: gs.map { .group($0) }))
+        }
+        activeGroupId = (activeTab.flatMap { id in gs.first { $0.tabIds.contains(id) } } ?? gs[0]).id
+        changed()
+        focusTerminal()
     }
 
     // MARK: Layout persistence

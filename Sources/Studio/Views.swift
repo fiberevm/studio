@@ -73,9 +73,11 @@ struct ProjectView: View {
             TitleBar(title: model.name, subtitle: abbreviatePath(model.folder))
             Hairline()
             HStack(spacing: 0) {
-                Sidebar()
-                    .frame(width: sidebarWidth)
-                Hairline(vertical: true)
+                if model.sidebarVisible {
+                    Sidebar()
+                        .frame(width: model.sidebarWidth)
+                    SidebarEdge()
+                }
                 LayoutView(node: model.root)
             }
         }
@@ -400,6 +402,28 @@ struct TitleBar: View {
         .frame(maxWidth: .infinity)
         .frame(height: 28)
         .background(WindowDragArea())
+    }
+}
+
+/// The sidebar's 1px edge, draggable to resize it (VS Code style).
+struct SidebarEdge: View {
+    @EnvironmentObject var model: ProjectModel
+    @State private var start: CGFloat?
+
+    var body: some View {
+        Hairline(vertical: true)
+            .overlay(
+                SwiftUI.Color.clear.frame(width: 7).contentShape(Rectangle())
+                    .onHover { inside in if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() } }
+                    .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                        .onChanged { v in
+                            let s0 = start ?? model.sidebarWidth
+                            if start == nil { start = s0 }
+                            model.sidebarWidth = min(max(s0 + v.translation.width, 160), 520)
+                        }
+                        .onEnded { _ in start = nil })
+            )
+            .zIndex(1)
     }
 }
 
