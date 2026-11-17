@@ -166,10 +166,10 @@ struct Sidebar: View {
                     Image(systemName: "plus").font(.system(size: 12)).frame(width: 20, height: 20)
                 }
                 .buttonStyle(.borderless)
-                .help("New session in \(model.name) (⌘T)")
+                .help("New session in \(model.name) (⌘N)")
             }
-            .padding(.leading, 12).padding(.trailing, 6)
-            .frame(height: 26)
+            .padding(.leading, 16).padding(.trailing, 8)
+            .frame(height: 30)
             .help(abbreviatePath(model.folder))
 
             ScrollView {
@@ -214,8 +214,8 @@ struct Sidebar: View {
                     Spacer()
                 }
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 8)
-                .frame(height: 24)
+                .padding(.horizontal, 12)
+                .frame(height: 28)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -226,7 +226,7 @@ struct Sidebar: View {
                         ForEach(busy) { row($0) }
                     }
                 }
-                .frame(maxHeight: 22 * 10)
+                .frame(maxHeight: 28 * 8)
                 .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -257,7 +257,7 @@ struct Sidebar: View {
     }
 }
 
-/// One 22px line: title on the left, status dot on the right. Unread (finished while you were away) shows bold.
+/// One 28px line: title on the left, status dot on the right. Unread (finished while you were away) shows bold.
 struct SessionRow: View {
     let item: ActiveItem
     let attention: Bool
@@ -274,8 +274,8 @@ struct SessionRow: View {
             Spacer(minLength: 4)
             StatusDot(status: item.status)
         }
-        .padding(.leading, 12).padding(.trailing, 8)
-        .frame(height: 22)
+        .padding(.leading, 16).padding(.trailing, 12)
+        .frame(height: 28)
         .background(selected ? SwiftUI.Color(nsColor: Theme.selection) : (hovering ? SwiftUI.Color.white.opacity(0.04) : .clear))
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
@@ -334,7 +334,7 @@ struct TabStrip: View {
                 Image(systemName: "plus").font(.system(size: 12)).frame(width: 30, height: topBarHeight)
             }
             .buttonStyle(.borderless)
-            .help("New tab (⌘T)")
+            .help("New tab (⌘N)")
             SwiftUI.Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity).background(WindowDragArea())
         }
     }
@@ -355,7 +355,7 @@ struct TabButton: View {
     }
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             StatusDot(status: item?.status ?? (terminal.running ? .starting : .exited))
             Text(tabTitle)
                 .font(.system(size: 12))
@@ -368,7 +368,7 @@ struct TabButton: View {
             .opacity(hovering || selected ? 1 : 0)
             .help("Close tab — session keeps running (⌥⌘W)")
         }
-        .padding(.leading, 12).padding(.trailing, 8)
+        .padding(.leading, 16).padding(.trailing, 10)
         .frame(height: topBarHeight)
         .background(selected ? SwiftUI.Color(nsColor: Theme.background) : (hovering ? SwiftUI.Color.white.opacity(0.03) : .clear))
         .overlay(alignment: .top) {

@@ -34,15 +34,15 @@ struct AppCommands: Commands {
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
-            Button("New Tab") { project?.newTab() }
-                .keyboardShortcut("t")
+            Button("New Session") { project?.newTab() }
+                .keyboardShortcut("n")
                 .disabled(project == nil)
             Button("Open Project…") {
                 if let f = pickFolder(prompt: "Open", startingAt: project.map { ($0.folder as NSString).deletingLastPathComponent }) {
                     openWindow(value: f)
                 }
             }
-            .keyboardShortcut("n")
+            .keyboardShortcut("n", modifiers: [.command, .shift])
             Menu("Open Recent Project") {
                 ForEach(RecentProjects.list(), id: \.self) { f in
                     Button(abbreviatePath(f)) { openWindow(value: f) }
