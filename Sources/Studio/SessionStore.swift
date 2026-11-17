@@ -314,6 +314,14 @@ final class SessionStore: ObservableObject {
         return t
     }
 
+    /// A copy of a conversation under a new session id (`claude --resume <id> --fork-session`).
+    /// The original keeps running untouched; the fork learns its own id once Claude starts.
+    func fork(_ sid: String, cwd: String) -> TerminalSession {
+        let t = TerminalSession(cwd: cwd, claudeArgs: ["--resume", sid, "--fork-session"], sessionId: nil, fontSize: fontSize)
+        add(t)
+        return t
+    }
+
     func newSession(in cwd: String, prompt: String? = nil) -> TerminalSession {
         let t = TerminalSession(cwd: cwd, claudeArgs: prompt.map { [$0] } ?? [], sessionId: nil, fontSize: fontSize)
         add(t)

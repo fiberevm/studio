@@ -768,6 +768,11 @@ struct TabButton: View {
         .anchorPreference(key: TabAnchors.self, value: .bounds) { [terminal.id: $0] }
         .onDrag { model.peekTab = nil; return TabDrag.provider(terminal) }
         .contextMenu {
+            if !terminal.isShell {
+                Button("Fork Session to the Right") { model.fork(terminal) }
+                Button("Fork Session Below") { model.fork(terminal, zone: .bottom) }
+                Divider()
+            }
             Button("Split Right") { model.split(terminal, .right) }
             Button("Split Left") { model.split(terminal, .left) }
             Button("Split Down") { model.split(terminal, .bottom) }

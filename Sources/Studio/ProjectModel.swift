@@ -172,6 +172,14 @@ final class ProjectModel: ObservableObject {
 
     func newShellTab() { select(store.newShell(in: folder)) }
 
+    /// ⌘E: fork a session into a new pane beside it, so you can try another direction without losing this one.
+    func fork(_ t: TerminalSession? = nil, zone: DropZone = .right) {
+        guard let t = t ?? selectedTerminal, !t.isShell else { showToast("Select a Claude session to fork"); return }
+        guard let sid = t.sessionId, SessionStore.transcriptExists(sid) else { showToast("Nothing to fork yet: send a message first"); return }
+        let g = group(containing: t.id) ?? activeGroup
+        place(store.fork(sid, cwd: t.cwd), beside: g, zone: zone)
+    }
+
     func resume(_ sid: String) { select(store.resume(sid)) }
 
     func select(_ t: TerminalSession) { selection = "t:\(t.id)" }

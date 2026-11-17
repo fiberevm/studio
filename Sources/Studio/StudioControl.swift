@@ -202,6 +202,13 @@ final class StudioControl {
             t.submit(text)
             return "sent"
 
+        case "fork_session":
+            let t = try tab()
+            guard !t.isShell, let sid = t.sessionId else { throw ControlError(message: "that tab isn't a Claude session with a conversation yet") }
+            let f = store.fork(sid, cwd: t.cwd)
+            model.place(f, beside: model.group(containing: t.id) ?? callerGroup, zone: try zone("split") ?? .right)
+            return ["tab": f.id.uuidString]
+
         case "split_tab":
             let t = try tab()
             guard let z = try zone("direction"), z != .center else { throw ControlError(message: "direction must be right, left, up or down") }

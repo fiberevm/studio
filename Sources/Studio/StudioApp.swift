@@ -73,6 +73,9 @@ struct AppCommands: Commands {
             Button("New Tab") { project?.newTab() }
                 .keyboardShortcut("t")
                 .disabled(project == nil)
+            Button("Fork Session to the Right") { project?.fork() }
+                .keyboardShortcut("e")
+                .disabled(project == nil)
             Button("New Terminal") { project?.newShellTab() }
                 .keyboardShortcut("`", modifiers: .control)
                 .disabled(project == nil)
