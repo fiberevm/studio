@@ -16,9 +16,7 @@ Studio tells you which session needs you next, so you can keep six agents busy w
 
 [Features](#features) · [Install](#install) · [Shortcuts](#keyboard-shortcuts) · [Studio MCP](#studio-mcp) · [How it works](#how-it-works) · [Contributing](#contributing)
 
-<!-- Screenshot: add docs/screenshot.png and uncomment
-<img src="docs/screenshot.png" alt="Studio with three panes: two Claude Code sessions and a terminal" width="900">
--->
+<img src="docs/screenshot.png" alt="Studio: two Claude Code sessions side by side and a terminal, in split panes" width="900">
 
 </div>
 
@@ -45,12 +43,27 @@ happened. Studio is built around one idea: **you should only look at a session w
 - **Plain terminals** with <kbd>⌃`</kbd>, next to your sessions, just like VS Code.
 - **Drag and drop** files or images onto a session to paste their paths.
 
-### Staying in flow
-- **Next up (<kbd>⌘J</kbd>):** jumps to the session that needs you, blocked ones first, across every project window.
-- **Hover peek:** rest on a tab to see the session's status and Claude's last message without switching to it.
-- **Quick prompt (<kbd>⌘K</kbd>):** type a message, pick the session with ↑↓ and press Return. Tick several sessions with <kbd>⇥</kbd> to broadcast, or press <kbd>⌘↵</kbd> to start a new session with it.
-- **Snippets:** reusable prompts (`#tests`, `#review`, `#pr`, …) you can insert in <kbd>⌘K</kbd>, send from <kbd>⌘P</kbd>, or save with <kbd>⌘S</kbd>. They're plain JSON you can edit.
-- **Notifications that matter:** sent only while you're in another app, only when a session is blocked on you or has finished 30+ seconds of work. Each one shows Claude's last words, and clicking it opens the session.
+### Productivity features
+
+Everything here is about one thing: spending your attention only where a session needs it.
+
+| | Feature | What it does for you |
+|---|---|---|
+| ⏭ | **Next up** <kbd>⌘J</kbd> | Jumps to the session that has waited longest for you. Sessions blocked on a permission prompt or question come first, across every project window. Press it again for the next one; you'll see *All caught up* when the queue is empty. |
+| 👀 | **Hover peek** | Rest on a tab for half a second to see the session's status, how long it's been in that state, Claude's last message and your last prompt, without switching to it. |
+| 🔴 | **Needs-you badge** | A pulsing red dot means Claude is blocked on you (permission, question). A blue dot means it finished while you were looking elsewhere. A walking pane-grid means it's working. Idle sessions stay quiet. |
+| 💬 | **Quick prompt** <kbd>⌘K</kbd> | Type a message and send it to any session without leaving the pane you're in. ↑↓ picks the session; the current one is first. |
+| 📣 | **Broadcast** | In <kbd>⌘K</kbd>, press <kbd>⇥</kbd> to tick several sessions and send them all the same message (*"rebase on main"*, *"run the tests"*). |
+| ✨ | **Start from a prompt** | <kbd>⌘↵</kbd> in <kbd>⌘K</kbd> starts a new session with your message already sent. |
+| 🧩 | **Snippets** | Reusable prompts: type `#` in <kbd>⌘K</kbd> (`#tests`, `#review`, `#pr`, `#rebase`, `#summary`, `#continue`), pick one in <kbd>⌘P</kbd> to send it to the current session, or press <kbd>⌘S</kbd> to save what you typed. Stored as plain JSON you can edit. |
+| 🔔 | **Notifications that matter** | Only while you're in another app, only when a session is blocked on you or finished 30+ seconds of work, never for the one you're watching. Each shows Claude's last words; clicking it opens the session. |
+| 🔍 | **Go to anything** <kbd>⌘P</kbd> | Fuzzy-search every running and past session in every project, plus all commands. Picking a session in another project opens that project's window. |
+| 🪟 | **Focus without noise** | Unfocused panes dim slightly (with a quick fade), so the one you're typing in stands out. |
+| 🧷 | **Tabs are bookmarks** | Closing a tab never ends the conversation; it keeps running and is one <kbd>⌘P</kbd> away. Emptied panes stay put with a quiet *New Session* action. |
+| 💾 | **Layout survives restarts** | Tabs, splits, pane sizes and terminal tabs come back exactly where they were; Claude sessions are resumed with `claude --resume`. |
+| 🌿 | **Context at a glance** | Each session's status bar shows its git branch, model and tokens in/out, and Studio finds the PR it opened, with CI and review state. |
+| 🖼 | **Drop to paste** | Drag files or screenshots onto a session to paste their paths into the prompt. |
+| 🤖 | **Agents drive the editor** | Through the Studio MCP, Claude can open splits, start helper sessions, run commands in a terminal next to it, and rearrange your layout. |
 
 ### Workspace
 - **Split panes** with drag-to-snap: drop a tab on any edge of a pane to split it, or right-click for Split Right / Left / Up / Down. Unfocused panes dim slightly.
