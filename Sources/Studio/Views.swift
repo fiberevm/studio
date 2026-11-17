@@ -601,6 +601,12 @@ struct GroupView: View {
             Hairline()
             GeometryReader { geo in
                 GroupPane(group: group)
+                    // unfocused panes recede a little so the active one stands out
+                    .overlay {
+                        if model.activeGroupId != group.id && model.groups.count > 1 {
+                            SwiftUI.Color(nsColor: Theme.background).opacity(0.3).allowsHitTesting(false)
+                        }
+                    }
                     .overlay(alignment: .topLeading) {
                         if let t = model.dropTarget, t.group == group.id { dropPreview(t.zone, size: geo.size) }
                     }
