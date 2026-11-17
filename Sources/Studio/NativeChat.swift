@@ -13,6 +13,7 @@ struct ChatItem: Identifiable, Equatable {
     var kind: Kind
     // tool results attach to their tool item
     var output: String? = nil
+    var duration: Double? = nil                            // note: how long the turn took
     var isError = false
     var decided: Bool? = nil                                // permission: nil = pending, true = allowed
 }
@@ -29,6 +30,9 @@ final class NativeChat: ObservableObject {
     @Published var sessionId: String?
     /// Text streaming in for the current assistant block.
     @Published private(set) var streaming = ""
+    @Published private(set) var model: String?
+    @Published private(set) var permissionMode = "default"
+    @Published private(set) var turnStartedAt: Date?
 
     var pendingPermission: Bool { items.contains { if case .permission = $0.kind { return $0.decided == nil }; return false } }
     /// What Claude is doing right now (for the tab icon).
@@ -55,14 +59,18 @@ final class NativeChat: ObservableObject {
         self.tab = tab
         self.sessionId = sid
         if let sid { loadHistory(sid) }
-        start(resume: sid)
+        start(resume: sid, mode: lastMode)
     }
 
     // MARK: Process
 
-    private func start(resume sid: String?) {
+    /// The permission mode the session last ran in (from its transcript), so native mode behaves the same.
+    private var lastMode: String?
+
+    private func start(resume sid: String?, mode: String?) {
         var args = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
                     "--include-partial-messages", "--permission-prompt-tool", "stdio"]
+        if let mode { args += ["--permission-mode", mode] }
         if let sid { args += ["--resume", sid] }
         if let cfg = StudioControl.mcpConfigPath { args += ["--mcp-config", cfg] }
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
@@ -124,6 +132,14 @@ final class NativeChat: ObservableObject {
         items.append(ChatItem(id: UUID().uuidString, kind: .user(t)))
         write(["type": "user", "message": ["role": "user", "content": t]])
         busy = true
+        turnStartedAt = Date()
+    }
+
+    /// Supervised (ask), auto-accept edits, or full access — changes the running session's permission mode.
+    func setPermissionMode(_ mode: String) {
+        permissionMode = mode
+        write(["type": "control_request", "request_id": UUID().uuidString,
+               "request": ["subtype": "set_permission_mode", "mode": mode]])
     }
 
     func interrupt() {
@@ -156,9 +172,13 @@ final class NativeChat: ObservableObject {
     private func handle(_ o: [String: Any]) {
         switch o["type"] as? String {
         case "system":
-            if o["subtype"] as? String == "init", let sid = o["session_id"] as? String, sid != sessionId {
-                sessionId = sid
-                onSessionId?(sid)
+            if o["subtype"] as? String == "init" {
+                if let m = o["model"] as? String { model = m }
+                if let pm = o["permissionMode"] as? String { permissionMode = pm }
+                if let sid = o["session_id"] as? String, sid != sessionId {
+                    sessionId = sid
+                    onSessionId?(sid)
+                }
             }
         case "stream_event":
             guard let ev = o["event"] as? [String: Any] else { return }
@@ -177,11 +197,11 @@ final class NativeChat: ObservableObject {
         case "result":
             busy = false
             streaming = ""
-            var parts: [String] = []
-            if let ms = o["duration_ms"] as? Double { parts.append(String(format: "%.1fs", ms / 1000)) }
-            if let c = o["total_cost_usd"] as? Double { parts.append(String(format: "$%.2f", c)) }
-            if o["subtype"] as? String != "success" { parts.insert(o["subtype"] as? String ?? "stopped", at: 0) }
-            note("✻ Done" + (parts.isEmpty ? "" : " in " + parts.joined(separator: " · ")))
+            let secs = (o["duration_ms"] as? Double).map { $0 / 1000 } ?? turnStartedAt.map { Date().timeIntervalSince($0) }
+            turnStartedAt = nil
+            var item = ChatItem(id: UUID().uuidString, kind: .note(o["subtype"] as? String == "success" ? "done" : (o["subtype"] as? String ?? "stopped")))
+            item.duration = secs
+            items.append(item)
         case "control_request":
             guard let req = o["request"] as? [String: Any], req["subtype"] as? String == "can_use_tool",
                   let rid = o["request_id"] as? String else { return }
@@ -231,8 +251,9 @@ final class NativeChat: ObservableObject {
             guard let data = fm.contents(atPath: path) else { continue }
             for line in data.split(separator: 0x0A) {
                 guard let o = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
-                      o["isSidechain"] as? Bool != true, o["isMeta"] as? Bool != true,
-                      let msg = o["message"] as? [String: Any] else { continue }
+                      o["isSidechain"] as? Bool != true, o["isMeta"] as? Bool != true else { continue }
+                if o["type"] as? String == "permission-mode", let m = o["permissionMode"] as? String { lastMode = m; continue }
+                guard let msg = o["message"] as? [String: Any] else { continue }
                 switch o["type"] as? String {
                 case "user":
                     if let s = msg["content"] as? String {

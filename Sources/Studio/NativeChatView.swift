@@ -1,167 +1,422 @@
 import SwiftUI
 import AppKit
 
-/// Studio's own rendering of a Claude conversation: monospace, quiet, VS Code-like.
+/// Studio's own rendering of a Claude conversation, modeled on T3 Code: your messages as quiet bubbles on the
+/// right, Claude's answer full width, and the tool calls in between folded into a compact work log that
+/// collapses to one line once the answer is in. Approvals sit inline; the composer is a rounded box with
+/// its controls underneath and Send turning into Stop while Claude works.
 struct NativeChatView: View {
     @ObservedObject var chat: NativeChat
     @EnvironmentObject var model: ProjectModel
     @State private var draft = ""
-    @State private var inputHeight: CGFloat = 22
+    @State private var inputHeight: CGFloat = 20
 
-    private var font: Font { .system(size: model.store.fontSize, design: .monospaced) }
-    private var fg: SwiftUI.Color { SwiftUI.Color(nsColor: Theme.foreground) }
-    private var accent: SwiftUI.Color { SwiftUI.Color(nsColor: Theme.accent) }
+    private var size: CGFloat { model.store.fontSize }
+    private var mono: Font { .system(size: size, design: .monospaced) }
 
     var body: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 10) {
-                        ForEach(chat.items) { item in row(item).id(item.id) }
-                        if !chat.streaming.isEmpty {
-                            markdown(chat.streaming).id("streaming")
-                        }
-                        if chat.busy {
-                            HStack(spacing: 8) {
-                                ClaudeSpinner()
-                                Text(chat.pendingPermission ? "Waiting for you" : "Working…  esc to interrupt")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .id("busy")
+                    LazyVStack(alignment: .leading, spacing: 18) {
+                        ForEach(turns) { turn in
+                            TurnView(turn: turn, chat: chat, size: size, live: turn.id == turns.last?.id && chat.busy)
+                                .id(turn.id)
                         }
                         SwiftUI.Color.clear.frame(height: 1).id("bottom")
                     }
-                    .font(font)
-                    .textSelection(.enabled)
-                    .padding(.horizontal, 16).padding(.vertical, 12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 8)
+                    .frame(maxWidth: 860)
+                    .frame(maxWidth: .infinity)
                 }
-                .onChange(of: chat.items.count) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
+                .onChange(of: chat.items.count) { _, _ in withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) } }
                 .onChange(of: chat.streaming) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
                 .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
             }
-            Hairline()
-            input
+            composer
+                .padding(.horizontal, 16).padding(.bottom, 12).padding(.top, 4)
+                .frame(maxWidth: 892)
+                .frame(maxWidth: .infinity)
         }
+        .font(mono)
         .background(SwiftUI.Color(nsColor: Theme.background))
     }
 
-    // MARK: Rows
+    // MARK: Turns
 
-    @ViewBuilder
-    private func row(_ item: ChatItem) -> some View {
-        switch item.kind {
-        case .user(let text):
-            HStack(alignment: .top, spacing: 8) {
-                Text("❯").foregroundStyle(accent)
-                Text(text).fixedSize(horizontal: false, vertical: true)
+    /// A prompt and everything Claude did for it.
+    struct Turn: Identifiable {
+        let id: String
+        var prompt: ChatItem?
+        var work: [ChatItem] = []        // tool calls, permissions and in-between remarks
+        var answer: [ChatItem] = []      // the text after the last tool call: the summary
+        var end: ChatItem?               // the result note (duration)
+    }
+
+    private var turns: [Turn] {
+        var out: [Turn] = []
+        var cur = Turn(id: "start")
+        func flush() {
+            // the answer is the trailing run of text; earlier text is part of the work
+            if let lastWork = cur.work.lastIndex(where: { if case .text = $0.kind { return false }; return true }) {
+                cur.answer = Array(cur.work[(lastWork + 1)...])
+                cur.work = Array(cur.work[...lastWork])
+            } else {
+                cur.answer = cur.work
+                cur.work = []
             }
-            .padding(.vertical, 6).padding(.horizontal, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(fg.opacity(0.06))
-        case .text(let text):
-            markdown(text)
-        case .tool(_, let name, let summary):
-            ToolRow(name: name, summary: summary, output: item.output, isError: item.isError, font: font)
-        case .permission(_, let tool, let summary, let input):
-            PermissionRow(item: item, tool: tool, summary: summary, input: input, chat: chat)
-        case .note(let s):
-            Text(s).foregroundStyle(.secondary)
+            if cur.prompt != nil || !cur.answer.isEmpty || !cur.work.isEmpty { out.append(cur) }
         }
+        for item in chat.items {
+            switch item.kind {
+            case .user:
+                flush()
+                cur = Turn(id: item.id, prompt: item)
+            case .note:
+                cur.end = item
+            default:
+                cur.work.append(item)
+            }
+        }
+        flush()
+        return out
     }
 
-    private func markdown(_ s: String) -> some View {
-        let attr = (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s)
-        return Text(attr).fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
+    // MARK: Composer
+
+    private var composer: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ChatInput(text: $draft, height: $inputHeight, fontSize: size,
+                      placeholder: chat.exited ? "Session ended — ⌘/ to switch back to the terminal"
+                                               : chat.busy ? "Queue a follow-up…" : "Ask Claude anything…",
+                      onSubmit: send, onEscape: { chat.interrupt() })
+                .frame(height: min(max(inputHeight, 20), 240))
+            HStack(spacing: 10) {
+                if let m = chat.model {
+                    Label(prettyModel(m), systemImage: "cpu").labelStyle(.titleAndIcon)
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+                Menu {
+                    Button("Supervised — ask before changes") { chat.setPermissionMode("default") }
+                    Button("Auto-accept edits") { chat.setPermissionMode("acceptEdits") }
+                    Button("Plan only") { chat.setPermissionMode("plan") }
+                    Button("Full access") { chat.setPermissionMode("bypassPermissions") }
+                } label: {
+                    Label(modeLabel, systemImage: modeIcon).font(.system(size: 11))
+                }
+                .menuStyle(.borderlessButton).fixedSize()
+                .foregroundStyle(.secondary)
+                Spacer()
+                if chat.busy, let start = chat.turnStartedAt {
+                    TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                        Text(elapsed(ctx.date.timeIntervalSince(start))).font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
+                    }
+                }
+                Button(action: { chat.busy && draft.isEmpty ? chat.interrupt() : send() }) {
+                    Image(systemName: chat.busy && draft.isEmpty ? "stop.fill" : "arrow.up")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(SwiftUI.Color(nsColor: Theme.background))
+                        .frame(width: 24, height: 24)
+                        .background(Circle().fill(SwiftUI.Color(nsColor: Theme.foreground).opacity(draft.isEmpty && !chat.busy ? 0.25 : 0.9)))
+                }
+                .buttonStyle(.plain)
+                .help(chat.busy && draft.isEmpty ? "Stop (esc)" : "Send (↵)")
+            }
+        }
+        .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 8)
+        .background(RoundedRectangle(cornerRadius: 12).fill(SwiftUI.Color(nsColor: Theme.chrome)))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(SwiftUI.Color(nsColor: Theme.paneDivider), lineWidth: 1))
     }
 
-    // MARK: Input
+    private func send() {
+        guard !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        chat.send(draft)
+        draft = ""
+    }
 
-    private var input: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Text("❯").font(font).foregroundStyle(accent).padding(.top, 1)
-            ChatInput(text: $draft, height: $inputHeight, fontSize: model.store.fontSize,
-                      placeholder: chat.exited ? "Session ended — ⌘/ to switch back to the terminal" : "Message Claude…  (⇧↵ new line)",
-                      onSubmit: { chat.send(draft); draft = "" },
-                      onEscape: { chat.interrupt() })
-                .frame(height: min(max(inputHeight, 20), 220))
+    private var modeLabel: String {
+        switch chat.permissionMode {
+        case "acceptEdits": return "Auto-accept edits"
+        case "plan": return "Plan only"
+        case "bypassPermissions": return "Full access"
+        case "auto": return "Auto"
+        default: return "Supervised"
         }
-        .padding(.horizontal, 16).padding(.vertical, 10)
-        .background(SwiftUI.Color(nsColor: Theme.background))
+    }
+    private var modeIcon: String {
+        switch chat.permissionMode {
+        case "bypassPermissions": return "lock.open"
+        case "acceptEdits", "auto": return "checkmark.shield"
+        case "plan": return "list.bullet.clipboard"
+        default: return "hand.raised"
+        }
     }
 }
 
-/// "● Bash(npm test)" with its output folded under it; click to expand.
+func elapsed(_ s: Double) -> String {
+    let t = Int(s)
+    return t < 60 ? "\(t)s" : "\(t / 60)m \(t % 60)s"
+}
+
+// MARK: - One turn
+
+private struct TurnView: View {
+    let turn: NativeChatView.Turn
+    @ObservedObject var chat: NativeChat
+    let size: CGFloat
+    let live: Bool
+    @State private var showWork = false
+
+    private var fg: SwiftUI.Color { SwiftUI.Color(nsColor: Theme.foreground) }
+    private var hasPending: Bool { turn.work.contains { if case .permission = $0.kind { return $0.decided == nil }; return false } }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let p = turn.prompt, case .user(let text) = p.kind {
+                HStack {
+                    Spacer(minLength: 80)
+                    Text(text)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(fg.opacity(0.08)))
+                }
+            }
+
+            if !turn.work.isEmpty {
+                // While Claude works (or needs you), the log is open; once the answer is out it folds away.
+                let open = live || hasPending || showWork
+                VStack(alignment: .leading, spacing: 4) {
+                    Button { withAnimation(.easeInOut(duration: 0.18)) { showWork.toggle() } } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9, weight: .semibold))
+                                .rotationEffect(.degrees(open ? 90 : 0))
+                            Text(workSummary)
+                        }
+                        .foregroundStyle(.secondary)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(live || hasPending)
+
+                    if open {
+                        VStack(alignment: .leading, spacing: 3) {
+                            ForEach(turn.work) { item in workRow(item) }
+                        }
+                        .padding(.leading, 6)
+                        .overlay(alignment: .leading) { fg.opacity(0.12).frame(width: 1) }
+                        .transition(.opacity)
+                    }
+                }
+            }
+
+            ForEach(turn.answer) { item in
+                if case .text(let t) = item.kind { MarkdownView(text: t, size: size) }
+            }
+            if live && !chat.streaming.isEmpty {
+                MarkdownView(text: chat.streaming, size: size)
+            } else if live && turn.answer.isEmpty && turn.work.isEmpty {
+                HStack(spacing: 8) { ClaudeSpinner(); Text("Thinking…").foregroundStyle(.secondary) }
+            }
+        }
+    }
+
+    private var workSummary: String {
+        let steps = turn.work.filter { if case .tool = $0.kind { return true }; return false }.count
+        if live { return hasPending ? "Waiting for your approval" : "Working · \(steps) step\(steps == 1 ? "" : "s")" }
+        let time = turn.end?.duration.map { "Worked for " + elapsed($0) } ?? "Worked"
+        return "\(time) · \(steps) step\(steps == 1 ? "" : "s")"
+    }
+
+    @ViewBuilder
+    private func workRow(_ item: ChatItem) -> some View {
+        switch item.kind {
+        case .tool(_, let name, let summary):
+            ToolRow(name: name, summary: summary, output: item.output, isError: item.isError, size: size)
+        case .permission(_, let tool, let summary, let input):
+            PermissionRow(item: item, tool: tool, summary: summary, input: input, chat: chat)
+        case .text(let t):
+            Text(t.replacingOccurrences(of: "\n", with: " "))
+                .foregroundStyle(.secondary).lineLimit(2)
+                .padding(.leading, 8)
+        default:
+            EmptyView()
+        }
+    }
+}
+
+// MARK: - Work log rows
+
+/// One line per tool call: icon, name, target. Click to see its output.
 private struct ToolRow: View {
     let name: String
     let summary: String
     let output: String?
     let isError: Bool
-    let font: Font
+    let size: CGFloat
     @State private var expanded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .top, spacing: 6) {
-                Text("●").foregroundStyle(output == nil ? ClaudeSpinner.orange : isError ? NeedsYouDot.red : .green)
-                (Text(name).bold() + Text(summary.isEmpty ? "" : "(\(summary))").foregroundColor(.secondary))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if let out = output, !out.isEmpty {
-                let lines = out.split(separator: "\n", omittingEmptySubsequences: false)
-                let shown = expanded ? lines : Array(lines.prefix(3))
-                HStack(alignment: .top, spacing: 6) {
-                    Text("⎿").foregroundStyle(.tertiary)
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(shown.joined(separator: "\n")).foregroundStyle(isError ? NeedsYouDot.red.opacity(0.9) : .secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if lines.count > 3 {
-                            Text(expanded ? "show less" : "… \(lines.count - 3) more lines")
-                                .foregroundStyle(.tertiary)
-                                .onTapGesture { expanded.toggle() }
-                                .modifier(PointingHandCursor())
-                        }
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 7) {
+                Group {
+                    if output == nil { ClaudeSpinner(size: 10) }
+                    else {
+                        Image(systemName: isError ? "exclamationmark.triangle" : Activity.tool(name).symbol)
+                            .foregroundStyle(isError ? NeedsYouDot.red : .secondary)
                     }
                 }
-                .padding(.leading, 2)
+                .font(.system(size: 10.5))
+                .frame(width: 14)
+                Text(name).foregroundStyle(.secondary)
+                Text(summary).foregroundStyle(.tertiary).lineLimit(1).truncationMode(.middle)
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { if output?.isEmpty == false { expanded.toggle() } }
+            .padding(.leading, 8)
+
+            if expanded, let out = output {
+                ScrollView {
+                    Text(out).font(.system(size: size - 1, design: .monospaced))
+                        .foregroundStyle(isError ? NeedsYouDot.red.opacity(0.9) : .secondary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
+                }
+                .frame(maxHeight: 220)
+                .background(RoundedRectangle(cornerRadius: 6).fill(SwiftUI.Color(nsColor: Theme.foreground).opacity(0.05)))
+                .padding(.leading, 30)
             }
         }
-        .font(font)
     }
 }
 
-/// Inline permission ask with Allow / Deny.
+/// Inline approval under the command it's about: Decline / Approve.
 private struct PermissionRow: View {
     let item: ChatItem
     let tool: String
     let summary: String
     let input: String
     @ObservedObject var chat: NativeChat
-    @State private var showInput = false
+    @State private var details = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                NeedsYouDot()
-                Text("Allow ").foregroundStyle(.secondary) + Text(tool).bold() + Text(summary.isEmpty ? "?" : ": \(summary)?")
+            HStack(spacing: 7) {
+                Image(systemName: "hand.raised.fill").foregroundStyle(NeedsYouDot.red).font(.system(size: 10.5)).frame(width: 14)
+                Text("\(tool) wants to run").foregroundStyle(.secondary)
             }
-            if showInput { Text(input).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+            Text(summary).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                .padding(8).frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 6).fill(SwiftUI.Color(nsColor: Theme.foreground).opacity(0.05)))
+            if details { Text(input).foregroundStyle(.secondary).font(.system(size: 11, design: .monospaced)) }
             if let d = item.decided {
-                Text(d ? "Allowed" : "Denied").foregroundStyle(d ? .green : NeedsYouDot.red)
+                Text(d ? "Approved" : "Declined").foregroundStyle(d ? .green : NeedsYouDot.red)
             } else {
                 HStack(spacing: 8) {
-                    Button("Allow") { chat.answer(item, allow: true) }
-                    Button("Deny") { chat.answer(item, allow: false) }
-                    Button(showInput ? "Hide details" : "Details") { showInput.toggle() }.buttonStyle(.link)
+                    Button("Decline") { chat.answer(item, allow: false) }
+                    Button("Approve") { chat.answer(item, allow: true) }.keyboardShortcut(.defaultAction)
+                    Button(details ? "Hide details" : "Details") { details.toggle() }.buttonStyle(.link)
                 }
             }
         }
         .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(Rectangle().stroke(item.decided == nil ? NeedsYouDot.red.opacity(0.6) : SwiftUI.Color(nsColor: Theme.paneDivider)))
+        .background(RoundedRectangle(cornerRadius: 8).stroke(item.decided == nil ? NeedsYouDot.red.opacity(0.5) : SwiftUI.Color(nsColor: Theme.paneDivider)))
+        .padding(.leading, 8)
     }
 }
+
+// MARK: - Markdown
+
+/// Block-level markdown: headings, lists, quotes and fenced code; inline styles via AttributedString.
+struct MarkdownView: View {
+    let text: String
+    let size: CGFloat
+
+    enum Block: Hashable { case para(String), heading(String, Int), code(String, String), bullet(String, Int), rule }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(Array(blocks.enumerated()), id: \.offset) { _, b in block(b) }
+        }
+        .textSelection(.enabled)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func block(_ b: Block) -> some View {
+        switch b {
+        case .para(let s):
+            Text(inline(s)).fixedSize(horizontal: false, vertical: true)
+        case .heading(let s, let level):
+            Text(inline(s)).font(.system(size: size + (level == 1 ? 4 : level == 2 ? 2 : 1), weight: .semibold, design: .monospaced))
+                .padding(.top, 4)
+        case .code(let lang, let code):
+            VStack(alignment: .leading, spacing: 0) {
+                if !lang.isEmpty {
+                    Text(lang).font(.system(size: 10.5)).foregroundStyle(.secondary).padding(.horizontal, 10).padding(.top, 6)
+                }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    Text(code).font(.system(size: size - 0.5, design: .monospaced)).padding(10)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 8).fill(SwiftUI.Color(nsColor: Theme.foreground).opacity(0.06)))
+        case .bullet(let s, let indent):
+            HStack(alignment: .top, spacing: 8) {
+                Text("•").foregroundStyle(.secondary)
+                Text(inline(s)).fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.leading, CGFloat(indent) * 14)
+        case .rule:
+            SwiftUI.Color(nsColor: Theme.paneDivider).frame(height: 1)
+        }
+    }
+
+    private func inline(_ s: String) -> AttributedString {
+        (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s)
+    }
+
+    private var blocks: [Block] {
+        var out: [Block] = []
+        var para: [String] = []
+        var code: [String]? = nil
+        var lang = ""
+        func flushPara() { if !para.isEmpty { out.append(.para(para.joined(separator: "\n"))); para = [] } }
+        for raw in text.components(separatedBy: "\n") {
+            let line = raw
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("```") {
+                if let c = code { out.append(.code(lang, c.joined(separator: "\n"))); code = nil }
+                else { flushPara(); code = []; lang = String(trimmed.dropFirst(3)) }
+                continue
+            }
+            if code != nil { code!.append(line); continue }
+            if trimmed.isEmpty { flushPara(); continue }
+            if trimmed.hasPrefix("#") {
+                let level = trimmed.prefix(while: { $0 == "#" }).count
+                flushPara(); out.append(.heading(trimmed.dropFirst(level).trimmingCharacters(in: .whitespaces), level)); continue
+            }
+            if trimmed == "---" || trimmed == "***" { flushPara(); out.append(.rule); continue }
+            if let r = trimmed.range(of: #"^([-*+]|\d+\.)\s+"#, options: .regularExpression) {
+                flushPara()
+                let indent = (line.count - line.drop(while: { $0 == " " }).count) / 2
+                let marker = trimmed[r].trimmingCharacters(in: .whitespaces)
+                let body = String(trimmed[r.upperBound...])
+                out.append(.bullet(marker.hasSuffix(".") ? "\(marker) \(body)" : body, indent))
+                continue
+            }
+            para.append(line)
+        }
+        if let c = code { out.append(.code(lang, c.joined(separator: "\n"))) }
+        flushPara()
+        return out
+    }
+}
+
+// MARK: - Input
 
 /// Multi-line input: Return sends, Shift-Return inserts a newline, Esc interrupts. Grows with its content.
 struct ChatInput: NSViewRepresentable {
