@@ -643,7 +643,7 @@ struct GroupPane: View {
     }
 }
 
-/// Bottom strip under a session: branch, model, tokens sent/received, PRs. Icons only; hover for labels.
+/// Bottom strip under a session: branch, model, tokens sent/received. Icons only; hover for labels.
 struct SessionStatusBar: View {
     @ObservedObject var terminal: TerminalSession
     @EnvironmentObject var model: ProjectModel
@@ -658,7 +658,6 @@ struct SessionStatusBar: View {
                 stat("arrow.up", formatTokens(st.tokensIn), help: "Tokens sent: \(st.tokensIn.formatted()) (incl. cache)")
                 stat("arrow.down", formatTokens(st.tokensOut), help: "Tokens received: \(st.tokensOut.formatted())")
             }
-            ForEach(sid.flatMap { model.store.prs[$0] } ?? []) { PRChip(pr: $0) }
             Spacer()
         }
         .padding(.horizontal, 10)
