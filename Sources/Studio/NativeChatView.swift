@@ -351,8 +351,16 @@ struct MarkdownView: View {
         case .para(let s):
             Text(inline(s)).fixedSize(horizontal: false, vertical: true)
         case .heading(let s, let level):
-            Text(inline(s)).font(.system(size: size + (level == 1 ? 4 : level == 2 ? 2 : 1), weight: .semibold, design: .monospaced))
-                .padding(.top, 4)
+            // Titles in the proportional system font, sized by level, with room above (GitHub-like rules under H1/H2).
+            VStack(alignment: .leading, spacing: 6) {
+                Text(inline(s))
+                    .font(.system(size: size + (level == 1 ? 10 : level == 2 ? 6 : level == 3 ? 3 : 1),
+                                  weight: level <= 2 ? .bold : .semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                if level <= 2 { SwiftUI.Color(nsColor: Theme.paneDivider).frame(height: 1) }
+            }
+            .padding(.top, level == 1 ? 18 : level == 2 ? 14 : 10)
+            .padding(.bottom, 4)
         case .code(let lang, let code):
             VStack(alignment: .leading, spacing: 0) {
                 if !lang.isEmpty {
