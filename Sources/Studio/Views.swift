@@ -433,7 +433,7 @@ struct ClaudeSpinner: View {
 
 /// The line between split panes: thicker and higher-contrast than chrome hairlines so panes read as separate.
 struct PaneDivider: View {
-    static let thickness: CGFloat = 2
+    static let thickness: CGFloat = 1
     var vertical = false
     var body: some View {
         SwiftUI.Color(nsColor: Theme.paneDivider)
