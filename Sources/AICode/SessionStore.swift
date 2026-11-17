@@ -163,6 +163,8 @@ final class SessionStore: ObservableObject {
     /// Terminals opened in the app are remembered so quitting/relaunching brings them back.
     /// Entries for projects whose window hasn't been reopened yet are kept as-is.
     private func persistTerminals() {
+        // A --no-restore instance is a throwaway side-by-side copy: never touch the saved tab list.
+        guard !CommandLine.arguments.contains("--no-restore") else { return }
         let current = terminals.compactMap { t in t.sessionId.map { ["sid": $0, "cwd": t.cwd] } }
         let pending = savedTerminals().filter { e in
             !restoredFolders.contains { isInside(e["cwd"] ?? "", $0) } && !current.contains { $0["sid"] == e["sid"] }
