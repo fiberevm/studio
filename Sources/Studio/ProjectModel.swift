@@ -14,8 +14,8 @@ final class ProjectModel: ObservableObject {
     /// Command palette: nil when closed, otherwise the text it opened with ("" for sessions, ">" for commands).
     @Published var palette: String?
     /// Sidebar visibility and width (⌘B, drag its edge, or the Studio MCP). Shared by all windows.
-    @Published var sidebarVisible: Bool = UserDefaults.standard.object(forKey: "sidebarVisible") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(sidebarVisible, forKey: "sidebarVisible") }
+    @Published var sidebarVisible: Bool = UserDefaults.standard.object(forKey: "sidebarVisible.v2") as? Bool ?? false {
+        didSet { UserDefaults.standard.set(sidebarVisible, forKey: "sidebarVisible.v2") }
     }
     @Published var sidebarWidth: CGFloat = UserDefaults.standard.object(forKey: "sidebarWidth") as? CGFloat ?? 250 {
         didSet { UserDefaults.standard.set(sidebarWidth, forKey: "sidebarWidth") }
@@ -149,8 +149,7 @@ final class ProjectModel: ObservableObject {
     /// A plain terminal has nowhere else to live, so closing its tab ends it.
     func close(_ t: TerminalSession) {
         guard let g = group(containing: t.id) else { return }
-        detach(t.id, from: g)
-        if g.tabIds.isEmpty, groups.count > 1 { remove(g) }
+        detach(t.id, from: g)   // an emptied pane stays, showing its empty state
         if t.isShell { store.close(t) }
         changed()
     }
@@ -162,6 +161,9 @@ final class ProjectModel: ObservableObject {
     }
 
     func closeSelectedTab() { if let t = selectedTerminal { close(t) } }
+
+    /// Remove a pane from the split (its tabs, if any, fold into a neighbour).
+    func closePane(_ g: GroupNode) { merge(g) }
 
     func cycleTab(_ d: Int) {
         let list = tabs

@@ -71,6 +71,7 @@ struct AppCommands: Commands {
         CommandGroup(replacing: .saveItem) {
             Button("Close Tab") {
                 if let p = project, p.selectedTerminal != nil { p.closeSelectedTab() }
+                else if let p = project, p.groups.count > 1 { p.closePane(p.activeGroup) }
                 else { NSApp.keyWindow?.performClose(nil) }
             }
             .keyboardShortcut("w")

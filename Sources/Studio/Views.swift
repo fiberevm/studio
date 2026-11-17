@@ -682,7 +682,7 @@ struct GroupPane: View {
             } else if let sel = group.selection, sel.hasPrefix("s:") {
                 SessionInfoPane(sid: String(sel.dropFirst(2)))
             } else {
-                EmptyPane()
+                EmptyPane(group: group)
             }
         }
         .contentShape(Rectangle())
@@ -972,15 +972,43 @@ struct SessionInfoPane: View {
     }
 }
 
+/// Shown when a pane has no tabs: quiet, low-contrast actions so it doesn't shout.
 struct EmptyPane: View {
+    let group: GroupNode
     @EnvironmentObject var model: ProjectModel
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "terminal").font(.system(size: 36)).foregroundStyle(.tertiary)
-            Text("No open sessions in \(model.name)").foregroundStyle(.secondary)
-            Button("New Session") { model.newTab() }.keyboardShortcut(.defaultAction)
+        VStack(spacing: 6) {
+            EmptyAction(title: "New Session", key: "⌘N") { model.activate(group); model.newTab() }
+            if model.groups.count > 1 {
+                EmptyAction(title: "Close Pane", key: "⌘W") { model.closePane(group) }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct EmptyAction: View {
+    let title: String
+    let key: String
+    let action: () -> Void
+    @State private var hover = false
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                Text(title)
+                Spacer(minLength: 0)
+                Text(key).monospaced()
+            }
+            .font(.system(size: 12))
+            .frame(width: 170)
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+            .opacity(hover ? 0.75 : 0.4)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(SwiftUI.Color(nsColor: Theme.foreground))
+        .onHover { hover = $0 }
+        .modifier(PointingHandCursor())
     }
 }
 
