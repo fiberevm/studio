@@ -25,11 +25,11 @@ struct ProjectWindow: View {
         .modifier(HideTitlebarBackground())
         .ignoresSafeArea()
         .preferredColorScheme(Theme.current.isLight ? .light : .dark)
-        .navigationTitle(folder.map { projectName(for: $0) } ?? "AICode")
+        .navigationTitle(folder.map { projectName(for: $0) } ?? "Studio")
         .onAppear(perform: handleLaunchArguments)
     }
 
-    /// `AICode --new <dir>` opens a window on dir with a fresh session; `--resume <id>` resumes into its project.
+    /// `Studio --new <dir>` opens a window on dir with a fresh session; `--resume <id>` resumes into its project.
     private func handleLaunchArguments() {
         guard folder == nil, !LaunchArgs.consumed else { return }
         LaunchArgs.consumed = true
@@ -317,7 +317,7 @@ struct SessionRow: View {
                     ignoresSafeAreaEdges: [])
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
-        .help("\(item.title)\n\(item.status.label) · \(abbreviatePath(item.cwd))\(item.inApp ? "" : "\nRunning outside AICode (pid \(item.pid ?? 0))")")
+        .help("\(item.title)\n\(item.status.label) · \(abbreviatePath(item.cwd))\(item.inApp ? "" : "\nRunning outside Studio (pid \(item.pid ?? 0))")")
     }
 }
 
@@ -487,9 +487,9 @@ struct GroupView: View {
     }
 }
 
-/// Drag payload for a tab: "aicode-tab:<terminal uuid>".
+/// Drag payload for a tab: "studio-tab:<terminal uuid>".
 enum TabDrag {
-    static let prefix = "aicode-tab:"
+    static let prefix = "studio-tab:"
     static func provider(_ t: TerminalSession) -> NSItemProvider { NSItemProvider(object: (prefix + t.id.uuidString) as NSString) }
 }
 

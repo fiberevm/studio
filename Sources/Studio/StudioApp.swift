@@ -10,14 +10,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @main
-struct AICodeApp: App {
+struct StudioApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var store = SessionStore()
+
+    init() { Self.migrateSettingsFromAICode() }
+
+    /// The app used to be called AICode (bundle id dev.local.aicode). Carry over saved tabs, theme, recents, etc. once.
+    static func migrateSettingsFromAICode() {
+        let d = UserDefaults.standard
+        guard !d.bool(forKey: "migratedFromAICode"), let old = UserDefaults(suiteName: "dev.local.aicode") else { return }
+        for key in ["openTerminals", "recentProjects", "theme", "fontSize", "busyExpanded"] {
+            if d.object(forKey: key) == nil, let v = old.object(forKey: key) { d.set(v, forKey: key) }
+        }
+        d.set(true, forKey: "migratedFromAICode")
+    }
 
     var body: some Scene {
         // One window per project folder. The folder is the window's value, so it survives relaunch,
         // and opening a folder that already has a window brings that window forward.
-        WindowGroup("AICode", for: String.self) { $folder in
+        WindowGroup("Studio", for: String.self) { $folder in
             ProjectWindow(folder: $folder)
                 .environmentObject(store)
                 .frame(minWidth: 820, minHeight: 520)

@@ -2,16 +2,16 @@
 import PackageDescription
 
 let package = Package(
-    name: "AICode",
+    name: "Studio",
     platforms: [.macOS(.v14)],
     dependencies: [
         .package(url: "https://github.com/migueldeicaza/SwiftTerm", from: "1.2.0"),
     ],
     targets: [
         .executableTarget(
-            name: "AICode",
+            name: "Studio",
             dependencies: ["SwiftTerm"],
-            path: "Sources/AICode"
+            path: "Sources/Studio"
         ),
     ]
 )

@@ -1,4 +1,4 @@
-# AICode
+# Studio
 
 A native macOS app for working with many Claude Code sessions at once, laid out like VS Code:
 a session sidebar on the left and the selected session's live terminal on the right.
@@ -12,11 +12,13 @@ a session sidebar on the left and the selected session's live terminal on the ri
 - Terminals stay alive while you switch between them. When a session finishes working while you're looking
   elsewhere, it gets a blue dot, a Dock badge, and a notification.
 
+Icon: `Resources/AppIcon.svg` → `scripts/make-icon.sh` regenerates `Resources/AppIcon.icns`.
+
 ## Build & run
 
-    ./build-app.sh --open          # builds build/AICode.app (release) and opens it
-    open build/AICode.app --args --new ~/code/foo      # start a session in a folder
-    open build/AICode.app --args --resume <sessionId>  # resume a session
+    ./build-app.sh --open          # builds build/Studio.app (release) and opens it
+    open build/Studio.app --args --new ~/code/foo      # start a session in a folder
+    open build/Studio.app --args --resume <sessionId>  # resume a session
 
 ## Shortcuts
 
@@ -42,6 +44,6 @@ Each session tab has a status bar: git branch, uptime, model, tokens sent ↑ / 
 
 **PR detection** (needs the `gh` CLI, logged in): PRs a session created are found from `gh pr create` output in its
 transcript; otherwise the session's branch is looked up (long-lived branches like main/staging are skipped). State
-(open/draft/merged/closed), CI checks and review are refreshed every minute. Set `AICODE_DEBUG_LOG=/path` to trace lookups.
+(open/draft/merged/closed), CI checks and review are refreshed every minute. Set `STUDIO_DEBUG_LOG=/path` to trace lookups.
 
 Built with SwiftUI + [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm).

@@ -63,7 +63,7 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
         for k in env.keys where k == "CLAUDECODE" || k.hasPrefix("CLAUDE_CODE_") { env.removeValue(forKey: k) }
         env["TERM"] = "xterm-256color"
         env["COLORTERM"] = "truecolor"
-        env["TERM_PROGRAM"] = "AICode"
+        env["TERM_PROGRAM"] = "Studio"
         if env["LANG"] == nil { env["LANG"] = "en_US.UTF-8" }
         return env.map { "\($0.key)=\($0.value)" }
     }

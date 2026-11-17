@@ -41,7 +41,7 @@ final class SessionStore: ObservableObject {
     private let scanner = TranscriptScanner()
     private let historyScanner = TranscriptScanner()
     private let statsReader = StatsReader()
-    private let scanQueue = DispatchQueue(label: "aicode.scan", qos: .utility)
+    private let scanQueue = DispatchQueue(label: "studio.scan", qos: .utility)
     private var liveTimer: Timer?
     private var scanTimer: Timer?
     private var lastStatus: [String: String] = [:]
@@ -177,7 +177,7 @@ final class SessionStore: ObservableObject {
                 sessionId: sid,
                 title: title(rec: rec, info: info, fallback: "New session"),
                 cwd: info?.cwd ?? rec?.cwd ?? t.cwd,
-                status: status, inApp: true, entrypoint: "aicode", pid: t.pid,
+                status: status, inApp: true, entrypoint: "studio", pid: t.pid,
                 startedAt: t.createdAt, updatedAt: info?.updatedAt ?? t.createdAt))
         }
         for (sid, info) in live where !covered.contains(sid) {
@@ -215,7 +215,7 @@ final class SessionStore: ObservableObject {
 
     /// Terminals opened in the app are remembered so quitting/relaunching brings them back.
     /// Merge, don't overwrite: entries this instance doesn't know about (another window's project,
-    /// another AICode instance) are kept; only sessions this instance ended are dropped.
+    /// another Studio instance) are kept; only sessions this instance ended are dropped.
     private var forgotten: Set<String> = []
 
     private func persistTerminals() {

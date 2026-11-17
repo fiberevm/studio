@@ -17,7 +17,7 @@ struct PRInfo: Equatable, Identifiable {
 /// PRs a session created (found in its transcript) win; otherwise its branch is looked up,
 /// skipping long-lived branches that would match unrelated release PRs.
 final class PRMonitor {
-    private let queue = DispatchQueue(label: "aicode.pr", qos: .utility)
+    private let queue = DispatchQueue(label: "studio.pr", qos: .utility)
     private var lastFetch: [String: Date] = [:]          // request key → time
     private var cache: [String: [PRInfo]] = [:]          // request key → result
     private let refreshInterval: TimeInterval = 60
@@ -128,9 +128,9 @@ final class PRMonitor {
     }
 }
 
-/// Set AICODE_DEBUG_LOG=/path/to/file to trace background lookups.
+/// Set STUDIO_DEBUG_LOG=/path/to/file to trace background lookups.
 func debugLog(_ msg: String) {
-    guard let path = ProcessInfo.processInfo.environment["AICODE_DEBUG_LOG"] else { return }
+    guard let path = ProcessInfo.processInfo.environment["STUDIO_DEBUG_LOG"] else { return }
     let line = "\(Date()) \(msg)\n"
     if let h = FileHandle(forWritingAtPath: path) { h.seekToEndOfFile(); h.write(Data(line.utf8)); try? h.close() }
     else { try? line.write(toFile: path, atomically: true, encoding: .utf8) }
