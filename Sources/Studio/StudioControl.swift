@@ -294,10 +294,8 @@ final class StudioControl {
     private func sandbox(_ method: String, _ p: [String: Any], callerTab: UUID?) async throws -> Any {
         guard let store else { throw ControlError(message: "Studio isn't ready") }
         let reg = store.sandboxes
-        let provider = reg.provider
-        guard provider.installed else { throw ControlError(message: "No sandbox provider: install the boat CLI (https://boat.dev) and run `boat login`.") }
-        guard Pref.bool(Pref.sandboxEnabled, default: true) else {
-            throw ControlError(message: "Sandboxes are turned off in Studio Settings (⌘, → Sandboxes).")
+        guard !reg.available.isEmpty else {
+            throw ControlError(message: "No sandbox provider is set up: install and sign in to the boat CLI (https://boat.dev), or set up AWS Lambda MicroVMs in Settings (⌘, → Sandboxes).")
         }
         let policy = Pref.string(Pref.sandboxPolicy) ?? "auto"   // default: use sandboxes when helpful
         let model = callerTab.flatMap { id in models.first { $0.terminal(id) != nil } } ?? lastActive ?? models.first
@@ -314,11 +312,12 @@ final class StudioControl {
         do {
             switch method {
             case "sandbox_list":
-                let all = try await provider.list()
+                var all: [SandboxInfo] = []
+                for prov in reg.available { all += try await prov.list() }
                 all.forEach(reg.note)
                 let mine = me.map { reg.ids(for: $0) } ?? []
-                func row(_ s: SandboxInfo) -> [String: Any] { ["id": s.id, "name": s.name ?? "", "state": s.state, "type": s.type ?? ""] }
-                var out: [String: Any] = ["provider": provider.id,
+                func row(_ s: SandboxInfo) -> [String: Any] { ["id": s.id, "name": s.name ?? "", "state": s.state, "type": s.type ?? "", "provider": s.provider] }
+                var out: [String: Any] = ["providers": reg.available.map(\.id), "default_provider": reg.provider.id,
                                           "policy": policy == "auto"
                                             ? "auto: you may create a sandbox when it helps; stop it when done"
                                             : "ask: use this session's sandboxes; create one only when the user asks",
@@ -329,6 +328,7 @@ final class StudioControl {
             case "sandbox_create":
                 // Settings → Sandboxes supplies the defaults
                 let ttlPref = UserDefaults.standard.object(forKey: Pref.sandboxTTL) as? Int ?? 60
+                let provider = reg.provider(named: p["provider"] as? String).flatMap { reg.usable($0) ? $0 : nil } ?? reg.provider
                 let s = try await provider.create(type: p["type"] as? String ?? Pref.string(Pref.sandboxType) ?? "small",
                                                   ttlMinutes: p["ttl_minutes"] as? Int ?? (ttlPref > 0 ? ttlPref : nil),
                                                   environment: p["environment"] as? String ?? Pref.string(Pref.sandboxEnvironment))
@@ -344,19 +344,19 @@ final class StudioControl {
             case "sandbox_exec":
                 guard let cmd = p["command"] as? String, !cmd.isEmpty else { throw ControlError(message: "command is required") }
                 let id = try target(); use(id)
-                return try await provider.exec(id, command: cmd, cwd: p["cwd"] as? String,
+                return try await reg.provider(for: id).exec(id, command: cmd, cwd: p["cwd"] as? String,
                                                timeout: p["timeout"] as? Int ?? 120, background: p["background"] as? Bool ?? false)
 
             case "sandbox_push":
                 let id = try target(); use(id)
                 guard let dir = (p["dir"] as? String).map({ ($0 as NSString).expandingTildeInPath }) ?? me?.cwd ?? model?.folder
                 else { throw ControlError(message: "dir is required") }
-                return try await provider.push(id, dir: dir, to: p["to"] as? String)
+                return try await reg.provider(for: id).push(id, dir: dir, to: p["to"] as? String)
 
             case "sandbox_url":
                 guard let port = p["port"] as? Int else { throw ControlError(message: "port is required") }
                 let id = try target(); use(id)
-                return try await provider.url(id, port: port, isPublic: p["public"] as? Bool ?? false)
+                return try await reg.provider(for: id).url(id, port: port, isPublic: p["public"] as? Bool ?? false)
 
             case "sandbox_terminal":
                 let id = try target(); use(id)
@@ -364,7 +364,7 @@ final class StudioControl {
                 let t = store.newShell(in: me?.cwd ?? model.folder)
                 let g = me.flatMap { model.group(containing: $0.id) } ?? model.activeGroup
                 model.place(t, beside: g, zone: .right)
-                let ssh = provider.sshCommand(id)
+                let ssh = reg.provider(for: id).sshCommand(id)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { t.type(ssh + "\r") }
                 return ["tab": t.id.uuidString]
 
@@ -373,12 +373,12 @@ final class StudioControl {
             case "sandbox_detach":
                 let id = try target(); if let me { reg.detach(id, from: me) }; return "detached \(id)"
             case "sandbox_stop":
-                let id = try target(); return try await provider.stop(id)
+                let id = try target(); return try await reg.provider(for: id).stop(id)
             case "sandbox_resume":
-                let id = try target(); use(id); return try await provider.resume(id)
+                let id = try target(); use(id); return try await reg.provider(for: id).resume(id)
             case "sandbox_delete":
                 let id = try target()
-                let r = try await provider.delete(id)
+                let r = try await reg.provider(for: id).delete(id)
                 reg.forget(id)
                 return r
             default:

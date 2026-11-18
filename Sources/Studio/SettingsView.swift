@@ -243,6 +243,7 @@ private struct SandboxSettings: View {
     @AppStorage(Pref.sandboxTTL) private var ttl = 60
     @AppStorage(Pref.sandboxEnvironment) private var environment = ""
     @AppStorage(Pref.sandboxPolicy) private var policy = "auto"
+    @AppStorage("sandbox.defaultProvider") private var defaultProvider = "boat"
     @State private var status: [String: Any]?
     @State private var loading = false
 
@@ -253,6 +254,14 @@ private struct SandboxSettings: View {
 
             Group_(title: "Providers")
             providerCard
+            AWSProviderCard(provider: registry.aws)
+            Row(title: "Default provider", detail: "Where new sandboxes go unless Claude or you pick one.") {
+                Picker("", selection: $defaultProvider) {
+                    Text("Boat").tag("boat")
+                    Text("AWS Lambda MicroVMs").tag("aws")
+                }
+                .labelsHidden().pickerStyle(.segmented).frame(width: 280)
+            }
 
             Group_(title: "When Claude uses sandboxes")
             Row(title: "Policy", detail: policy == "auto"
@@ -283,7 +292,7 @@ private struct SandboxSettings: View {
     }
 
     private var providerCard: some View {
-        let installed = registry.provider.installed
+        let installed = registry.boat.installed
         let account = status?["account"] as? [String: Any]
         let signedIn = account?["signedIn"] as? Bool ?? false
         return HStack(alignment: .top, spacing: 14) {
@@ -329,14 +338,88 @@ private struct SandboxSettings: View {
     }
 
     private func load() async {
-        guard registry.provider.installed else { return }
+        guard registry.boat.installed else { return }
         loading = true
-        status = await registry.provider.status()
+        status = await registry.boat.status()
         loading = false
     }
 
     private func runInTerminal(_ cmd: String) {
         let script = "tell application \"Terminal\" to do script \"\(cmd)\"\ntell application \"Terminal\" to activate"
+        NSAppleScript(source: script)?.executeAndReturnError(nil)
+    }
+}
+
+/// AWS Lambda MicroVMs: account, region/profile, the Studio image, Set Up.
+private struct AWSProviderCard: View {
+    let provider: AWSMicroVMProvider
+    @AppStorage("sandbox.aws.enabled") private var enabled = true
+    @AppStorage("sandbox.aws.profile") private var profile = ""
+    @AppStorage("sandbox.aws.region") private var region = ""
+    @AppStorage("sandbox.aws.imageArn") private var imageArn = ""
+    @State private var account: String?
+    @State private var checking = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: "cloud").font(.system(size: 22)).foregroundStyle(.secondary).frame(width: 34)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text("AWS Lambda MicroVMs").font(.system(size: 14, weight: .semibold))
+                    Text("Firecracker VMs · up to 8 h · suspend/resume").font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+                Group {
+                    if !provider.cliInstalled { Text("The AWS CLI isn't installed (brew install awscli).") }
+                    else if checking && account == nil { Text("Checking credentials…") }
+                    else if let account { Text("AWS account \(account)") }
+                    else { Text("No AWS credentials. Run `aws login` (or set a profile below).") }
+                    Text(imageArn.isEmpty ? "Studio image not set up yet." : "Image: \(imageArn.split(separator: ":").last ?? "")")
+                }
+                .font(.system(size: 12)).foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    TextField("profile (default)", text: $profile).textFieldStyle(.roundedBorder).frame(width: 140)
+                    TextField("region (us-east-1)", text: $region).textFieldStyle(.roundedBorder).frame(width: 140)
+                }
+                HStack(spacing: 8) {
+                    if !provider.cliInstalled {
+                        Button("Get the AWS CLI…") { NSWorkspace.shared.open(URL(string: "https://aws.amazon.com/cli/")!) }
+                    } else {
+                        if account == nil { Button("Sign In…") { runInTerminal("aws login" + (profile.isEmpty ? "" : " --profile \(profile)")) } }
+                        Button(imageArn.isEmpty ? "Set Up…" : "Rebuild Image…") { runSetup() }
+                            .help("Creates an S3 bucket, two IAM roles and the studio-sandbox MicroVM image in your account")
+                        Button("Refresh") { Task { await check() } }
+                    }
+                }
+                .padding(.top, 2)
+            }
+            Spacer()
+            Toggle("", isOn: $enabled).labelsHidden().toggleStyle(.switch).disabled(!provider.installed)
+        }
+        .padding(14)
+        .background(SwiftUI.Color(nsColor: Theme.chrome))
+        .overlay(Rectangle().stroke(SwiftUI.Color(nsColor: Theme.paneDivider), lineWidth: 1))
+        .padding(.top, 8)
+        .task { await check() }
+    }
+
+    private func check() async {
+        checking = true
+        account = (await provider.status())?["account"] as? String
+        checking = false
+    }
+
+    /// Runs Resources/MicroVMAgent/setup.sh in Terminal so you see what it creates.
+    private func runSetup() {
+        guard let dir = Bundle.main.resourcePath.map({ $0 + "/MicroVMAgent" }) else { return }
+        var env = "STUDIO_DOMAIN=\(Bundle.main.bundleIdentifier ?? "dev.local.studio")"
+        if !profile.isEmpty { env += " AWS_PROFILE=\(profile)" }
+        if !region.isEmpty { env += " AWS_REGION=\(region)" }
+        runInTerminal("\(env) bash '\(dir)/setup.sh'")
+    }
+
+    private func runInTerminal(_ cmd: String) {
+        let escaped = cmd.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+        let script = "tell application \"Terminal\" to do script \"\(escaped)\"\ntell application \"Terminal\" to activate"
         NSAppleScript(source: script)?.executeAndReturnError(nil)
     }
 }

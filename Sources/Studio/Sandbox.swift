@@ -174,7 +174,28 @@ struct BoatProvider: SandboxProvider {
 /// Which sandboxes each session uses (shown in its status bar), plus their latest state.
 @MainActor
 final class SandboxRegistry: ObservableObject {
-    let provider: SandboxProvider = BoatProvider()
+    let boat = BoatProvider()
+    let aws = AWSMicroVMProvider()
+    var all: [SandboxProvider] { [boat, aws] }
+
+    /// Installed, set up and switched on in Settings.
+    func usable(_ p: SandboxProvider) -> Bool {
+        p.installed && Pref.bool(p.id == "boat" ? Pref.sandboxEnabled : "sandbox.\(p.id).enabled", default: true)
+    }
+    var available: [SandboxProvider] { all.filter(usable) }
+
+    /// Where new sandboxes go: Settings' default if usable, else the first usable provider.
+    var provider: SandboxProvider {
+        let want = Pref.string("sandbox.defaultProvider") ?? "boat"
+        return available.first { $0.id == want } ?? available.first ?? boat
+    }
+    func provider(named n: String?) -> SandboxProvider? { n.flatMap { n in all.first { $0.id == n } } }
+
+    /// The provider that owns a sandbox, from its id ("bx_…" is Boat, "microvm-…" / "mvm-…" is AWS).
+    func provider(for id: String) -> SandboxProvider {
+        if let p = info[id]?.provider, let match = all.first(where: { $0.id == p }) { return match }
+        return id.hasPrefix("microvm-") || id.hasPrefix("mvm-") ? aws : boat
+    }
     /// session key (Claude session id, or "tab:<uuid>" before it has one) → sandbox ids, newest last
     @Published private(set) var bySession: [String: [String]] =
         (UserDefaults.standard.dictionary(forKey: "sessionSandboxes") as? [String: [String]]) ?? [:]
@@ -224,7 +245,12 @@ final class SandboxRegistry: ObservableObject {
     /// Refresh states of the sandboxes sessions use; drop ones that no longer exist.
     func refresh() async {
         let tracked = Set(bySession.values.flatMap { $0 })
-        guard provider.installed, !tracked.isEmpty, let all = try? await provider.list() else { return }
+        guard !tracked.isEmpty else { return }
+        var all: [SandboxInfo] = []
+        for p in available {
+            guard let l = try? await p.list() else { return }   // a failed lookup must not drop anything
+            all += l
+        }
         let byId = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         for id in tracked {
             if let s = byId[id] { if info[id] != s { info[id] = s } } else { forget(id) }

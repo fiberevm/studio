@@ -96,7 +96,7 @@ Studio gives every Claude session a remote machine of its own whenever the work 
 - `sandbox_create` brings up a machine and pushes your project into it, git-tracked files only. Claude then runs commands there with `sandbox_exec`, re-pushes after local edits, and can open a shell for you in a split (`sandbox_terminal`).
 - **Used when helpful, by default.** Claude brings up a sandbox on its own when it helps (builds, tests, servers, risky or long-running work) and stops it when done. Set **Settings → Sandboxes → Policy** to *Only when I ask* to make that your call. Deleting always needs you.
 - **You can always see them.** Every sandbox a session uses appears as a chip in its status bar (`⛵ name ●`, green when running). The chip's menu has Open Terminal, Open Desktop, Copy ID, Stop / Resume, and Delete.
-- **Defaults in Settings:** machine size, auto-stop time and environment for new sandboxes, plus an off switch per provider.
+- **Defaults in Settings:** the default provider, machine size, auto-stop time and environment for new sandboxes, plus an off switch per provider. Claude can also pick one per sandbox (`sandbox_create` with `provider: "boat"` or `"aws"`).
 
 ### Supported providers
 
@@ -104,7 +104,9 @@ Studio gives every Claude session a remote machine of its own whenever the work 
 |---|---|---|---|
 | <a href="https://boat.dev"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/providers/boat-dark.svg"><img src="docs/providers/boat-light.svg" alt="Boat" height="28"></picture></a> | [boat.dev](https://boat.dev) | ✅ Supported | The `boat` CLI, signed in (`boat login`). Linux VMs from 2 to 16 vCPU, snapshots, fork and resume, HTTPS URLs, desktop. |
 
-More are on the way. Providers plug in through the `SandboxProvider` protocol in [`Sources/Studio/Sandbox.swift`](Sources/Studio/Sandbox.swift), so the MCP tools, skill, status bar and Settings work unchanged for any provider that can create a machine, run a command, copy files in and expose a port. PRs welcome.
+| <a href="https://docs.aws.amazon.com/lambda/latest/dg/microvms.html"><img src="docs/providers/aws-lambda.svg" alt="AWS Lambda" height="28"></a> | [AWS Lambda MicroVMs](https://docs.aws.amazon.com/lambda/latest/dg/microvms.html) | ✅ Supported | The AWS CLI with credentials, and a one-time **Settings → Sandboxes → AWS → Set Up**: it creates an S3 bucket, two IAM roles and a `studio-sandbox` image (Amazon Linux 2023 dev box + Studio's agent) in your account. Firecracker VMs up to 8 h, suspend/resume that keeps memory and processes, an interactive shell (`websocat`). Ports are reached through the MicroVM's endpoint with an auth header, so they open in `curl`, not a browser. |
+
+More are on the way. Providers plug in through the `SandboxProvider` protocol in [`Sources/Studio/Sandbox.swift`](Sources/Studio/Sandbox.swift) (Boat) and [`SandboxAWS.swift`](Sources/Studio/SandboxAWS.swift) (AWS, with its in-VM agent in [`Resources/MicroVMAgent`](Resources/MicroVMAgent)), so the MCP tools, skill, status bar and Settings work unchanged for any provider that can create a machine, run a command, copy files in and expose a port. PRs welcome.
 
 ## Install
 

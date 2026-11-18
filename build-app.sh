@@ -12,6 +12,9 @@ cp .build/release/studio-mcp "$APP/Contents/MacOS/.studio-mcp.new" && mv -f "$AP
 # Studio's Claude plugin (skills), loaded into every session it starts with --plugin-dir
 rm -rf "$APP/Contents/Resources/.StudioPlugin.new" && cp -R Resources/StudioPlugin "$APP/Contents/Resources/.StudioPlugin.new" \
   && rm -rf "$APP/Contents/Resources/StudioPlugin" && mv "$APP/Contents/Resources/.StudioPlugin.new" "$APP/Contents/Resources/StudioPlugin"
+# AWS Lambda MicroVMs sandbox image (agent + Dockerfile + one-time setup script)
+rm -rf "$APP/Contents/Resources/.MicroVMAgent.new" && cp -R Resources/MicroVMAgent "$APP/Contents/Resources/.MicroVMAgent.new" \
+  && rm -rf "$APP/Contents/Resources/MicroVMAgent" && mv "$APP/Contents/Resources/.MicroVMAgent.new" "$APP/Contents/Resources/MicroVMAgent"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/.AppIcon.new" && mv -f "$APP/Contents/Resources/.AppIcon.new" "$APP/Contents/Resources/AppIcon.icns"
 cat > "$APP/Contents/.Info.plist.new" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

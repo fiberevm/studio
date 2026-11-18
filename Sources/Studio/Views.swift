@@ -968,7 +968,7 @@ struct SandboxChips: View {
         }
         .alert("Delete sandbox \(confirmDelete ?? "")?", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } })) {
             Button("Delete", role: .destructive) {
-                if let id = confirmDelete { act { _ = try await registry.provider.delete(id); registry.forget(id) } }
+                if let id = confirmDelete { act { _ = try await registry.provider(for: id).delete(id); registry.forget(id) } }
             }
             Button("Cancel", role: .cancel) {}
         } message: { Text("Its disk and snapshots are permanently removed.") }
@@ -983,17 +983,17 @@ struct SandboxChips: View {
             Button("Open Terminal") { openTerminal(id) }
             Button("Open Desktop") {
                 act {
-                    let url = try await registry.provider.desktopURL(id)
+                    let url = try await registry.provider(for: id).desktopURL(id)
                     model.openWeb(url, beside: model.group(containing: terminal.id), zone: .right)
                 }
             }
-            Button("Open Desktop in Browser") { act { _ = try await registry.provider.openDesktop(id) } }
+            Button("Open Desktop in Browser") { act { _ = try await registry.provider(for: id).openDesktop(id) } }
             Button("Copy ID") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(id, forType: .string) }
             Divider()
             if state == "stopped" {
-                Button("Resume") { act { _ = try await registry.provider.resume(id) } }
+                Button("Resume") { act { _ = try await registry.provider(for: id).resume(id) } }
             } else {
-                Button("Stop") { act { _ = try await registry.provider.stop(id) } }
+                Button("Stop") { act { _ = try await registry.provider(for: id).stop(id) } }
             }
             Button("Remove from This Session") { registry.detach(id, from: terminal) }
             Button("Delete…") { confirmDelete = id }
@@ -1023,7 +1023,7 @@ struct SandboxChips: View {
     private func openTerminal(_ id: String) {
         let t = model.store.newShell(in: terminal.cwd)
         model.place(t, beside: model.group(containing: terminal.id) ?? model.activeGroup, zone: .right)
-        let cmd = registry.provider.sshCommand(id)
+        let cmd = registry.provider(for: id).sshCommand(id)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { t.type(cmd + "\r") }
     }
 
