@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import Combine
 
 /// A remote sandbox as Studio shows it.
@@ -142,7 +143,16 @@ struct BoatProvider: SandboxProvider {
     func stop(_ id: String) async throws -> Any { try await run(["stop", id], timeout: 300) }
     func resume(_ id: String) async throws -> Any { try await run(["resume", id], timeout: 600) }
     func delete(_ id: String) async throws -> Any { try await run(["delete", id, "--yes"], timeout: 120) }
-    func openDesktop(_ id: String) async throws -> Any { try await run(["desktop", id], timeout: 60) }
+    /// `boat desktop --json` only returns the URLs (it opens nothing), so open the viewer ourselves.
+    func openDesktop(_ id: String) async throws -> Any {
+        let r = try await run(["desktop", id], timeout: 60)
+        let o = r as? [String: Any] ?? [:]
+        guard let s = o["viewerUrl"] as? String ?? o["desktopUrl"] as? String, let url = URL(string: s) else {
+            throw SandboxError(message: "Boat returned no desktop URL for \(id)")
+        }
+        await MainActor.run { _ = NSWorkspace.shared.open(url) }
+        return ["opened": s]
+    }
     func sshCommand(_ id: String) -> String { "\(shellQuote(binary ?? "boat")) ssh \(shellQuote(id))" }
 
     func status() async -> [String: Any]? {
