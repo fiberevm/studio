@@ -46,6 +46,27 @@ let tools: [Tool] = [
          properties: ["url": ["type": "string"], "split": ["type": "string", "enum": ["right", "left", "up", "down", "center"]],
                       "tab": ["type": "string", "description": "an existing web tab to navigate"]],
          required: ["url"]),
+    // Web panels (after open_url). tab defaults to the newest web panel in this window.
+    Tool(name: "web_read",
+         description: "Read a web panel: URL, title, visible text, and numbered interactive elements (ref) for web_click / web_type.",
+         properties: ["tab": ["type": "string"], "max_chars": ["type": "integer", "description": "text limit, default 6000"]], required: []),
+    Tool(name: "web_click",
+         description: "Click an element in a web panel by ref (from web_read), CSS selector, or visible text.",
+         properties: ["tab": ["type": "string"], "ref": ["type": "integer"], "selector": ["type": "string"], "text": ["type": "string"]], required: []),
+    Tool(name: "web_type",
+         description: "Type into an input/textarea/contenteditable (by ref, selector or text label); clear replaces (default true); submit presses Enter / submits the form.",
+         properties: ["tab": ["type": "string"], "ref": ["type": "integer"], "selector": ["type": "string"], "text": ["type": "string"],
+                      "value": ["type": "string"], "submit": ["type": "boolean"], "clear": ["type": "boolean"]],
+         required: ["value"]),
+    Tool(name: "web_wait",
+         description: "Wait until an element (ref/selector) or some text appears in a web panel. timeout in seconds, default 10.",
+         properties: ["tab": ["type": "string"], "selector": ["type": "string"], "text": ["type": "string"], "timeout": ["type": "integer"]], required: []),
+    Tool(name: "web_nav", description: "Back, forward or reload a web panel.",
+         properties: ["tab": ["type": "string"], "action": ["type": "string", "enum": ["back", "forward", "reload"]]], required: ["action"]),
+    Tool(name: "web_screenshot", description: "Snapshot a web panel to a PNG file and return its path (Read it to see the page).",
+         properties: ["tab": ["type": "string"]], required: []),
+    Tool(name: "web_eval", description: "Run JavaScript in a web panel's page (async function body; use return). For anything the other web_* tools don't cover.",
+         properties: ["tab": ["type": "string"], "script": ["type": "string"]], required: ["script"]),
     Tool(name: "send_to_session",
          description: "Send a message to another Claude session's prompt (as if the user typed it and pressed Return). Use get_state for tab ids. Use sparingly: it starts real work in that session.",
          properties: ["tab": ["type": "string"], "text": ["type": "string"]],
@@ -157,7 +178,7 @@ func callStudio(_ method: String, _ params: [String: Any]) -> (ok: Bool, text: S
     guard fd >= 0 else { return (false, "socket failed") }
     defer { close(fd) }
     // sandbox calls run real remote work (create, exec, push), so they get far longer than UI calls
-    var tv = timeval(tv_sec: method.hasPrefix("sandbox_") ? 3700 : 10, tv_usec: 0)
+    var tv = timeval(tv_sec: method.hasPrefix("sandbox_") ? 3700 : method.hasPrefix("web_") ? 120 : 10, tv_usec: 0)
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
     var addr = sockaddr_in()
     addr.sin_family = sa_family_t(AF_INET)

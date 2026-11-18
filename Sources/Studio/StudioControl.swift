@@ -1,5 +1,6 @@
 import AppKit
 import Network
+import WebKit
 
 /// Lets an AI drive the editor. Studio listens on 127.0.0.1 (random port, random token, both in a 0600 file);
 /// the bundled `studio-mcp` binary — injected into every Claude session via --mcp-config — forwards MCP tool
@@ -125,6 +126,9 @@ final class StudioControl {
             if method.hasPrefix("sandbox_") {
                 return ["ok": true, "result": try await sandbox(method, params, callerTab: tab)]
             }
+            if method.hasPrefix("web_") {
+                return ["ok": true, "result": try await web(method, params, callerTab: tab)]
+            }
             return ["ok": true, "result": try dispatch(method, params, callerTab: tab)]
         } catch let e as ControlError {
             return ["ok": false, "error": e.message]
@@ -134,6 +138,154 @@ final class StudioControl {
     }
 
     struct ControlError: Error { let message: String }
+
+    // MARK: Web panels
+
+    /// web_* tools: read and drive a web panel's page (WKWebView) for the agent.
+    private func web(_ method: String, _ p: [String: Any], callerTab: UUID?) async throws -> Any {
+        guard let store else { throw ControlError(message: "Studio isn't ready") }
+        let model = callerTab.flatMap { id in models.first { $0.terminal(id) != nil } } ?? lastActive ?? models.first
+        // the named web tab, else the newest web panel in the caller's window
+        let tab: TerminalSession
+        if let s = p["tab"] as? String, let id = UUID(uuidString: s), let t = store.terminals.first(where: { $0.id == id }), t.isWeb {
+            tab = t
+        } else if let model, let t = store.terminals.last(where: { t in t.isWeb && model.group(containing: t.id) != nil }) {
+            tab = t
+        } else {
+            throw ControlError(message: "No web panel open: use open_url first.")
+        }
+        let w = tab.webView
+        if w.frame.isEmpty { w.frame = NSRect(x: 0, y: 0, width: 1280, height: 860) }   // never shown yet
+
+        func js(_ body: String, _ args: [String: Any] = [:]) async throws -> Any? {
+            do {
+                return try await w.callAsyncJavaScript(body, arguments: args, in: nil, contentWorld: .page)
+            } catch {
+                throw ControlError(message: "page script failed: \((error as NSError).userInfo["WKJavaScriptExceptionMessage"] as? String ?? error.localizedDescription)")
+            }
+        }
+        /// JSON-safe copy of whatever the page returned
+        func clean(_ v: Any?) -> Any {
+            guard let v, !(v is NSNull) else { return NSNull() }
+            if JSONSerialization.isValidJSONObject(["v": v]) { return v }
+            return "\(v)"
+        }
+        // shared helper: resolve {ref | selector | text} to an element
+        let find = """
+        const pick = (ref, selector, text) => {
+          if (ref !== undefined && ref !== null) return document.querySelector(`[data-studio-ref="${ref}"]`);
+          if (selector) return document.querySelector(selector);
+          if (text) {
+            const t = text.toLowerCase();
+            const all = [...document.querySelectorAll('a,button,input,textarea,select,label,summary,[role=button],[role=link],[role=tab],[onclick]')];
+            return all.find(e => (e.innerText || e.value || e.getAttribute('aria-label') || '').toLowerCase().includes(t)) || null;
+          }
+          return null;
+        };
+        """
+        let target: [String: Any] = ["ref": p["ref"] ?? NSNull(), "selector": p["selector"] ?? NSNull(), "text": p["text"] ?? NSNull()]
+
+        switch method {
+        case "web_read":
+            let max = p["max_chars"] as? Int ?? 6000
+            let r = try await js("""
+            const vis = e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'; };
+            const els = [...document.querySelectorAll('a[href],button,input,textarea,select,summary,[role=button],[role=link],[role=tab],[contenteditable=true]')].filter(vis).slice(0, 200);
+            els.forEach((e, i) => e.setAttribute('data-studio-ref', i));
+            return { url: location.href, title: document.title,
+              text: (document.body ? document.body.innerText : '').replace(/\\n{3,}/g, '\\n\\n').slice(0, max),
+              elements: els.map((e, i) => ({ ref: i, tag: e.tagName.toLowerCase(),
+                text: (e.innerText || e.value || e.placeholder || e.getAttribute('aria-label') || e.title || '').trim().replace(/\\s+/g, ' ').slice(0, 80),
+                href: e.href || undefined, type: e.type || undefined })) };
+            """, ["max": max])
+            return clean(r)
+
+        case "web_click":
+            let r = try await js(find + """
+            const e = pick(ref, selector, text);
+            if (!e) return { ok: false, error: 'no matching element' };
+            e.scrollIntoView({ block: 'center' });
+            e.focus && e.focus();
+            e.click();
+            return { ok: true, clicked: (e.innerText || e.value || e.tagName).trim().slice(0, 80) };
+            """, target)
+            try? await Task.sleep(nanoseconds: 600_000_000)   // let navigation/rendering start
+            var out = clean(r) as? [String: Any] ?? [:]
+            out["url"] = w.url?.absoluteString
+            return out
+
+        case "web_type":
+            guard let value = p["value"] as? String else { throw ControlError(message: "value is required") }
+            var args = target
+            args["value"] = value
+            args["submit"] = p["submit"] as? Bool ?? false
+            args["clear"] = p["clear"] as? Bool ?? true
+            let r = try await js(find + """
+            const e = pick(ref, selector, text) || document.activeElement;
+            if (!e) return { ok: false, error: 'no matching element' };
+            e.scrollIntoView({ block: 'center' }); e.focus();
+            if (e.isContentEditable) { e.textContent = clear ? value : e.textContent + value; }
+            else {
+              const proto = e instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype
+                          : e instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+              const set = Object.getOwnPropertyDescriptor(proto, 'value').set;   // React-friendly
+              set.call(e, clear ? value : (e.value || '') + value);
+            }
+            e.dispatchEvent(new Event('input', { bubbles: true }));
+            e.dispatchEvent(new Event('change', { bubbles: true }));
+            if (submit) {
+              if (e.form && e.form.requestSubmit) e.form.requestSubmit();
+              else ['keydown', 'keypress', 'keyup'].forEach(t => e.dispatchEvent(new KeyboardEvent(t, { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true })));
+            }
+            return { ok: true };
+            """, args)
+            if p["submit"] as? Bool == true { try? await Task.sleep(nanoseconds: 800_000_000) }
+            var out = clean(r) as? [String: Any] ?? [:]
+            out["url"] = w.url?.absoluteString
+            return out
+
+        case "web_wait":
+            let timeout = Double(p["timeout"] as? Int ?? 10)
+            let deadline = Date().addingTimeInterval(timeout)
+            while Date() < deadline {
+                let found = try await js(find + "return !!pick(ref, selector, text) || (text ? document.body.innerText.toLowerCase().includes(text.toLowerCase()) : false);", target)
+                if found as? Bool == true { return ["ok": true, "url": w.url?.absoluteString ?? ""] }
+                try? await Task.sleep(nanoseconds: 300_000_000)
+            }
+            return ["ok": false, "error": "timed out after \(Int(timeout))s"]
+
+        case "web_nav":
+            switch p["action"] as? String {
+            case "back": w.goBack()
+            case "forward": w.goForward()
+            default: w.reload()
+            }
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            return ["url": w.url?.absoluteString ?? "", "title": w.title ?? ""]
+
+        case "web_eval":
+            guard let code = p["script"] as? String else { throw ControlError(message: "script is required") }
+            return ["result": clean(try await js(code))]
+
+        case "web_screenshot":
+            let cfg = WKSnapshotConfiguration()
+            let image: NSImage = try await withCheckedThrowingContinuation { cont in
+                w.takeSnapshot(with: cfg) { img, err in
+                    if let img { cont.resume(returning: img) } else { cont.resume(throwing: err ?? ControlError(message: "snapshot failed")) }
+                }
+            }
+            guard let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff),
+                  let png = rep.representation(using: .png, properties: [:]) else { throw ControlError(message: "couldn't encode the snapshot") }
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("StudioWeb")
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let file = dir.appendingPathComponent("web-\(tab.id.uuidString.prefix(8))-\(Int(Date().timeIntervalSince1970)).png")
+            try png.write(to: file)
+            return ["path": file.path, "url": w.url?.absoluteString ?? "", "note": "Read this PNG to see the page."]
+
+        default:
+            throw ControlError(message: "unknown method \(method)")
+        }
+    }
 
     // MARK: Sandboxes
 
