@@ -161,6 +161,8 @@ watcher"*, or *"lay these out as a 2×2 grid"*.
 | Sandboxes | `sandbox_list`, `sandbox_create`, `sandbox_exec`, `sandbox_push`, `sandbox_url`, `sandbox_terminal`, `sandbox_attach` / `sandbox_detach`, `sandbox_stop` / `sandbox_resume` / `sandbox_delete` |
 | Appearance & navigation | `set_theme`, `set_font_size`, `open_palette`, `open_project` |
 
+**Always current:** sessions outlive Studio restarts, so when Studio is updated each session's `studio-mcp` swaps in the new build in place and tells Claude its tool list changed. New tools show up in sessions that are already running.
+
 **Skills:** every session Studio starts also loads Studio's own plugin (`--plugin-dir`), with two short skills: `studio:studio` (driving the editor) and `studio:sandbox` (when and how to use sandboxes). They're in `Resources/StudioPlugin/`.
 
 **Security:** the control server listens on `127.0.0.1` only and requires a random token stored in a `0600` file

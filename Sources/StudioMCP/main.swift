@@ -222,7 +222,40 @@ func fail(_ id: Any, _ code: Int, _ message: String) {
     send(["jsonrpc": "2.0", "id": id, "error": ["code": code, "message": message]])
 }
 
+// MARK: Live updates
+//
+// Sessions now outlive Studio restarts, so this server can be far older than the app. When Studio's build
+// replaces this binary, swap the new one in place (exec keeps stdin/stdout, so the MCP connection survives)
+// and tell Claude the tool list changed, so new tools appear in sessions that are already running.
+
+setvbuf(stdin, nil, _IONBF, 0)    // read byte by byte: nothing sits in a buffer that exec would drop
+setvbuf(stdout, nil, _IONBF, 0)
+
+let selfPath = Bundle.main.executablePath ?? CommandLine.arguments[0]
+func modified(_ p: String) -> Date? { (try? FileManager.default.attributesOfItem(atPath: p))?[.modificationDate] as? Date }
+let startedFrom = modified(selfPath)
+nonisolated(unsafe) var busy = false
+
+if CommandLine.arguments.contains("--reexec") {
+    send(["jsonrpc": "2.0", "method": "notifications/tools/list_changed"])
+}
+
+Thread.detachNewThread {
+    while true {
+        sleep(5)
+        guard !busy, let now = modified(selfPath), let then = startedFrom, now > then,
+              FileManager.default.isExecutableFile(atPath: selfPath) else { continue }
+        sleep(1)   // let the build finish writing
+        guard !busy else { continue }
+        let args = [selfPath, "--reexec"]
+        var cargs = args.map { strdup($0) } + [nil]
+        execv(selfPath, &cargs)   // only returns on failure; keep serving with this version
+    }
+}
+
 while let line = readLine(strippingNewline: true) {
+    busy = true
+    defer { busy = false }
     guard !line.isEmpty, let msg = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else { continue }
     let method = msg["method"] as? String ?? ""
     guard let id = msg["id"] else { continue }   // notifications (e.g. notifications/initialized) need no reply
@@ -232,7 +265,7 @@ while let line = readLine(strippingNewline: true) {
     case "initialize":
         reply(id, result: [
             "protocolVersion": params["protocolVersion"] as? String ?? "2025-06-18",
-            "capabilities": ["tools": [String: Any]()],
+            "capabilities": ["tools": ["listChanged": true]],
             "serverInfo": ["name": "studio", "version": "0.1"],
             "instructions": "You are running inside Studio, a Claude Code session manager. These tools control its UI (tabs, splits, terminals, themes, palette), its web panels, and remote sandboxes (sandbox_*). For any browsing, use the web panel by default (open_url, then web_*), so the user sees it beside you. See the studio:studio and studio:sandbox skills.",
         ])
