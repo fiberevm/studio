@@ -7,8 +7,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !CommandLine.arguments.contains("--order-front") { NSApp.activate(ignoringOtherApps: true) }
         else {
             // Background preview copies must never keep keyboard focus, even if macOS activates them on relaunch.
-            NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
-                NSApp.deactivate()
+            // Start once launch has settled: deactivating during launch stops SwiftUI opening the first window.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                if NSApp.isActive { NSApp.deactivate() }
+                NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+                    NSApp.deactivate()
+                }
             }
         }
         NSWindow.allowsAutomaticWindowTabbing = false

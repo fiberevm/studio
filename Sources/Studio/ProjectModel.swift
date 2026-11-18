@@ -55,17 +55,32 @@ final class ProjectModel: ObservableObject {
             }.store(in: &bag)
         watchClicks()
         StudioControl.shared.register(self)
+        launchObserver = NotificationCenter.default.addObserver(forName: .studioLaunchNewSession, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.consumeLaunchNewSession() }
+        }
         // Restore after this window is built, not while SwiftUI is creating it: restoring adds sessions to the
         // shared store, and changing observed state in the middle of a view update aborts the app.
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            // tabs opened before this ran (--new, a session opened from another window) must survive the restore
+            let opened = self.groups.flatMap(\.tabIds)
             let restored = self.store.restoreTerminals(in: folder)
             if !self.restoreLayout() {
-                first.tabIds = restored.map(\.id)
-                first.selection = restored.first.map { "t:\($0.id)" }
+                first.tabIds = opened + restored.map(\.id).filter { !opened.contains($0) }
+                first.selection = first.selection ?? first.tabIds.first.map { "t:\($0)" }
+            } else if !opened.isEmpty {
+                let present = Set(self.groups.flatMap(\.tabIds))
+                let missing = opened.filter { !present.contains($0) }
+                if let g = self.groups.first, !missing.isEmpty {
+                    g.tabIds += missing
+                    g.selection = "t:\(missing.last!)"
+                    self.activeGroupId = g.id
+                }
             }
             self.objectWillChange.send()
             self.consumePendingFocus()   // opened from another window's palette
+            self.restored = true
+            self.consumeLaunchNewSession()
             self.focusTerminal()
         }
     }
@@ -150,15 +165,25 @@ final class ProjectModel: ObservableObject {
 
     func newTab() { select(store.newSession(in: folder)) }
 
+    private var restored = false
+    private var launchObserver: Any?
+    /// `--new <dir>`: once this window has restored its tabs, add the fresh session (asked for from either side
+    /// of the restore, since SwiftUI may bring the window up before or after the launch flag is read).
+    func consumeLaunchNewSession() {
+        guard restored, LaunchArgs.pendingNewSession == folder else { return }   // the restore pass calls this again
+        LaunchArgs.pendingNewSession = nil
+        newTab()
+    }
+
     /// ⌘K quick prompt is open.
     @Published var quickPrompt = false
 
     /// Sessions ⌘K can message: the current one first, then this window's tabs, then other projects'.
     var quickTargets: [TerminalSession] {
-        let claude = store.terminals.filter { !$0.isShell && $0.running }
-        let mine = tabs.filter { !$0.isShell && $0.running }
+        let claude = store.terminals.filter { $0.isClaude && $0.running }
+        let mine = tabs.filter { $0.isClaude && $0.running }
         var out: [TerminalSession] = []
-        if let cur = selectedTerminal, !cur.isShell, cur.running { out.append(cur) }
+        if let cur = selectedTerminal, cur.isClaude, cur.running { out.append(cur) }
         for t in mine + claude where !out.contains(where: { $0 === t }) { out.append(t) }
         return out
     }
@@ -190,9 +215,17 @@ final class ProjectModel: ObservableObject {
 
     func newShellTab() { select(store.newShell(in: folder)) }
 
+    /// Open a web panel: in a split beside the active pane (or as a tab with zone .center).
+    @discardableResult
+    func openWeb(_ url: URL?, beside g: GroupNode? = nil, zone: DropZone = .right) -> TerminalSession {
+        let t = store.newWeb(url, cwd: folder)
+        place(t, beside: g ?? activeGroup, zone: zone)
+        return t
+    }
+
     /// ⌘/: switch the session between Claude's terminal UI and Studio's native view.
     func toggleNative(_ t: TerminalSession? = nil) {
-        guard let t = t ?? selectedTerminal, !t.isShell else { showToast("Select a Claude session"); return }
+        guard let t = t ?? selectedTerminal, t.isClaude else { showToast("Select a Claude session"); return }
         guard t.sessionId != nil else { showToast("Send a message first, then switch views"); return }
         let goingNative = !t.isNative
         t.toggleNative()
@@ -201,7 +234,7 @@ final class ProjectModel: ObservableObject {
 
     /// ⌘E: fork a session into a new pane beside it, so you can try another direction without losing this one.
     func fork(_ t: TerminalSession? = nil, zone: DropZone = .right) {
-        guard let t = t ?? selectedTerminal, !t.isShell else { showToast("Select a Claude session to fork"); return }
+        guard let t = t ?? selectedTerminal, t.isClaude else { showToast("Select a Claude session to fork"); return }
         guard let sid = t.sessionId, SessionStore.transcriptExists(sid) else { showToast("Nothing to fork yet: send a message first"); return }
         let g = group(containing: t.id) ?? activeGroup
         place(store.fork(sid, cwd: t.cwd), beside: g, zone: zone)
@@ -221,21 +254,21 @@ final class ProjectModel: ObservableObject {
     /// Close a tab. Without the sidebar there's nowhere for a hidden session to show up, so closing ends it
     /// (⌘P can still resume the conversation). With the sidebar visible, the session keeps running there.
     func close(_ t: TerminalSession) {
-        if !Pref.bool(Pref.closeTabEndsSession, default: true) && !t.isShell { closeKeepingRunning(t) } else { endSession(t) }
+        if !Pref.bool(Pref.closeTabEndsSession, default: true) && t.isClaude { closeKeepingRunning(t) } else { endSession(t) }
     }
 
     /// Close the tab only; a Claude session keeps running (find it with ⌘P). A terminal ends.
     func closeKeepingRunning(_ t: TerminalSession) {
         guard let g = group(containing: t.id) else { return }
         detach(t.id, from: g)   // an emptied pane stays, showing its empty state
-        if t.isShell { store.close(t) }
+        if !t.isClaude { store.close(t) }   // terminals and web panels have nowhere else to live
         changed()
     }
 
     /// Stop the claude process for good (it can still be resumed later with `claude --resume`).
     func endSession(_ t: TerminalSession) {
         closeKeepingRunning(t)
-        if !t.isShell { store.close(t) }   // a shell was already ended
+        if t.isClaude { store.close(t) }   // a shell or web panel was already ended
     }
 
     func closeSelectedTab() { if let t = selectedTerminal { close(t) } }
@@ -260,7 +293,7 @@ final class ProjectModel: ObservableObject {
         // Plain terminals live only in this window's layout; end them rather than leave them running unreachable.
         // (Quitting is different: hosted terminals keep running and the next launch reattaches them.)
         if !SessionStore.terminating {
-            for g in groups { for t in tabs(in: g) where t.isShell { store.close(t) } }
+            for g in groups { for t in tabs(in: g) where !t.isClaude { store.close(t) } }
         }
         store.endViewing(window: windowId)
         StudioControl.shared.unregister(self)
@@ -492,6 +525,7 @@ final class ProjectModel: ObservableObject {
                 // Claude tabs are saved by session id; plain terminals as "shell:<cwd>" and reopened fresh.
                 func token(_ t: TerminalSession?) -> String? {
                     guard let t else { return nil }
+                    if t.isWeb { return "web:" + (t.url?.absoluteString ?? "about:blank") }
                     if t.isShell {
                         // hosted terminals reattach next launch: "shellh:<tab>|<host>|<cwd>"
                         if let h = t.hostName { return "shellh:\(t.id.uuidString)|\(h)|\(t.cwd)" }
@@ -509,7 +543,7 @@ final class ProjectModel: ObservableObject {
             }
         }
         // Don't overwrite a saved layout while restored sessions are still learning their ids.
-        guard groups.flatMap(\.tabIds).allSatisfy({ terminal($0)?.isShell == true || terminal($0)?.sessionId != nil })
+        guard groups.flatMap(\.tabIds).allSatisfy({ terminal($0)?.isClaude == false || terminal($0)?.sessionId != nil })
         else { return }
         guard let layout = encode(root), let data = try? JSONEncoder().encode(layout), data != lastSavedLayout else { return }
         lastSavedLayout = data
@@ -533,7 +567,9 @@ final class ProjectModel: ObservableObject {
                 var selected: TerminalSession?
                 let ts: [TerminalSession] = sids.compactMap { sid in
                     let t: TerminalSession?
-                    if sid.hasPrefix("shellh:") {
+                    if sid.hasPrefix("web:") {
+                        t = store.newWeb(URL(string: String(sid.dropFirst(4))), cwd: folder)
+                    } else if sid.hasPrefix("shellh:") {
                         let parts = sid.dropFirst(7).split(separator: "|", maxSplits: 2).map(String.init)
                         if parts.count == 3, let tab = UUID(uuidString: parts[0]) {
                             t = store.reattachShell(tab: tab, host: parts[1], cwd: parts[2])
@@ -566,7 +602,7 @@ final class ProjectModel: ObservableObject {
         guard let node = build(saved) else { return false }
         root = node
         // sessions that were restored but missing from the saved layout go into the first group
-        let leftovers = store.terminals(in: folder).filter { !used.contains($0.id) && $0.sessionId != nil && !$0.isShell }
+        let leftovers = store.terminals(in: folder).filter { !used.contains($0.id) && $0.sessionId != nil && $0.isClaude }
         if let g = root.groups.first { g.tabIds += leftovers.map(\.id) }
         activeGroupId = active ?? root.groups.first?.id ?? activeGroupId
         return true

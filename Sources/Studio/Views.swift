@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftTerm
+import WebKit
 
 private let topBarHeight: CGFloat = 35
 private let sidebarWidth: CGFloat = 250
@@ -35,12 +36,19 @@ struct ProjectWindow: View {
 
     /// `Studio --new <dir>` opens a window on dir with a fresh session; `--resume <id>` resumes into its project.
     private func handleLaunchArguments() {
-        guard folder == nil, !LaunchArgs.consumed else { return }
-        LaunchArgs.consumed = true
+        guard !LaunchArgs.consumed else { return }
         let args = CommandLine.arguments
+        // --new works even when SwiftUI already restored this window's folder on its own
         if let i = args.firstIndex(of: "--new"), i + 1 < args.count {
-            LaunchArgs.pendingNewSession = true
-            folder = args[i + 1]
+            LaunchArgs.consumed = true
+            LaunchArgs.pendingNewSession = args[i + 1]
+            if folder != args[i + 1] { folder = args[i + 1] }
+            NotificationCenter.default.post(name: .studioLaunchNewSession, object: nil)   // window may already be up
+            return
+        }
+        guard folder == nil else { return }
+        LaunchArgs.consumed = true
+        if false {
         } else if let i = args.firstIndex(of: "--resume"), i + 1 < args.count {
             let sid = args[i + 1]
             LaunchArgs.pendingResume = sid
@@ -56,9 +64,12 @@ struct ProjectWindow: View {
     }
 }
 
+extension Notification.Name { static let studioLaunchNewSession = Notification.Name("studioLaunchNewSession") }
+
 @MainActor enum LaunchArgs {
     static var consumed = false
-    static var pendingNewSession = false
+    /// Folder that should get a fresh session once its window is up (`--new <dir>`).
+    static var pendingNewSession: String?
     static var pendingResume: String?
 }
 
@@ -116,7 +127,7 @@ struct ProjectView: View {
         .environmentObject(model)
         .focusedSceneObject(model)
         .onAppear {
-            if LaunchArgs.pendingNewSession { LaunchArgs.pendingNewSession = false; model.newTab() }
+            model.consumeLaunchNewSession()
             if let sid = LaunchArgs.pendingResume { LaunchArgs.pendingResume = nil; model.resume(sid) }
             if CommandLine.arguments.contains("--new-terminal") { model.newShellTab() }
             // debug: split like a user would, a few seconds after launch
@@ -748,7 +759,8 @@ struct TabButton: View {
     private var tabStatus: SessionStatus { item?.status ?? (terminal.running ? .starting : .exited) }
 
     private var tabTitle: String {
-        let t = terminal.isShell ? shellTitle : (item?.title ?? "New session")
+        let t = terminal.isWeb ? (terminal.webTitle.isEmpty ? (terminal.url?.host ?? "New tab") : terminal.webTitle)
+            : terminal.isShell ? shellTitle : (item?.title ?? "New session")
         return t.count > 28 ? String(t.prefix(27)) + "…" : t
     }
 
@@ -762,7 +774,9 @@ struct TabButton: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            if terminal.isShell {
+            if terminal.isWeb {
+                Image(systemName: "globe").font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 12)
+            } else if terminal.isShell {
                 Image(systemName: "terminal").font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 12)
             } else if StatusDot.isVisible(tabStatus, attention: attention) {
                 StatusDot(status: tabStatus, attention: attention, activity: item?.activity)
@@ -797,7 +811,7 @@ struct TabButton: View {
         .onTapGesture { model.peekTab = nil; model.select(terminal, in: group) }
         .onHover { h in
             hovering = h
-            if h, !terminal.isShell {
+            if h, terminal.isClaude {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
                     if hovering, model.dropTarget == nil { model.peekTab = terminal.id }
                 }
@@ -808,7 +822,7 @@ struct TabButton: View {
         .anchorPreference(key: TabAnchors.self, value: .bounds) { [terminal.id: $0] }
         .onDrag { model.peekTab = nil; return TabDrag.provider(terminal) }
         .contextMenu {
-            if !terminal.isShell {
+            if terminal.isClaude {
                 Button(terminal.isNative ? "Switch to Terminal View" : "Switch to Native View") { model.toggleNative(terminal) }
                 Button("Fork Session to the Right") { model.fork(terminal) }
                 Button("Fork Session Below") { model.fork(terminal, zone: .bottom) }
@@ -820,7 +834,7 @@ struct TabButton: View {
             Button("Split Up") { model.split(terminal, .top) }
             Divider()
             Button("Close Tab") { model.close(terminal) }
-            if !terminal.isShell {
+            if terminal.isClaude {
                 Button("Close Tab, Keep Session Running") { model.closeKeepingRunning(terminal) }
             }
         }
@@ -915,14 +929,15 @@ struct SessionStatusBar: View {
         let sid = terminal.sessionId
         let st = sid.flatMap { model.store.stats[$0] }
         HStack(spacing: 14) {
-            if terminal.isShell { stat("folder", abbreviatePath(terminal.cwd), help: "Started in") }
+            if terminal.isWeb { stat("globe", terminal.url?.host ?? "", help: terminal.url?.absoluteString ?? "") }
+            else if terminal.isShell { stat("folder", abbreviatePath(terminal.cwd), help: "Started in") }
             if let b = st?.gitBranch { stat("arrow.triangle.branch", b, help: "Git branch") }
             if let m = st?.model { stat("cpu", prettyModel(m), help: "Model: \(m)") }
             if let st {
                 stat("arrow.up", formatTokens(st.tokensIn), help: "Tokens sent: \(st.tokensIn.formatted()) (incl. cache)")
                 stat("arrow.down", formatTokens(st.tokensOut), help: "Tokens received: \(st.tokensOut.formatted())")
             }
-            if !terminal.isShell { SandboxChips(registry: model.store.sandboxes, terminal: terminal) }
+            if terminal.isClaude { SandboxChips(registry: model.store.sandboxes, terminal: terminal) }
             Spacer()
         }
         .padding(.horizontal, 10)
@@ -966,7 +981,13 @@ struct SandboxChips: View {
             Text("\(s?.label ?? id) · \(state)\(s?.type.map { " · \($0)" } ?? "")")
             Divider()
             Button("Open Terminal") { openTerminal(id) }
-            Button("Open Desktop") { act { _ = try await registry.provider.openDesktop(id) } }
+            Button("Open Desktop") {
+                act {
+                    let url = try await registry.provider.desktopURL(id)
+                    model.openWeb(url, beside: model.group(containing: terminal.id), zone: .right)
+                }
+            }
+            Button("Open Desktop in Browser") { act { _ = try await registry.provider.openDesktop(id) } }
             Button("Copy ID") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(id, forType: .string) }
             Divider()
             if state == "stopped" {
@@ -1082,7 +1103,9 @@ struct TerminalPane: View {
 
     var body: some View {
         VStack(spacing: 0) {
-        if let chat = terminal.native {
+        if terminal.isWeb {
+            WebPane(tab: terminal)
+        } else if let chat = terminal.native {
             NativeChatView(chat: chat).id(ObjectIdentifier(chat))
         } else {
         ZStack {
@@ -1105,6 +1128,81 @@ struct TerminalPane: View {
         }
             Hairline()
             SessionStatusBar(terminal: terminal)
+        }
+    }
+}
+
+/// A web panel: slim toolbar (back, forward, reload, address, open in browser) over a WKWebView.
+struct WebPane: View {
+    @ObservedObject var tab: TerminalSession
+    @State private var address = ""
+    @FocusState private var editing: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                button("chevron.left", "Back") { tab.webView.goBack() }
+                button("chevron.right", "Forward") { tab.webView.goForward() }
+                button("arrow.clockwise", "Reload") { tab.webView.reload() }
+                TextField("Enter a URL", text: $address)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12))
+                    .padding(.horizontal, 8).frame(height: 24)
+                    .background(SwiftUI.Color(nsColor: Theme.background))
+                    .overlay(Rectangle().stroke(SwiftUI.Color(nsColor: editing ? Theme.accent : Theme.paneDivider), lineWidth: 1))
+                    .focused($editing)
+                    .onSubmit { go() }
+                button("safari", "Open in browser") { if let u = tab.url { NSWorkspace.shared.open(u) } }
+            }
+            .padding(.horizontal, 8).frame(height: 34)
+            .background(SwiftUI.Color(nsColor: Theme.chrome))
+            Hairline()
+            WebHost(view: tab.webView)
+        }
+        .onAppear {
+            address = tab.url?.absoluteString ?? ""
+            if tab.url == nil { DispatchQueue.main.async { editing = true } }
+        }
+        .onChange(of: tab.url) { _, u in if !editing { address = u?.absoluteString ?? "" } }
+    }
+
+    private func button(_ icon: String, _ help: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon).font(.system(size: 12)).frame(width: 22, height: 22)
+        }
+        .buttonStyle(.borderless).help(help)
+    }
+
+    /// Bare words search; anything with a dot or a scheme is a URL (localhost:3000 works too).
+    private func go() {
+        let s = address.trimmingCharacters(in: .whitespaces)
+        guard !s.isEmpty else { return }
+        let url: URL?
+        if s.contains("://") { url = URL(string: s) }
+        else if s.contains(".") || s.hasPrefix("localhost") || s.contains(":") { url = URL(string: "https://" + s.replacingOccurrences(of: "https://localhost", with: "http://localhost")) }
+        else { url = URL(string: "https://www.google.com/search?q=" + (s.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? s)) }
+        if let u = url.map({ $0.host == "localhost" || $0.host == "127.0.0.1" ? URL(string: $0.absoluteString.replacingOccurrences(of: "https://", with: "http://"))! : $0 }) {
+            tab.navigate(u)
+        }
+        editing = false
+    }
+}
+
+struct WebHost: NSViewRepresentable {
+    let view: WKWebView
+    func makeNSView(context: Context) -> NSView {
+        let c = NSView()
+        view.removeFromSuperview()
+        view.frame = c.bounds
+        view.autoresizingMask = [.width, .height]
+        c.addSubview(view)
+        return c
+    }
+    func updateNSView(_ c: NSView, context: Context) {
+        if view.superview !== c {
+            view.removeFromSuperview()
+            view.frame = c.bounds
+            c.addSubview(view)
         }
     }
 }

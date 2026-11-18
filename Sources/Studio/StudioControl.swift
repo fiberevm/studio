@@ -306,16 +306,28 @@ final class StudioControl {
             t.type(cmd + ((p["press_enter"] as? Bool ?? true) ? "\r" : ""))
             return "sent"
 
+        case "open_url":
+            guard let s = p["url"] as? String, let url = URL(string: s.contains("://") ? s : "https://" + s)
+            else { throw ControlError(message: "url is required") }
+            // navigate an existing web tab, or open a new web panel (split beside the caller by default)
+            if let id = (p["tab"] as? String).flatMap(UUID.init(uuidString:)), let t = model.terminal(id), t.isWeb {
+                t.navigate(url)
+                model.select(t)
+                return ["tab": t.id.uuidString]
+            }
+            let t = model.openWeb(url, beside: callerGroup, zone: try zone("split") ?? .right)
+            return ["tab": t.id.uuidString]
+
         case "send_to_session":
             let t = try tab(defaultToCaller: false)
-            guard !t.isShell else { throw ControlError(message: "send_to_session is for Claude sessions; use run_in_terminal for terminals") }
+            guard t.isClaude else { throw ControlError(message: "send_to_session is for Claude sessions; use run_in_terminal for terminals") }
             guard let text = p["text"] as? String, !text.isEmpty else { throw ControlError(message: "text is required") }
             t.submit(text)
             return "sent"
 
         case "set_view":
             let t = try tab()
-            guard !t.isShell else { throw ControlError(message: "terminals have no native view") }
+            guard t.isClaude else { throw ControlError(message: "terminals have no native view") }
             guard t.sessionId != nil else { throw ControlError(message: "the session needs a first message before switching views") }
             let wantNative = (p["view"] as? String ?? "native") == "native"
             if wantNative != t.isNative { t.toggleNative() }
@@ -323,7 +335,7 @@ final class StudioControl {
 
         case "fork_session":
             let t = try tab()
-            guard !t.isShell, let sid = t.sessionId else { throw ControlError(message: "that tab isn't a Claude session with a conversation yet") }
+            guard t.isClaude, let sid = t.sessionId else { throw ControlError(message: "that tab isn't a Claude session with a conversation yet") }
             let f = store.fork(sid, cwd: t.cwd)
             model.place(f, beside: model.group(containing: t.id) ?? callerGroup, zone: try zone("split") ?? .right)
             return ["tab": f.id.uuidString]
@@ -349,7 +361,7 @@ final class StudioControl {
 
         case "close_tab":
             let t = try tab(defaultToCaller: false)
-            let keep = (p["keep_running"] as? Bool == true || !Pref.bool(Pref.closeTabEndsSession, default: true)) && !t.isShell
+            let keep = (p["keep_running"] as? Bool == true || !Pref.bool(Pref.closeTabEndsSession, default: true)) && t.isClaude
             if keep { model.closeKeepingRunning(t) } else { model.endSession(t) }
             return keep ? "tab closed (session keeps running)" : "tab closed (session ended)"
 
@@ -439,7 +451,7 @@ final class StudioControl {
                             let item = m.item(for: t)
                             var d: [String: Any] = [
                                 "tab": t.id.uuidString,
-                                "kind": t.isShell ? "terminal" : "claude",
+                                "kind": t.isWeb ? "web" : t.isShell ? "terminal" : "claude",
                                 "title": t.isShell ? (t.terminalTitle.isEmpty ? "terminal" : t.terminalTitle) : (item?.title ?? "New session"),
                                 "selected": g.selection == "t:\(t.id)",
                                 "running": t.running,

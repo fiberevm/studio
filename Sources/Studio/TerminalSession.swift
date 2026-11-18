@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import SwiftTerm
+import WebKit
 
 /// One embedded terminal running a `claude` process. Kept alive while the app runs,
 /// so switching between sessions in the sidebar doesn't restart anything.
@@ -23,9 +24,30 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     private(set) var pid: Int32 = 0
     private let claudeArgs: [String]
     /// .claude runs a Claude Code session; .shell is a plain terminal (⌃`), like VS Code's integrated terminal.
-    enum Kind { case claude, shell }
+    enum Kind { case claude, shell, web }
     let kind: Kind
     var isShell: Bool { kind == .shell }
+    var isClaude: Bool { kind == .claude }
+    var isWeb: Bool { kind == .web }
+
+    // MARK: Web panel (kind .web): a browser tab, like a terminal tab
+    @Published var url: URL?
+    @Published var webTitle = ""
+    /// Kept for the tab's lifetime so switching tabs doesn't reload the page.
+    lazy var webView: WKWebView = {
+        let w = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        w.allowsBackForwardNavigationGestures = true
+        w.navigationDelegate = webDelegate
+        webDelegate.tab = self
+        if let url { w.load(URLRequest(url: url)) }
+        return w
+    }()
+    private let webDelegate = WebDelegate()
+
+    func navigate(_ u: URL) {
+        url = u
+        webView.load(URLRequest(url: u))
+    }
 
     init(cwd: String, claudeArgs: [String], sessionId: String?, fontSize: CGFloat = 12, kind: Kind = .claude,
          native: Bool = false, id: UUID = UUID(), host: String? = nil) {
@@ -95,7 +117,13 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
         view.font = Theme.font(size)
     }
 
-    private func start() { if isShell { launchShell() } else { launch(claudeArgs) } }
+    private func start() {
+        switch kind {
+        case .shell: launchShell()
+        case .claude: launch(claudeArgs)
+        case .web: running = true    // no process; the page lives in webView
+        }
+    }
 
     /// The user's login shell, interactive (it's on a pty), in the project folder.
     private func launchShell() {
@@ -173,6 +201,7 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
 
     /// End this tab's process for good: its host session too, if it has one.
     func terminate() {
+        if isWeb { webView.stopLoading(); running = false; return }
         native?.stop()
         if let h = hostName { SessionHost.kill(h) }
         else if running, pid > 0 { kill(pid, SIGHUP) }
@@ -207,6 +236,16 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
                 self.startNative(sid)
             }
         }
+    }
+}
+
+/// Keeps a web tab's URL and title in sync with its page.
+final class WebDelegate: NSObject, WKNavigationDelegate {
+    weak var tab: TerminalSession?
+    func webView(_ w: WKWebView, didCommit _: WKNavigation!) { tab?.url = w.url }
+    func webView(_ w: WKWebView, didFinish _: WKNavigation!) {
+        tab?.url = w.url
+        tab?.webTitle = w.title ?? ""
     }
 }
 

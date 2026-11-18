@@ -29,6 +29,8 @@ protocol SandboxProvider: Sendable {
     /// Shell command that opens an interactive session in the sandbox (run in a Studio terminal tab).
     func sshCommand(_ id: String) -> String
     func openDesktop(_ id: String) async throws -> Any
+    /// The sandbox desktop's viewer URL (for a Studio web panel).
+    func desktopURL(_ id: String) async throws -> URL
     /// Account status for Settings: {"account": {...}, "creditHours": Double}.
     func status() async -> [String: Any]?
 }
@@ -144,14 +146,20 @@ struct BoatProvider: SandboxProvider {
     func resume(_ id: String) async throws -> Any { try await run(["resume", id], timeout: 600) }
     func delete(_ id: String) async throws -> Any { try await run(["delete", id, "--yes"], timeout: 120) }
     /// `boat desktop --json` only returns the URLs (it opens nothing), so open the viewer ourselves.
-    func openDesktop(_ id: String) async throws -> Any {
+    func desktopURL(_ id: String) async throws -> URL {
         let r = try await run(["desktop", id], timeout: 60)
         let o = r as? [String: Any] ?? [:]
         guard let s = o["viewerUrl"] as? String ?? o["desktopUrl"] as? String, let url = URL(string: s) else {
             throw SandboxError(message: "Boat returned no desktop URL for \(id)")
         }
+        return url
+    }
+
+    /// `boat desktop --json` only returns the URLs (it opens nothing), so open the viewer ourselves.
+    func openDesktop(_ id: String) async throws -> Any {
+        let url = try await desktopURL(id)
         await MainActor.run { _ = NSWorkspace.shared.open(url) }
-        return ["opened": s]
+        return ["opened": url.absoluteString]
     }
     func sshCommand(_ id: String) -> String { "\(shellQuote(binary ?? "boat")) ssh \(shellQuote(id))" }
 

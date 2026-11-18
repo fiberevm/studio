@@ -147,7 +147,7 @@ final class SessionStore: ObservableObject {
         }
 
         // Map in-app terminals to their claude session via pid. Handles /clear and /resume inside the session too.
-        for t in terminals where t.running && !t.isShell {
+        for t in terminals where t.running && t.isClaude {
             if let info = byPid[t.sessionPid], t.sessionId != info.sessionId {
                 if let previous = t.sessionId { forgotten.insert(previous) }   // e.g. after /clear
                 t.sessionId = info.sessionId
@@ -191,7 +191,7 @@ final class SessionStore: ObservableObject {
     var allActiveItems: [ActiveItem] {
         var items: [ActiveItem] = []
         var covered = Set<String>()
-        for t in terminals where !t.isShell {   // plain terminals aren't Claude sessions
+        for t in terminals where t.isClaude {   // plain terminals aren't Claude sessions
             let sid = t.sessionId
             if let sid { covered.insert(sid) }
             let info = sid.flatMap { live[$0] }
@@ -259,7 +259,7 @@ final class SessionStore: ObservableObject {
         // A --no-restore instance is a throwaway side-by-side copy: never touch the saved tab list.
         guard !CommandLine.arguments.contains("--no-restore") else { return }
         let current: [[String: String]] = terminals.compactMap { t in
-            guard let sid = t.sessionId, !t.isShell else { return nil }
+            guard let sid = t.sessionId, t.isClaude else { return nil }
             var e = ["sid": sid, "cwd": t.cwd, "tab": t.id.uuidString]
             if let h = t.hostName, !t.isNative { e["tmux"] = h }   // reattach to it next launch
             return e
@@ -359,6 +359,14 @@ final class SessionStore: ObservableObject {
     }
 
     /// A plain terminal (⌃`) in the folder; not a Claude session, so it isn't listed or restored.
+    /// A web panel tab (opened by ⌘P → Open URL, the open_url MCP tool, or a sandbox's desktop/URL).
+    func newWeb(_ url: URL?, cwd: String) -> TerminalSession {
+        let t = TerminalSession(cwd: cwd, claudeArgs: [], sessionId: nil, fontSize: fontSize, kind: .web)
+        t.url = url
+        add(t)
+        return t
+    }
+
     /// Reattach to a terminal tab still running in its host session (or start a fresh shell there).
     func reattachShell(tab: UUID, host: String, cwd: String) -> TerminalSession {
         if let t = terminals.first(where: { $0.id == tab }) { return t }

@@ -13,6 +13,6 @@ Sandboxes are remote Linux VMs from Studio's `sandbox_*` MCP tools. Each session
 1. `sandbox_create`: pushes the project to `/home/user/<project>` and returns its id.
 2. `sandbox_exec`: `cwd` is relative to `/home/user`. Use `background: true` for servers and long jobs.
 3. After local edits, `sandbox_push` again. Edit locally, run in the sandbox.
-4. `sandbox_url`: an HTTPS link to a port. `sandbox_terminal`: a shell for the user.
+4. `sandbox_url`: an HTTPS link to a port. Show it with `open_url`. `sandbox_terminal`: a shell for the user.
 
 `id` defaults to the session's latest sandbox. Report the sandbox id and any URLs you open.
