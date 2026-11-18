@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   release:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 45
     env:
       TAG: ${{ github.event.inputs.tag || github.ref_name }}
@@ -34,7 +34,9 @@ jobs:
 
       - name: Select Xcode
         run: |
-          sudo xcode-select -s "$(ls -d /Applications/Xcode_16*.app | sort -V | tail -1)"
+          # Newest stable Xcode 26 (SwiftTerm 1.99 needs Swift 6.2+)
+          X=$(ls -d /Applications/Xcode_26*.app | grep -viE 'beta|rc' | sort -V | tail -1)
+          sudo xcode-select -s "${X:-/Applications/Xcode.app}"
           swift --version
 
       - name: Import signing certificate
@@ -61,6 +63,8 @@ jobs:
         env:
           SIGN_IDENTITY: ${{ steps.cert.outputs.identity }}
         run: |
+          swift package resolve
+          grep -A4 swiftterm Package.resolved | grep version
           VERSION="${TAG#v}" BUILD_NUMBER="${{ github.run_number }}" APP=build/release/Studio.app ./build-app.sh
 
       - name: Notarize
