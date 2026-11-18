@@ -64,7 +64,6 @@ jobs:
           SIGN_IDENTITY: ${{ steps.cert.outputs.identity }}
         run: |
           swift package resolve
-          grep -A4 swiftterm Package.resolved | grep version
           VERSION="${TAG#v}" BUILD_NUMBER="${{ github.run_number }}" APP=build/release/Studio.app ./build-app.sh
 
       - name: Notarize
