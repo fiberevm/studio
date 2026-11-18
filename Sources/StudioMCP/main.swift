@@ -234,7 +234,7 @@ while let line = readLine(strippingNewline: true) {
             "protocolVersion": params["protocolVersion"] as? String ?? "2025-06-18",
             "capabilities": ["tools": [String: Any]()],
             "serverInfo": ["name": "studio", "version": "0.1"],
-            "instructions": "You are running inside Studio, a Claude Code session manager. These tools control its UI (tabs, splits, terminals, themes, palette) and remote sandboxes (sandbox_*). See the studio:studio and studio:sandbox skills.",
+            "instructions": "You are running inside Studio, a Claude Code session manager. These tools control its UI (tabs, splits, terminals, themes, palette), its web panels, and remote sandboxes (sandbox_*). For any browsing, use the web panel by default (open_url, then web_*), so the user sees it beside you. See the studio:studio and studio:sandbox skills.",
         ])
     case "ping":
         reply(id, result: [:])
