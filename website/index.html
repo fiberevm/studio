@@ -76,6 +76,9 @@
   .hero .icon { width: 112px; height: 112px; margin: 0 auto 28px; filter: drop-shadow(0 18px 40px rgba(0,0,0,.5)); }
   h1 { font-size: clamp(38px, 6vw, 64px); line-height: 1.05; letter-spacing: -.035em; margin: 0 auto 20px; max-width: 820px; }
   h1 .soft { color: var(--muted); }
+  .checks { list-style: none; padding: 0; margin: 0 auto 26px; display: flex; gap: 10px 26px; justify-content: center; flex-wrap: wrap; font-size: 16px; font-weight: 500; color: var(--text); }
+  .checks li { display: flex; align-items: center; gap: 8px; }
+  .checks svg { width: 18px; height: 18px; color: var(--green); flex: none; }
   .tagline { font-size: clamp(20px, 2.6vw, 26px); font-weight: 600; letter-spacing: -.015em; color: var(--accent); margin: -4px auto 18px; }
   .lede { font-size: clamp(17px, 2vw, 20px); color: var(--muted); max-width: 680px; margin: 0 auto 36px; }
   .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
@@ -203,6 +206,11 @@
   <div class="wrap">
     <img class="icon" src="assets/icon.svg" alt="Studio app icon">
     <h1>The IDE for agents that keeps you in flow.</h1>
+    <ul class="checks">
+      <li><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="8" fill="currentColor"/><path d="M4.6 8.3l2.2 2.2 4.6-4.8" fill="none" stroke="#0d1016" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>macOS native</li>
+      <li><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="8" fill="currentColor"/><path d="M4.6 8.3l2.2 2.2 4.6-4.8" fill="none" stroke="#0d1016" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>Sandbox support</li>
+      <li><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="8" fill="currentColor"/><path d="M4.6 8.3l2.2 2.2 4.6-4.8" fill="none" stroke="#0d1016" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>Open source</li>
+    </ul>
     <p class="tagline">Run six sessions at once. Only look at the one that needs you.</p>
     <p class="lede">Studio is a native workspace for Claude Code: tabs, split panes and a command palette like VS Code, where every pane is a live Claude session, a terminal or a web page.</p>
     <div class="cta">
