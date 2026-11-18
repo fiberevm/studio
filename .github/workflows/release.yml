@@ -64,7 +64,7 @@ jobs:
           SIGN_IDENTITY: ${{ steps.cert.outputs.identity }}
         run: |
           swift package resolve
-          VERSION="${TAG#v}" BUILD_NUMBER="${{ github.run_number }}" APP=build/release/Studio.app ./build-app.sh
+          UNIVERSAL=1 VERSION="${TAG#v}" BUILD_NUMBER="${{ github.run_number }}" APP=build/release/Studio.app ./build-app.sh
 
       - name: Notarize
         if: steps.cert.outputs.identity != ''
@@ -84,12 +84,27 @@ jobs:
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
+          SIGNED: ${{ steps.cert.outputs.identity != '' }}
         run: |
-          shasum -a 256 build/release/Studio.zip | tee build/release/Studio.zip.sha256
+          cd build/release
+          shasum -a 256 Studio.zip | tee Studio.zip.sha256
+          {
+            echo "**Install:** download \`Studio.zip\`, unzip it and move Studio to Applications. Universal (Apple silicon and Intel), macOS 14+. Needs [Claude Code](https://docs.claude.com/en/docs/claude-code); \`brew install tmux\` recommended."
+            echo
+            if [ "$SIGNED" != "true" ]; then
+              echo "> **This build isn't notarized yet**, so macOS blocks it on first launch. After moving it to Applications, run once:"
+              echo "> \`\`\`"
+              echo "> xattr -dr com.apple.quarantine /Applications/Studio.app"
+              echo "> \`\`\`"
+              echo "> or open it, then allow it in System Settings → Privacy & Security → *Open Anyway*."
+              echo
+            fi
+          } > notes.md
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" build/release/Studio.zip build/release/Studio.zip.sha256 --clobber
+            gh release upload "$TAG" Studio.zip Studio.zip.sha256 --clobber
+            gh release edit "$TAG" --notes-file notes.md
           else
-            gh release create "$TAG" build/release/Studio.zip build/release/Studio.zip.sha256 --title "Studio ${TAG#v}" --generate-notes
+            gh release create "$TAG" Studio.zip Studio.zip.sha256 --title "Studio ${TAG#v}" --notes-file notes.md --generate-notes
           fi
 
       - name: Clean up keychain
