@@ -14,7 +14,7 @@ Studio tells you which session needs you next, so you can keep six agents busy w
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Built with SwiftTerm](https://img.shields.io/badge/terminal-SwiftTerm-555)](https://github.com/migueldeicaza/SwiftTerm)
 
-[Features](#features) · [Install](#install) · [Shortcuts](#keyboard-shortcuts) · [Sandboxes](#sandboxes) · [Studio MCP](#studio-mcp) · [How it works](#how-it-works) · [Contributing](#contributing)
+[Website](https://fiberevm.github.io/studio/) · [Features](#features) · [Install](#install) · [Shortcuts](#keyboard-shortcuts) · [Sandboxes](#sandboxes) · [Studio MCP](#studio-mcp) · [How it works](#how-it-works) · [Contributing](#contributing)
 
 <img src="docs/screenshot.png" alt="Studio: a Claude session in the native view, a web panel showing Boat's docs, and a terminal, in split panes" width="900">
 
