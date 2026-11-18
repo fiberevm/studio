@@ -64,6 +64,7 @@ Everything here is about one thing: spending your attention only where a session
 | 💾 | **Layout survives restarts** | Tabs, splits, pane sizes and terminal tabs come back exactly where they were; Claude sessions are resumed with `claude --resume`. |
 | 🌿 | **Context at a glance** | Each session's status bar shows its git branch, model and tokens in/out, and Studio finds the PR it opened, with CI and review state. |
 | 🖼 | **Drop to paste** | Drag files or screenshots onto a session to paste their paths into the prompt. |
+| ⛵ | **Sandboxes** (boat.dev) | Every session can run work in a remote Linux sandbox through `sandbox_*` MCP tools: create one (the project is pushed in), run commands and servers, get an HTTPS URL for a port, open a shell in a split. Claude uses a session's existing sandboxes on its own, and creates or deletes one only when you ask. The sandboxes a session uses show as chips in its status bar, with live state and Open Terminal / Desktop / Stop / Resume / Delete. |
 | 🤖 | **Agents drive the editor** | Through the Studio MCP, Claude can open splits, start helper sessions, run commands in a terminal next to it, and rearrange your layout. |
 
 ### Workspace
@@ -127,7 +128,10 @@ watcher"*, or *"lay these out as a 2×2 grid"*.
 | Sessions & terminals | `new_session` (prompt, split, folder), `fork_session`, `set_view` (native / terminal), `new_terminal` (command, split), `run_in_terminal`, `send_to_session` |
 | Tabs | `split_tab`, `move_tab`, `focus_tab`, `close_tab`, `reorder_tab` |
 | Layout | `set_layout` (single / columns / rows / grid), `resize_pane`, `set_split_sizes`, `equalize_layout`, `merge_pane`, `focus_pane`, `set_sidebar` |
+| Sandboxes | `sandbox_list`, `sandbox_create`, `sandbox_exec`, `sandbox_push`, `sandbox_url`, `sandbox_terminal`, `sandbox_attach` / `sandbox_detach`, `sandbox_stop` / `sandbox_resume` / `sandbox_delete` |
 | Appearance & navigation | `set_theme`, `set_font_size`, `open_palette`, `open_project` |
+
+**Skills:** every session Studio starts also loads Studio's own plugin (`--plugin-dir`), with two short skills: `studio:studio` (driving the editor) and `studio:sandbox` (when and how to use sandboxes). They're in `Resources/StudioPlugin/`.
 
 **Security:** the control server listens on `127.0.0.1` only and requires a random token stored in a `0600` file
 (`~/Library/Application Support/Studio/control-<bundle-id>.json`). `run_in_terminal` only works on plain terminal tabs.

@@ -22,6 +22,12 @@ final class StudioControl {
 
     /// Path of the MCP config handed to `claude --mcp-config`, if the studio-mcp binary is available.
     nonisolated(unsafe) static var mcpConfigPath: String?
+    /// Studio's Claude plugin (Studio + Sandbox skills) bundled in the app, if present.
+    static let pluginDir: String? = {
+        guard let r = Bundle.main.resourcePath else { return nil }
+        let p = r + "/StudioPlugin"
+        return FileManager.default.fileExists(atPath: p + "/.claude-plugin/plugin.json") ? p : nil
+    }()
 
     private let token = UUID().uuidString
     private var listener: NWListener?
@@ -100,7 +106,7 @@ final class StudioControl {
                 buf = Data(buf[buf.index(after: nl)...])
                 let request = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any] ?? [:]
                 Task { @MainActor in
-                    let reply = self.handle(request)
+                    let reply = await self.handle(request)
                     var out = (try? JSONSerialization.data(withJSONObject: reply)) ?? Data("{\"ok\":false}".utf8)
                     out.append(0x0A)
                     conn.send(content: out, completion: .contentProcessed { _ in })
@@ -110,12 +116,15 @@ final class StudioControl {
         }
     }
 
-    private func handle(_ req: [String: Any]) -> [String: Any] {
+    private func handle(_ req: [String: Any]) async -> [String: Any] {
         guard req["token"] as? String == token else { return ["ok": false, "error": "bad token"] }
         let method = req["method"] as? String ?? ""
         let params = req["params"] as? [String: Any] ?? [:]
         let tab = (req["tab"] as? String).flatMap(UUID.init(uuidString:))
         do {
+            if method.hasPrefix("sandbox_") {
+                return ["ok": true, "result": try await sandbox(method, params, callerTab: tab)]
+            }
             return ["ok": true, "result": try dispatch(method, params, callerTab: tab)]
         } catch let e as ControlError {
             return ["ok": false, "error": e.message]
@@ -125,6 +134,98 @@ final class StudioControl {
     }
 
     struct ControlError: Error { let message: String }
+
+    // MARK: Sandboxes
+
+    /// sandbox_* tools. They run the provider's CLI off the main thread, and record which sandboxes the
+    /// calling session uses so its status bar can show them.
+    private func sandbox(_ method: String, _ p: [String: Any], callerTab: UUID?) async throws -> Any {
+        guard let store else { throw ControlError(message: "Studio isn't ready") }
+        let reg = store.sandboxes
+        let provider = reg.provider
+        guard provider.installed else { throw ControlError(message: "No sandbox provider: install the boat CLI (https://boat.dev) and run `boat login`.") }
+        let model = callerTab.flatMap { id in models.first { $0.terminal(id) != nil } } ?? lastActive ?? models.first
+        let me = callerTab.flatMap { id in store.terminals.first { $0.id == id } }
+
+        /// The sandbox to act on: the one named, else this session's most recent.
+        func target() throws -> String {
+            if let id = p["id"] as? String, !id.isEmpty { return id }
+            if let me, let last = reg.ids(for: me).last { return last }
+            throw ControlError(message: "No sandbox given and this session has none yet (sandbox_list / sandbox_create).")
+        }
+        func use(_ id: String) { if let me { reg.attach(id, to: me) } }
+
+        do {
+            switch method {
+            case "sandbox_list":
+                let all = try await provider.list()
+                all.forEach(reg.note)
+                let mine = me.map { reg.ids(for: $0) } ?? []
+                func row(_ s: SandboxInfo) -> [String: Any] { ["id": s.id, "name": s.name ?? "", "state": s.state, "type": s.type ?? ""] }
+                var out: [String: Any] = ["provider": provider.id,
+                                          "this_session": all.filter { mine.contains($0.id) }.map(row)]
+                if p["scope"] as? String == "all" { out["all"] = all.map(row) }
+                return out
+
+            case "sandbox_create":
+                let s = try await provider.create(type: p["type"] as? String, ttlMinutes: p["ttl_minutes"] as? Int,
+                                                  environment: p["environment"] as? String)
+                reg.note(s)
+                use(s.id)
+                var out: [String: Any] = ["id": s.id, "state": s.state]
+                if p["push"] as? Bool ?? true, let dir = me?.cwd ?? model?.folder {
+                    out["pushed"] = try await provider.push(s.id, dir: dir, to: nil)
+                    out["workdir"] = "/home/user/" + (dir as NSString).lastPathComponent
+                }
+                return out
+
+            case "sandbox_exec":
+                guard let cmd = p["command"] as? String, !cmd.isEmpty else { throw ControlError(message: "command is required") }
+                let id = try target(); use(id)
+                return try await provider.exec(id, command: cmd, cwd: p["cwd"] as? String,
+                                               timeout: p["timeout"] as? Int ?? 120, background: p["background"] as? Bool ?? false)
+
+            case "sandbox_push":
+                let id = try target(); use(id)
+                guard let dir = (p["dir"] as? String).map({ ($0 as NSString).expandingTildeInPath }) ?? me?.cwd ?? model?.folder
+                else { throw ControlError(message: "dir is required") }
+                return try await provider.push(id, dir: dir, to: p["to"] as? String)
+
+            case "sandbox_url":
+                guard let port = p["port"] as? Int else { throw ControlError(message: "port is required") }
+                let id = try target(); use(id)
+                return try await provider.url(id, port: port, isPublic: p["public"] as? Bool ?? false)
+
+            case "sandbox_terminal":
+                let id = try target(); use(id)
+                guard let model else { throw ControlError(message: "no Studio window is open") }
+                let t = store.newShell(in: me?.cwd ?? model.folder)
+                let g = me.flatMap { model.group(containing: $0.id) } ?? model.activeGroup
+                model.place(t, beside: g, zone: .right)
+                let ssh = provider.sshCommand(id)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { t.type(ssh + "\r") }
+                return ["tab": t.id.uuidString]
+
+            case "sandbox_attach":
+                let id = try target(); use(id); return "attached \(id)"
+            case "sandbox_detach":
+                let id = try target(); if let me { reg.detach(id, from: me) }; return "detached \(id)"
+            case "sandbox_stop":
+                let id = try target(); return try await provider.stop(id)
+            case "sandbox_resume":
+                let id = try target(); use(id); return try await provider.resume(id)
+            case "sandbox_delete":
+                let id = try target()
+                let r = try await provider.delete(id)
+                reg.forget(id)
+                return r
+            default:
+                throw ControlError(message: "unknown method \(method)")
+            }
+        } catch let e as SandboxError {
+            throw ControlError(message: e.message)
+        }
+    }
 
     // MARK: Commands
 

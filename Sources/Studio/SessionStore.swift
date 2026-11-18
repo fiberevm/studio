@@ -32,6 +32,8 @@ final class SessionStore: ObservableObject {
     }
 
     @Published private(set) var stats: [String: TranscriptStats] = [:]   // by sessionId
+    /// Remote sandboxes (boat.dev) each session uses.
+    let sandboxes = SandboxRegistry()
     @Published private(set) var prs: [String: [PRInfo]] = [:]            // by sessionId
     private let prMonitor = PRMonitor()
     /// Every past session on disk, loaded lazily for the command palette.

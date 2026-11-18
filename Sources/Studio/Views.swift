@@ -908,6 +908,7 @@ struct SessionStatusBar: View {
                 stat("arrow.up", formatTokens(st.tokensIn), help: "Tokens sent: \(st.tokensIn.formatted()) (incl. cache)")
                 stat("arrow.down", formatTokens(st.tokensOut), help: "Tokens received: \(st.tokensOut.formatted())")
             }
+            if !terminal.isShell { SandboxChips(registry: model.store.sandboxes, terminal: terminal) }
             Spacer()
         }
         .padding(.horizontal, 10)
@@ -922,6 +923,80 @@ struct SessionStatusBar: View {
         }
         .foregroundStyle(.secondary)
         .help(help)
+    }
+}
+
+/// The sandboxes this session uses: sailboat + name, tinted by state. Click for actions.
+struct SandboxChips: View {
+    @ObservedObject var registry: SandboxRegistry
+    @ObservedObject var terminal: TerminalSession
+    @EnvironmentObject var model: ProjectModel
+    @State private var confirmDelete: String?
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach(registry.ids(for: terminal), id: \.self) { id in chip(id) }
+        }
+        .alert("Delete sandbox \(confirmDelete ?? "")?", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } })) {
+            Button("Delete", role: .destructive) {
+                if let id = confirmDelete { act { _ = try await registry.provider.delete(id); registry.forget(id) } }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("Its disk and snapshots are permanently removed.") }
+    }
+
+    private func chip(_ id: String) -> some View {
+        let s = registry.info[id]
+        let state = s?.state ?? "…"
+        return Menu {
+            Text("\(s?.label ?? id) · \(state)\(s?.type.map { " · \($0)" } ?? "")")
+            Divider()
+            Button("Open Terminal") { openTerminal(id) }
+            Button("Open Desktop") { act { _ = try await registry.provider.openDesktop(id) } }
+            Button("Copy ID") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(id, forType: .string) }
+            Divider()
+            if state == "stopped" {
+                Button("Resume") { act { _ = try await registry.provider.resume(id) } }
+            } else {
+                Button("Stop") { act { _ = try await registry.provider.stop(id) } }
+            }
+            Button("Remove from This Session") { registry.detach(id, from: terminal) }
+            Button("Delete…") { confirmDelete = id }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "sailboat").font(.system(size: 10))
+                Text(s?.label ?? id).font(.system(size: 11)).lineLimit(1)
+                Circle().fill(color(state)).frame(width: 5, height: 5)
+            }
+            .foregroundStyle(.secondary)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Sandbox \(id) (\(state))")
+    }
+
+    private func color(_ state: String) -> SwiftUI.Color {
+        switch state {
+        case "running", "ready", "idle", "up": return .green
+        case "stopped": return .gray
+        case "error": return NeedsYouDot.red
+        default: return ClaudeSpinner.orange
+        }
+    }
+
+    private func openTerminal(_ id: String) {
+        let t = model.store.newShell(in: terminal.cwd)
+        model.place(t, beside: model.group(containing: terminal.id) ?? model.activeGroup, zone: .right)
+        let cmd = registry.provider.sshCommand(id)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { t.type(cmd + "\r") }
+    }
+
+    private func act(_ work: @escaping () async throws -> Void) {
+        Task {
+            do { try await work() } catch { model.showToast(error.localizedDescription) }
+            await registry.refresh()
+        }
     }
 }
 

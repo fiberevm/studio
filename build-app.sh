@@ -9,6 +9,9 @@ APP=build/Studio.app
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/Studio "$APP/Contents/MacOS/.Studio.new" && mv -f "$APP/Contents/MacOS/.Studio.new" "$APP/Contents/MacOS/Studio"
 cp .build/release/studio-mcp "$APP/Contents/MacOS/.studio-mcp.new" && mv -f "$APP/Contents/MacOS/.studio-mcp.new" "$APP/Contents/MacOS/studio-mcp"
+# Studio's Claude plugin (skills), loaded into every session it starts with --plugin-dir
+rm -rf "$APP/Contents/Resources/.StudioPlugin.new" && cp -R Resources/StudioPlugin "$APP/Contents/Resources/.StudioPlugin.new" \
+  && rm -rf "$APP/Contents/Resources/StudioPlugin" && mv "$APP/Contents/Resources/.StudioPlugin.new" "$APP/Contents/Resources/StudioPlugin"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/.AppIcon.new" && mv -f "$APP/Contents/Resources/.AppIcon.new" "$APP/Contents/Resources/AppIcon.icns"
 cat > "$APP/Contents/.Info.plist.new" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

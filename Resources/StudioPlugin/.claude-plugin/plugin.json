@@ -1,0 +1,5 @@
+{
+  "name": "studio",
+  "version": "0.1.0",
+  "description": "Skills for Claude sessions running inside Studio: driving the editor and using remote sandboxes."
+}

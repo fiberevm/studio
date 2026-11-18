@@ -72,6 +72,7 @@ final class NativeChat: ObservableObject {
                     "--include-partial-messages", "--permission-prompt-tool", "stdio"]
         if let mode { args += ["--permission-mode", mode] }
         if let sid { args += ["--resume", sid] }
+        if let plugin = StudioControl.pluginDir { args += ["--plugin-dir", plugin] }
         if let cfg = StudioControl.mcpConfigPath { args += ["--mcp-config", cfg] }
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let p = Process()

@@ -108,6 +108,7 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
         // Every session gets the Studio MCP so its AI can drive the editor. --mcp-config is variadic,
         // so it goes last (after any prompt or --resume).
         var args = args
+        if let plugin = StudioControl.pluginDir { args += ["--plugin-dir", plugin] }   // Studio + Sandbox skills
         if let cfg = StudioControl.mcpConfigPath { args += ["--mcp-config", cfg] }
         let cmd = (["exec", "claude"] + args).map(shellQuote).joined(separator: " ")
         // Login + interactive shell so the user's PATH (and therefore `claude`) resolves like in Terminal.

@@ -45,6 +45,43 @@ let tools: [Tool] = [
          description: "Send a message to another Claude session's prompt (as if the user typed it and pressed Return). Use get_state for tab ids. Use sparingly: it starts real work in that session.",
          properties: ["tab": ["type": "string"], "text": ["type": "string"]],
          required: ["tab", "text"]),
+    // Sandboxes (boat.dev). Use the session's own sandboxes freely; create/stop/delete only when the user asks.
+    Tool(name: "sandbox_list",
+         description: "List this session's sandboxes (and every account sandbox with scope=all). Check this before creating one.",
+         properties: ["scope": ["type": "string", "enum": ["session", "all"]]], required: []),
+    Tool(name: "sandbox_create",
+         description: "Create a remote sandbox (Linux VM) for this session and push the project into it (/home/user/<project>). Costs money: only when the user asks for a sandbox. Returns its id.",
+         properties: ["type": ["type": "string", "enum": ["small", "default", "large", "xlarge"]],
+                      "ttl_minutes": ["type": "integer", "description": "auto-stop after this many minutes"],
+                      "environment": ["type": "string", "description": "named Boat environment (repos, secrets)"],
+                      "push": ["type": "boolean", "description": "copy the project in (default true)"]],
+         required: []),
+    Tool(name: "sandbox_exec",
+         description: "Run a shell command in a sandbox (default: this session's latest). Returns stdout/stderr/exit code. Set background=true for servers and long jobs.",
+         properties: ["id": ["type": "string"], "command": ["type": "string"],
+                      "cwd": ["type": "string", "description": "relative to /home/user"],
+                      "timeout": ["type": "integer", "description": "seconds, default 120, 0 = none"],
+                      "background": ["type": "boolean"]],
+         required: ["command"]),
+    Tool(name: "sandbox_push",
+         description: "Copy a local directory (default: this project) into the sandbox, git-tracked files only. Re-run after local edits.",
+         properties: ["id": ["type": "string"], "dir": ["type": "string"], "to": ["type": "string"]], required: []),
+    Tool(name: "sandbox_url",
+         description: "Expose a port in the sandbox on an HTTPS URL (token-gated unless public=true).",
+         properties: ["id": ["type": "string"], "port": ["type": "integer"], "public": ["type": "boolean"]], required: ["port"]),
+    Tool(name: "sandbox_terminal",
+         description: "Open a Studio terminal tab with an interactive shell in the sandbox, split beside this session, for the user.",
+         properties: ["id": ["type": "string"]], required: []),
+    Tool(name: "sandbox_attach", description: "Show an existing sandbox in this session's status bar and make it the default target.",
+         properties: ["id": ["type": "string"]], required: ["id"]),
+    Tool(name: "sandbox_detach", description: "Stop tracking a sandbox in this session (it keeps running).",
+         properties: ["id": ["type": "string"]], required: []),
+    Tool(name: "sandbox_stop", description: "Stop a sandbox and snapshot it (resumable). Only when the user asks.",
+         properties: ["id": ["type": "string"]], required: []),
+    Tool(name: "sandbox_resume", description: "Resume a stopped sandbox.",
+         properties: ["id": ["type": "string"]], required: []),
+    Tool(name: "sandbox_delete", description: "Permanently delete a sandbox and its data. Only when the user explicitly asks.",
+         properties: ["id": ["type": "string"]], required: []),
     Tool(name: "set_view",
          description: "Show a Claude session (default: your own) in Studio's native view (Studio renders the conversation itself, monospace, with inline permission buttons) or in Claude Code's terminal UI. Switching restarts the session's claude process on the same conversation.",
          properties: ["tab": ["type": "string"], "view": ["type": "string", "enum": ["native", "terminal"]]], required: ["view"]),
@@ -114,7 +151,8 @@ func callStudio(_ method: String, _ params: [String: Any]) -> (ok: Bool, text: S
     let fd = socket(AF_INET, SOCK_STREAM, 0)
     guard fd >= 0 else { return (false, "socket failed") }
     defer { close(fd) }
-    var tv = timeval(tv_sec: 10, tv_usec: 0)
+    // sandbox calls run real remote work (create, exec, push), so they get far longer than UI calls
+    var tv = timeval(tv_sec: method.hasPrefix("sandbox_") ? 3700 : 10, tv_usec: 0)
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
     var addr = sockaddr_in()
     addr.sin_family = sa_family_t(AF_INET)
@@ -170,7 +208,7 @@ while let line = readLine(strippingNewline: true) {
             "protocolVersion": params["protocolVersion"] as? String ?? "2025-06-18",
             "capabilities": ["tools": [String: Any]()],
             "serverInfo": ["name": "studio", "version": "0.1"],
-            "instructions": "You are running inside Studio, a Claude Code session manager. These tools control its UI: tabs, split panes, plain terminals, themes and the command palette. Call get_state first; the tab marked is_you is this session.",
+            "instructions": "You are running inside Studio, a Claude Code session manager. These tools control its UI (tabs, splits, terminals, themes, palette) and remote sandboxes (sandbox_*). See the studio:studio and studio:sandbox skills.",
         ])
     case "ping":
         reply(id, result: [:])
