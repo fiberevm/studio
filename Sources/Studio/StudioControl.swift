@@ -604,7 +604,7 @@ final class StudioControl {
                             var d: [String: Any] = [
                                 "tab": t.id.uuidString,
                                 "kind": t.isWeb ? "web" : t.isShell ? "terminal" : "claude",
-                                "title": t.isShell ? (t.terminalTitle.isEmpty ? "terminal" : t.terminalTitle) : (item?.title ?? "New session"),
+                                "title": t.isWeb ? (t.webTitle.isEmpty ? (t.url?.absoluteString ?? "web") : t.webTitle) : t.isShell ? (t.terminalTitle.isEmpty ? "terminal" : t.terminalTitle) : (item?.title ?? "New session"),
                                 "selected": g.selection == "t:\(t.id)",
                                 "running": t.running,
                             ]
