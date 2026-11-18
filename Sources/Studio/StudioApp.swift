@@ -57,6 +57,11 @@ struct StudioApp: App {
         }
         .defaultSize(width: 1400, height: 900)
         .commands { AppCommands(store: store) }
+
+        // ⌘, (Studio → Settings…)
+        Settings {
+            SettingsView().environmentObject(store)
+        }
     }
 }
 

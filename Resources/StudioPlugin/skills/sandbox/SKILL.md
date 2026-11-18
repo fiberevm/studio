@@ -7,7 +7,7 @@ Sandboxes are remote Linux VMs from Studio's `sandbox_*` MCP tools. Each session
 
 **When**
 - This session has a sandbox (`sandbox_list`): run builds, tests, servers and risky commands there, not locally.
-- Create, stop or delete one only when the user asks. They cost money.
+- Creating one: follow the `policy` that `sandbox_list` returns. Delete only when the user asks; sandboxes cost money.
 
 **How**
 1. `sandbox_create`: pushes the project to `/home/user/<project>` and returns its id.

@@ -113,6 +113,7 @@ open build/Studio.app --args --resume <session-id>        # resume a specific se
 | <kbd>⌘1</kbd>…<kbd>⌘9</kbd> | Jump to tab |
 | <kbd>⌘W</kbd> | Close tab and end its session (resume it any time from <kbd>⌘P</kbd>); in an empty pane, close the pane |
 | <kbd>⇧⌘W</kbd> | Close window |
+| <kbd>⌘,</kbd> | Settings: appearance (themes, text size, sidebar), sessions, sandbox providers, snippets |
 | <kbd>⌘B</kbd> | Toggle the session sidebar |
 | <kbd>⌘+</kbd> / <kbd>⌘−</kbd> / <kbd>⌘0</kbd> | Text size |
 

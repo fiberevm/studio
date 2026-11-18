@@ -28,6 +28,8 @@ protocol SandboxProvider: Sendable {
     /// Shell command that opens an interactive session in the sandbox (run in a Studio terminal tab).
     func sshCommand(_ id: String) -> String
     func openDesktop(_ id: String) async throws -> Any
+    /// Account status for Settings: {"account": {...}, "creditHours": Double}.
+    func status() async -> [String: Any]?
 }
 
 struct SandboxError: LocalizedError {
@@ -139,6 +141,13 @@ struct BoatProvider: SandboxProvider {
     func delete(_ id: String) async throws -> Any { try await run(["delete", id, "--yes"], timeout: 120) }
     func openDesktop(_ id: String) async throws -> Any { try await run(["desktop", id], timeout: 60) }
     func sshCommand(_ id: String) -> String { "\(shellQuote(binary ?? "boat")) ssh \(shellQuote(id))" }
+
+    func status() async -> [String: Any]? {
+        guard var out = (try? await run(["status"], timeout: 20)) as? [String: Any] else { return nil }
+        if let limits = (try? await run(["limits"], timeout: 20)) as? [String: Any],
+           let h = limits["creditBalanceHours"] as? Double { out["creditHours"] = h }
+        return out
+    }
 }
 
 /// Which sandboxes each session uses (shown in its status bar), plus their latest state.

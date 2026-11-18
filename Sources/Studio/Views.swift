@@ -63,6 +63,7 @@ struct ProjectWindow: View {
 
 struct ProjectView: View {
     @StateObject private var model: ProjectModel
+    @Environment(\.openSettings) private var openSettings
 
     init(folder: String, store: SessionStore) {
         _model = StateObject(wrappedValue: ProjectModel(folder: folder, store: store))
@@ -126,6 +127,18 @@ struct ProjectView: View {
             // debug/screenshot aid: split the last tab off to the right
             if CommandLine.arguments.contains("--split-demo"), let t = model.tabs.last, model.tabs.count > 1 {
                 model.move(t.id, to: model.activeGroup, zone: .right)
+            }
+            // debug/screenshot aid: open Settings (on a section with --settings <name>)
+            if CommandLine.arguments.contains("--settings") {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                    openSettings()
+                    if CommandLine.arguments.contains("--order-front") {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                            NSApp.windows.filter { !($0.contentView?.subviews.isEmpty ?? true) && $0.title != model.name }
+                                .forEach { $0.orderFrontRegardless() }
+                        }
+                    }
+                }
             }
             // debug: open ⌘K once a Claude session is running in this window
             if CommandLine.arguments.contains("--quick-demo") {
@@ -763,7 +776,7 @@ struct TabButton: View {
             }
             .buttonStyle(.borderless)
             .opacity(hovering || selected ? 1 : 0)
-            .help(model.sidebarVisible ? "Close tab — session keeps running (⌘W)" : "Close tab and end the session (⌘W)")
+            .help(Pref.bool(Pref.closeTabEndsSession, default: true) ? "Close tab and end the session (⌘W)" : "Close tab — session keeps running (⌘W)")
         }
         // the title slides over when the dot comes and goes
         .animation(.easeInOut(duration: 0.22), value: StatusDot.isVisible(tabStatus, attention: attention))

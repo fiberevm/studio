@@ -14,6 +14,7 @@ final class ProjectModel: ObservableObject {
     /// Command palette: nil when closed, otherwise the text it opened with ("" for sessions, ">" for commands).
     @Published var palette: String?
     /// Sidebar visibility and width (⌘B, drag its edge, or the Studio MCP). Shared by all windows.
+    private var sidebarPref: Any?
     @Published var sidebarVisible: Bool = UserDefaults.standard.object(forKey: "sidebarVisible.v2") as? Bool ?? false {
         didSet { UserDefaults.standard.set(sidebarVisible, forKey: "sidebarVisible.v2") }
     }
@@ -33,6 +34,14 @@ final class ProjectModel: ObservableObject {
         let first = GroupNode()
         root = .group(first)
         activeGroupId = first.id
+        // Settings → Appearance → Show session sidebar applies to every open window, live.
+        sidebarPref = NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let v = UserDefaults.standard.object(forKey: "sidebarVisible.v2") as? Bool ?? false
+                if v != self.sidebarVisible { self.sidebarVisible = v }
+            }
+        }
         RecentProjects.add(folder)
         // Re-render this window whenever global session state changes.
         store.objectWillChange.sink { [weak self] in
@@ -203,7 +212,7 @@ final class ProjectModel: ObservableObject {
     /// Close a tab. Without the sidebar there's nowhere for a hidden session to show up, so closing ends it
     /// (⌘P can still resume the conversation). With the sidebar visible, the session keeps running there.
     func close(_ t: TerminalSession) {
-        if sidebarVisible && !t.isShell { closeKeepingRunning(t) } else { endSession(t) }
+        if !Pref.bool(Pref.closeTabEndsSession, default: true) && !t.isShell { closeKeepingRunning(t) } else { endSession(t) }
     }
 
     /// Close the tab only; a Claude session keeps running (find it with ⌘P). A terminal ends.

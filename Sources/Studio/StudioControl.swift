@@ -144,6 +144,10 @@ final class StudioControl {
         let reg = store.sandboxes
         let provider = reg.provider
         guard provider.installed else { throw ControlError(message: "No sandbox provider: install the boat CLI (https://boat.dev) and run `boat login`.") }
+        guard Pref.bool(Pref.sandboxEnabled, default: true) else {
+            throw ControlError(message: "Sandboxes are turned off in Studio Settings (⌘, → Sandboxes).")
+        }
+        let policy = Pref.string(Pref.sandboxPolicy) ?? "ask"
         let model = callerTab.flatMap { id in models.first { $0.terminal(id) != nil } } ?? lastActive ?? models.first
         let me = callerTab.flatMap { id in store.terminals.first { $0.id == id } }
 
@@ -163,13 +167,19 @@ final class StudioControl {
                 let mine = me.map { reg.ids(for: $0) } ?? []
                 func row(_ s: SandboxInfo) -> [String: Any] { ["id": s.id, "name": s.name ?? "", "state": s.state, "type": s.type ?? ""] }
                 var out: [String: Any] = ["provider": provider.id,
+                                          "policy": policy == "auto"
+                                            ? "auto: you may create a sandbox when it helps; stop it when done"
+                                            : "ask: use this session's sandboxes; create one only when the user asks",
                                           "this_session": all.filter { mine.contains($0.id) }.map(row)]
                 if p["scope"] as? String == "all" { out["all"] = all.map(row) }
                 return out
 
             case "sandbox_create":
-                let s = try await provider.create(type: p["type"] as? String, ttlMinutes: p["ttl_minutes"] as? Int,
-                                                  environment: p["environment"] as? String)
+                // Settings → Sandboxes supplies the defaults
+                let ttlPref = UserDefaults.standard.object(forKey: Pref.sandboxTTL) as? Int ?? 60
+                let s = try await provider.create(type: p["type"] as? String ?? Pref.string(Pref.sandboxType) ?? "small",
+                                                  ttlMinutes: p["ttl_minutes"] as? Int ?? (ttlPref > 0 ? ttlPref : nil),
+                                                  environment: p["environment"] as? String ?? Pref.string(Pref.sandboxEnvironment))
                 reg.note(s)
                 use(s.id)
                 var out: [String: Any] = ["id": s.id, "state": s.state]
@@ -339,7 +349,7 @@ final class StudioControl {
 
         case "close_tab":
             let t = try tab(defaultToCaller: false)
-            let keep = (p["keep_running"] as? Bool == true || model.sidebarVisible) && !t.isShell
+            let keep = (p["keep_running"] as? Bool == true || !Pref.bool(Pref.closeTabEndsSession, default: true)) && !t.isShell
             if keep { model.closeKeepingRunning(t) } else { model.endSession(t) }
             return keep ? "tab closed (session keeps running)" : "tab closed (session ended)"
 

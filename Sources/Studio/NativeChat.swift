@@ -59,7 +59,7 @@ final class NativeChat: ObservableObject {
         self.tab = tab
         self.sessionId = sid
         if let sid { loadHistory(sid) }
-        start(resume: sid, mode: lastMode)
+        start(resume: sid, mode: Pref.string(Pref.nativePermissionMode) ?? lastMode)
     }
 
     // MARK: Process
