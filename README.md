@@ -16,7 +16,7 @@ Studio tells you which session needs you next, so you can keep six agents busy w
 
 [Features](#features) · [Install](#install) · [Shortcuts](#keyboard-shortcuts) · [Sandboxes](#sandboxes) · [Studio MCP](#studio-mcp) · [How it works](#how-it-works) · [Contributing](#contributing)
 
-<img src="docs/screenshot.png" alt="Studio: two Claude Code sessions side by side and a terminal, in split panes" width="900">
+<img src="docs/screenshot.png" alt="Studio: a Claude session in the native view, a web panel showing Boat's docs, and a terminal, in split panes" width="900">
 
 </div>
 
