@@ -148,7 +148,7 @@ final class SessionStore: ObservableObject {
 
         // Map in-app terminals to their claude session via pid. Handles /clear and /resume inside the session too.
         for t in terminals where t.running && !t.isShell {
-            if let info = byPid[t.pid], t.sessionId != info.sessionId {
+            if let info = byPid[t.sessionPid], t.sessionId != info.sessionId {
                 if let previous = t.sessionId { forgotten.insert(previous) }   // e.g. after /clear
                 t.sessionId = info.sessionId
                 persistTerminals()
@@ -203,7 +203,7 @@ final class SessionStore: ObservableObject {
                 sessionId: sid,
                 title: title(rec: rec, info: info, fallback: "New session"),
                 cwd: info?.cwd ?? rec?.cwd ?? t.cwd,
-                status: status, inApp: true, entrypoint: "studio", pid: t.pid,
+                status: status, inApp: true, entrypoint: "studio", pid: t.sessionPid,
                 startedAt: t.createdAt, updatedAt: info?.updatedAt ?? t.createdAt,
                 activity: t.native.map { $0.activity } ?? Self.activity(status, rec)))
         }
@@ -258,7 +258,12 @@ final class SessionStore: ObservableObject {
     private func persistTerminals() {
         // A --no-restore instance is a throwaway side-by-side copy: never touch the saved tab list.
         guard !CommandLine.arguments.contains("--no-restore") else { return }
-        let current = terminals.compactMap { t in t.sessionId.map { ["sid": $0, "cwd": t.cwd] } }
+        let current: [[String: String]] = terminals.compactMap { t in
+            guard let sid = t.sessionId, !t.isShell else { return nil }
+            var e = ["sid": sid, "cwd": t.cwd, "tab": t.id.uuidString]
+            if let h = t.hostName, !t.isNative { e["tmux"] = h }   // reattach to it next launch
+            return e
+        }
         let currentIds = Set(current.compactMap { $0["sid"] })
         let kept = savedTerminals().filter { e in
             guard let sid = e["sid"] else { return false }
@@ -298,8 +303,16 @@ final class SessionStore: ObservableObject {
         for e in savedTerminals() {
             // Only this window's own sessions: a window for ~ must not swallow every project under it.
             guard let sid = e["sid"], let cwd = e["cwd"], home(of: e, cwd: cwd) == folder,
-                  live[sid] == nil,                                   // running elsewhere → leave it
                   !terminals.contains(where: { $0.sessionId == sid }) else { continue }
+            // Still running in its host session (Studio was only restarted): reattach, same tab id.
+            if let h = e["tmux"], SessionHost.enabled, SessionHost.exists(h) {
+                let t = TerminalSession(cwd: cwd, claudeArgs: ["--resume", sid], sessionId: sid, fontSize: fontSize,
+                                        id: e["tab"].flatMap(UUID.init(uuidString:)) ?? UUID(), host: h)
+                add(t)
+                out.append(t)
+                continue
+            }
+            guard live[sid] == nil else { continue }                  // running elsewhere → leave it
             guard Self.transcriptExists(sid) else { forgotten.insert(sid); continue } // never prompted
             let t = TerminalSession(cwd: cwd, claudeArgs: ["--resume", sid], sessionId: sid, fontSize: fontSize,
                                     native: TerminalSession.nativeSessions.contains(sid))
@@ -346,6 +359,18 @@ final class SessionStore: ObservableObject {
     }
 
     /// A plain terminal (⌃`) in the folder; not a Claude session, so it isn't listed or restored.
+    /// Reattach to a terminal tab still running in its host session (or start a fresh shell there).
+    func reattachShell(tab: UUID, host: String, cwd: String) -> TerminalSession {
+        if let t = terminals.first(where: { $0.id == tab }) { return t }
+        let t = TerminalSession(cwd: cwd, claudeArgs: [], sessionId: nil, fontSize: fontSize, kind: .shell,
+                                id: tab, host: SessionHost.exists(host) ? host : nil)
+        add(t)
+        return t
+    }
+
+    /// Set while the app quits: windows closing then must not end hosted sessions.
+    static var terminating = false
+
     func newShell(in cwd: String) -> TerminalSession {
         let t = TerminalSession(cwd: cwd, claudeArgs: [], sessionId: nil, fontSize: fontSize, kind: .shell)
         add(t)

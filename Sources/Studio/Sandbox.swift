@@ -57,9 +57,12 @@ struct BoatProvider: SandboxProvider {
         let out = Pipe()
         p.standardOutput = out
         p.standardError = FileHandle.nullDevice
-        try? p.run()
-        p.waitUntilExit()
-        let s = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+        let done = DispatchSemaphore(value: 0)
+        p.terminationHandler = { _ in done.signal() }   // not waitUntilExit (it pumps the run loop)
+        guard (try? p.run()) != nil else { return nil }
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        done.wait()
+        let s = String(data: data, encoding: .utf8)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return s.isEmpty ? nil : s
     }

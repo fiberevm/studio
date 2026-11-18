@@ -27,8 +27,9 @@ struct ProjectWindow: View {
         .preferredColorScheme(Theme.current.isLight ? .light : .dark)
         .navigationTitle(folder.map { projectName(for: $0) } ?? "Studio")
         .onAppear {
-            handleLaunchArguments()
             StudioControl.shared.openWindow = { folder in openWindow(value: folder) }
+            // a beat later: setting the scene value during the window's first appearance can be dropped
+            DispatchQueue.main.async { handleLaunchArguments() }
         }
     }
 

@@ -5,7 +5,13 @@ import SwiftTerm
 /// One embedded terminal running a `claude` process. Kept alive while the app runs,
 /// so switching between sessions in the sidebar doesn't restart anything.
 final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProcessTerminalViewDelegate {
-    let id = UUID()
+    let id: UUID
+    /// The hidden tmux session this tab's process lives in (sessions survive Studio restarts), if hosted.
+    private(set) var hostName: String?
+    /// The process inside the host session (claude or the shell); `pid` is only the tmux client then.
+    private(set) var hostedPid: Int32?
+    /// The pid Claude Code records in ~/.claude/sessions/<pid>.json for this tab.
+    var sessionPid: Int32 { hostedPid ?? pid }
     let cwd: String
     let createdAt = Date()
     @Published var sessionId: String?
@@ -22,7 +28,9 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     var isShell: Bool { kind == .shell }
 
     init(cwd: String, claudeArgs: [String], sessionId: String?, fontSize: CGFloat = 12, kind: Kind = .claude,
-         native: Bool = false) {
+         native: Bool = false, id: UUID = UUID(), host: String? = nil) {
+        self.id = id
+        self.hostName = host
         self.kind = kind
         self.cwd = cwd
         self.claudeArgs = claudeArgs
@@ -60,7 +68,10 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
         } else {
             guard let sid = sessionId else { return }
             Self.nativeSessions.insert(sid)
-            if running { switchingToNative = true; kill(pid, SIGHUP) } else { startNative(sid) }
+            if running {
+                switchingToNative = true
+                if let h = hostName { SessionHost.kill(h); hostName = nil } else { kill(pid, SIGHUP) }
+            } else { startNative(sid) }
         }
     }
 
@@ -73,8 +84,10 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     private var nativeObserver: Any?
 
     /// Process ids this tab owns right now (for quitting cleanly).
+    /// Hosted tabs keep running after Studio quits, so there's nothing of theirs to wait for.
     var livePids: [Int32] {
         if let n = native { return n.exited || n.pid <= 0 ? [] : [n.pid] }
+        if hostName != nil { return [] }
         return running && pid > 0 ? [pid] : []
     }
 
@@ -88,6 +101,7 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     private func launchShell() {
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let dir = FileManager.default.fileExists(atPath: cwd) ? cwd : NSHomeDirectory()
+        if SessionHost.enabled { startHosted(command: [shell, "-l"], dir: dir); return }
         view.startProcess(executable: shell, args: ["-l"], environment: Self.childEnvironment(tab: id),
                           execName: "-" + (shell as NSString).lastPathComponent, currentDirectory: dir)
         pid = view.process.shellPid
@@ -113,11 +127,34 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
         let cmd = (["exec", "claude"] + args).map(shellQuote).joined(separator: " ")
         // Login + interactive shell so the user's PATH (and therefore `claude`) resolves like in Terminal.
         // `exec` keeps the pid, so ~/.claude/sessions/<pid>.json maps back to this terminal.
+        if SessionHost.enabled { startHosted(command: [shell, "-l", "-i", "-c", cmd], dir: dir); return }
         view.startProcess(executable: shell, args: ["-l", "-i", "-c", cmd],
                           environment: Self.childEnvironment(tab: id), execName: nil, currentDirectory: dir)
         pid = view.process.shellPid
         running = true
         exitCode = nil
+    }
+
+    /// Attach to this tab's host session, creating it (running `command`) if it doesn't exist yet.
+    private func startHosted(command: [String], dir: String) {
+        guard let tmux = SessionHost.tmux else { return }
+        let name = hostName ?? SessionHost.newName()
+        hostName = name
+        let env = ["STUDIO_TAB": id.uuidString, "STUDIO_CONTROL_FILE": StudioControl.controlFilePath,
+                   "TERM_PROGRAM": "Studio", "COLORTERM": "truecolor"]
+        view.startProcess(executable: tmux, args: SessionHost.clientArgs(name: name, cwd: dir, env: env, command: command),
+                          environment: Self.childEnvironment(tab: id), execName: nil, currentDirectory: dir)
+        pid = view.process.shellPid
+        running = true
+        exitCode = nil
+        // The process inside the session, for ~/.claude/sessions/<pid>.json lookups. The session may take
+        // a moment to come up, so keep asking for a few seconds.
+        DispatchQueue.global().async { [weak self] in
+            for _ in 0..<40 {
+                if let p = SessionHost.panePid(name) { DispatchQueue.main.async { self?.hostedPid = p }; return }
+                usleep(250_000)
+            }
+        }
     }
 
     /// Type text into the terminal as if the user had (used by the Studio MCP's run_in_terminal).
@@ -134,9 +171,11 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in self?.view.send(txt: "\r") }
     }
 
+    /// End this tab's process for good: its host session too, if it has one.
     func terminate() {
         native?.stop()
-        if running, pid > 0 { kill(pid, SIGHUP) }
+        if let h = hostName { SessionHost.kill(h) }
+        else if running, pid > 0 { kill(pid, SIGHUP) }
     }
 
     static func childEnvironment(tab: UUID? = nil) -> [String] {

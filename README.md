@@ -39,7 +39,7 @@ happened. Studio is built around one idea: **you should only look at a session w
 - **Embedded Claude Code** in real terminals ([SwiftTerm](https://github.com/migueldeicaza/SwiftTerm)): it's the real `claude` CLI, so slash commands, hooks, MCP servers and settings all work unchanged.
 - **Imports what's already running.** Studio reads Claude Code's own session files, so sessions started in other terminals show up too.
 - **Closing a tab never loses a conversation.** It ends the session; <kbd>⌘P</kbd> resumes it any time, right where it left off.
-- **Restores your workspace.** Tabs, splits, pane sizes and terminal tabs come back after a restart (Claude sessions are resumed with `claude --resume`).
+- **Sessions survive restarts.** Every tab runs in a hidden tmux session that Studio only attaches to. Quit or update Studio and Claude keeps working: in-progress turns, shell commands, dev servers and local chains carry on, and the next launch reattaches every tab, with the same layout and the same processes. Without tmux, or with *Settings → Sessions → Keep sessions running* off, Studio resumes conversations with `claude --resume` instead.
 - **Plain terminals** with <kbd>⌃`</kbd>, next to your sessions, just like VS Code.
 - **Drag and drop** files or images onto a session to paste their paths.
 
@@ -61,7 +61,7 @@ Everything here is about one thing: spending your attention only where a session
 | 🔔 | **Notifications that matter** | Only while you're in another app, only when a session is blocked on you or finished 30+ seconds of work, never for the one you're watching. Each shows Claude's last words; clicking it opens the session. |
 | 🔍 | **Go to anything** <kbd>⌘P</kbd> | Fuzzy-search every running and past session in every project, plus all commands. Picking a session in another project opens that project's window. |
 | 🧷 | **Nothing is ever lost** | Closing a tab ends the session, but the conversation is one <kbd>⌘P</kbd> away and resumes where it left off. Right-click → *Close Tab, Keep Session Running* to leave it working in the background. Emptied panes stay put with a quiet *New Session* action. |
-| 💾 | **Layout survives restarts** | Tabs, splits, pane sizes and terminal tabs come back exactly where they were; Claude sessions are resumed with `claude --resume`. |
+| 💾 | **Restarts don't interrupt anything** | Each tab lives in a hidden tmux session, so quitting Studio leaves Claude, its commands and your dev servers running; relaunching reattaches every tab, with the same layout and the same processes. |
 | 🌿 | **Context at a glance** | Each session's status bar shows its git branch, model and tokens in/out, and Studio finds the PR it opened, with CI and review state. |
 | 🖼 | **Drop to paste** | Drag files or screenshots onto a session to paste their paths into the prompt. |
 | ⛵ | **Sandboxes** ([more ↓](#sandboxes)) | Every session can run work in a remote Linux sandbox through `sandbox_*` MCP tools: create one (the project is pushed in), run commands and servers, get an HTTPS URL for a port, open a shell in a split. Claude uses a session's existing sandboxes on its own, and creates or deletes one only when you ask. The sandboxes a session uses show as chips in its status bar, with live state and Open Terminal / Desktop / Stop / Resume / Delete. |
@@ -107,7 +107,7 @@ More are on the way. Providers plug in through the `SandboxProvider` protocol in
 
 ## Install
 
-Requirements: **macOS 14+**, **Xcode 16+ / Swift 6 toolchain**, and [Claude Code](https://docs.claude.com/en/docs/claude-code) installed and logged in. The [`gh` CLI](https://cli.github.com) is optional, for PR detection.
+Requirements: **macOS 14+**, **Xcode 16+ / Swift 6 toolchain**, and [Claude Code](https://docs.claude.com/en/docs/claude-code) installed and logged in. Recommended: [tmux](https://github.com/tmux/tmux) (`brew install tmux`) so sessions survive Studio restarts. Optional: the [`gh` CLI](https://cli.github.com) for PR detection, and the [`boat` CLI](https://boat.dev) for sandboxes.
 
 ```bash
 git clone https://github.com/fiberevm/studio.git
@@ -206,7 +206,6 @@ scripts/make-icon.sh     regenerates AppIcon.icns from AppIcon.svg
 
 ## Roadmap
 
-- [ ] Sessions that survive app restarts (a small background host owns the processes)
 - [ ] Changes pane: a live git diff of what the session is editing
 - [ ] Worktree-per-session with one click
 - [ ] Search across every transcript

@@ -3,6 +3,7 @@ import SwiftUI
 /// Settings keys shared by the Settings window and the code that reads them.
 enum Pref {
     static let closeTabEndsSession = "closeTabEndsSession"          // Bool, default true
+    static let keepSessionsAlive = "keepSessionsAlive"              // Bool, default true (needs tmux)
     static let nativePermissionMode = "nativePermissionMode"        // "" = same as the session
     static let sandboxEnabled = "sandbox.boat.enabled"              // Bool, default true
     static let sandboxType = "sandbox.boat.type"                    // small/default/large/xlarge
@@ -165,6 +166,7 @@ private struct ThemeSwatches: View {
 
 private struct SessionSettings: View {
     @AppStorage(Pref.closeTabEndsSession) private var closeEnds = true
+    @AppStorage(Pref.keepSessionsAlive) private var keepAlive = true
     @AppStorage(Pref.nativePermissionMode) private var nativeMode = ""
 
     var body: some View {
@@ -172,6 +174,12 @@ private struct SessionSettings: View {
             Row(title: "Closing a tab ends its session",
                 detail: "Off: the session keeps running in the background (reopen it from ⌘P). Right-click a tab for the other behavior either way.") {
                 Toggle("", isOn: $closeEnds).labelsHidden().toggleStyle(.switch)
+            }
+            Row(title: "Keep sessions running when Studio quits",
+                detail: SessionHost.tmux == nil
+                    ? "Needs tmux (brew install tmux). Without it, quitting ends sessions and Studio resumes their conversations."
+                    : "Each tab runs in a hidden tmux session, so restarting Studio reattaches instead of interrupting Claude, its commands and dev servers. Applies to new tabs.") {
+                Toggle("", isOn: $keepAlive).labelsHidden().toggleStyle(.switch).disabled(SessionHost.tmux == nil)
             }
             Row(title: "Native view permission mode",
                 detail: "What Claude may do without asking when a session is in the native view (⌘/).") {

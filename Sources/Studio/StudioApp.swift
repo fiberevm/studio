@@ -5,6 +5,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)   // needed when run as a bare SwiftPM executable
         // A background preview copy (--order-front, launched with `open -g`) must never take focus.
         if !CommandLine.arguments.contains("--order-front") { NSApp.activate(ignoringOtherApps: true) }
+        else {
+            // Background preview copies must never keep keyboard focus, even if macOS activates them on relaunch.
+            NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+                NSApp.deactivate()
+            }
+        }
         NSWindow.allowsAutomaticWindowTabbing = false
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
@@ -12,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Quit only once every session has actually exited. Otherwise a quick relaunch sees them still running,
     /// takes them for sessions running elsewhere, and doesn't reopen their tabs.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        MainActor.assumeIsolated { SessionStore.terminating = true }
         let pids = MainActor.assumeIsolated { SessionStore.current?.terminals.flatMap(\.livePids) ?? [] }
         guard !pids.isEmpty else { return .terminateNow }
         pids.forEach { kill($0, SIGHUP) }
@@ -40,7 +47,9 @@ struct StudioApp: App {
     /// The app used to be called AICode (bundle id dev.local.aicode). Carry over saved tabs, theme, recents, etc. once.
     static func migrateSettingsFromAICode() {
         let d = UserDefaults.standard
-        guard !d.bool(forKey: "migratedFromAICode"), let old = UserDefaults(suiteName: "dev.local.aicode") else { return }
+        // Only the real app: a preview copy must never inherit the user's saved tabs.
+        guard Bundle.main.bundleIdentifier == "dev.local.studio",
+              !d.bool(forKey: "migratedFromAICode"), let old = UserDefaults(suiteName: "dev.local.aicode") else { return }
         for key in ["openTerminals", "recentProjects", "theme", "fontSize", "busyExpanded"] {
             if d.object(forKey: key) == nil, let v = old.object(forKey: key) { d.set(v, forKey: key) }
         }

@@ -249,7 +249,10 @@ final class ProjectModel: ObservableObject {
     func windowClosed() {
         saveLayout()
         // Plain terminals live only in this window's layout; end them rather than leave them running unreachable.
-        for g in groups { for t in tabs(in: g) where t.isShell { store.close(t) } }
+        // (Quitting is different: hosted terminals keep running and the next launch reattaches them.)
+        if !SessionStore.terminating {
+            for g in groups { for t in tabs(in: g) where t.isShell { store.close(t) } }
+        }
         store.endViewing(window: windowId)
         StudioControl.shared.unregister(self)
         if let m = clickMonitor { NSEvent.removeMonitor(m); clickMonitor = nil }
@@ -480,7 +483,12 @@ final class ProjectModel: ObservableObject {
                 // Claude tabs are saved by session id; plain terminals as "shell:<cwd>" and reopened fresh.
                 func token(_ t: TerminalSession?) -> String? {
                     guard let t else { return nil }
-                    return t.isShell ? "shell:" + t.cwd : t.sessionId
+                    if t.isShell {
+                        // hosted terminals reattach next launch: "shellh:<tab>|<host>|<cwd>"
+                        if let h = t.hostName { return "shellh:\(t.id.uuidString)|\(h)|\(t.cwd)" }
+                        return "shell:" + t.cwd
+                    }
+                    return t.sessionId
                 }
                 let sids = g.tabIds.compactMap { token(terminal($0)) }
                 let sel = token(selectedTerminal(in: g))
@@ -516,7 +524,12 @@ final class ProjectModel: ObservableObject {
                 var selected: TerminalSession?
                 let ts: [TerminalSession] = sids.compactMap { sid in
                     let t: TerminalSession?
-                    if sid.hasPrefix("shell:") {
+                    if sid.hasPrefix("shellh:") {
+                        let parts = sid.dropFirst(7).split(separator: "|", maxSplits: 2).map(String.init)
+                        if parts.count == 3, let tab = UUID(uuidString: parts[0]) {
+                            t = store.reattachShell(tab: tab, host: parts[1], cwd: parts[2])
+                        } else { t = nil }
+                    } else if sid.hasPrefix("shell:") {
                         let cwd = String(sid.dropFirst(6))
                         t = store.newShell(in: FileManager.default.fileExists(atPath: cwd) ? cwd : folder)
                     } else {
