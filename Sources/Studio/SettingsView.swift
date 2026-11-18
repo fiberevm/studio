@@ -44,49 +44,88 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
-            List(Section.allCases, selection: $section) { s in
-                Label(s.rawValue, systemImage: s.icon).tag(s)
-            }
-            .navigationSplitViewColumnWidth(min: 170, ideal: 180, max: 220)
-        } detail: {
-            ScrollView {
+        VStack(spacing: 0) {
+            TitleBar(title: "Settings", subtitle: section.rawValue)
+            Hairline()
+            HStack(spacing: 0) {
+                // Same as the session sidebar: chrome color, 28pt rows, square selection.
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(section.rawValue).font(.system(size: 20, weight: .semibold)).padding(.bottom, 16)
-                    switch section {
-                    case .appearance: AppearanceSettings()
-                    case .sessions: SessionSettings()
-                    case .sandboxes: SandboxSettings(registry: store.sandboxes)
-                    case .snippets: SnippetSettings()
-                    case .about: AboutSettings()
+                    ForEach(Section.allCases) { s in
+                        SectionRow(section: s, selected: s == section) { section = s }
                     }
+                    Spacer()
                 }
-                .padding(24)
-                .frame(maxWidth: 640, alignment: .leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 6)
+                .frame(width: 190)
+                .background(SwiftUI.Color(nsColor: Theme.chrome), ignoresSafeAreaEdges: [])
+                Hairline(vertical: true)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        switch section {
+                        case .appearance: AppearanceSettings()
+                        case .sessions: SessionSettings()
+                        case .sandboxes: SandboxSettings(registry: store.sandboxes)
+                        case .snippets: SnippetSettings()
+                        case .about: AboutSettings()
+                        }
+                    }
+                    .padding(.horizontal, 24).padding(.vertical, 14)
+                    .frame(maxWidth: 680, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .background(SwiftUI.Color(nsColor: Theme.background), ignoresSafeAreaEdges: [])
+                .clipped()   // scrolled content must not slide under the title bar
             }
         }
-        .frame(minWidth: 720, minHeight: 480)
+        .font(.system(size: 13))
+        .foregroundStyle(SwiftUI.Color(nsColor: Theme.foreground))
+        .background(SwiftUI.Color(nsColor: Theme.chrome).ignoresSafeArea())
+        .background(WindowConfigurator())
+        .modifier(HideTitlebarBackground())
+        .ignoresSafeArea()
+        .frame(minWidth: 760, minHeight: 520)
         .preferredColorScheme(Theme.current.isLight ? .light : .dark)   // match Studio's theme
     }
 }
 
-/// One setting: title and explanation on the left, control on the right.
+private struct SectionRow: View {
+    let section: SettingsView.Section
+    let selected: Bool
+    let action: () -> Void
+    @State private var hover = false
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: section.icon).font(.system(size: 12)).frame(width: 16)
+            Text(section.rawValue).font(.system(size: 13))
+            Spacer()
+        }
+        .foregroundStyle(selected ? .primary : .secondary)
+        .padding(.horizontal, 14)
+        .frame(height: 28)
+        .background(selected ? SwiftUI.Color(nsColor: Theme.selection) : (hover ? SwiftUI.Color.primary.opacity(0.04) : .clear))
+        .contentShape(Rectangle())
+        .onTapGesture(perform: action)
+        .onHover { hover = $0 }
+        .modifier(PointingHandCursor())
+    }
+}
+
+/// VS Code-style setting: bold title, one-line description, control underneath; hairline between settings.
 private struct Row<Control: View>: View {
     let title: String
     var detail: String? = nil
     @ViewBuilder let control: () -> Control
     var body: some View {
-        HStack(alignment: .top, spacing: 20) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.system(size: 13, weight: .medium))
-                if let detail { Text(detail).font(.system(size: 11.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.system(size: 13, weight: .semibold))
+            if let detail {
+                Text(detail).font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
-            Spacer(minLength: 12)
-            control()
+            control().padding(.top, 2)
         }
-        .padding(.vertical, 10)
-        .overlay(alignment: .bottom) { Divider() }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 12)
+        .overlay(alignment: .bottom) { Hairline() }
     }
 }
 
@@ -94,7 +133,7 @@ private struct Group_: View {
     let title: String
     var body: some View {
         Text(title.uppercased()).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
-            .padding(.top, 18).padding(.bottom, 2)
+            .padding(.top, 20).padding(.bottom, 2)
     }
 }
 
@@ -150,8 +189,7 @@ private struct ThemeSwatches: View {
                             }
                         }
                         .frame(height: 58)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(on ? SwiftUI.Color.accentColor : SwiftUI.Color.primary.opacity(0.12), lineWidth: on ? 2 : 1))
+                        .overlay(Rectangle().stroke(on ? SwiftUI.Color(nsColor: Theme.accent) : SwiftUI.Color(nsColor: Theme.paneDivider), lineWidth: on ? 2 : 1))
                         Text(t.name).font(.system(size: 11)).foregroundStyle(on ? .primary : .secondary).lineLimit(1)
                     }
                 }
@@ -285,8 +323,9 @@ private struct SandboxSettings: View {
                 .help(enabled ? "Sessions can use Boat sandboxes" : "Sandbox tools are turned off")
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 8).fill(SwiftUI.Color.primary.opacity(0.04)))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(SwiftUI.Color.primary.opacity(0.08)))
+        .background(SwiftUI.Color(nsColor: Theme.chrome))
+        .overlay(Rectangle().stroke(SwiftUI.Color(nsColor: Theme.paneDivider), lineWidth: 1))
+        .padding(.top, 6)
     }
 
     private func load() async {
