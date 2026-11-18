@@ -1188,22 +1188,57 @@ struct WebPane: View {
     }
 }
 
+/// Hosts a tab's long-lived WKWebView. Same ownership rule as TerminalHost: SwiftUI makes the new container
+/// before tearing down the old one when a pane moves, splits or resizes, so the newest container (or the one
+/// that just entered a window) owns the view, and a container on its way out never takes it back.
 struct WebHost: NSViewRepresentable {
     let view: WKWebView
-    func makeNSView(context: Context) -> NSView {
-        let c = NSView()
-        view.removeFromSuperview()
-        view.frame = c.bounds
-        view.autoresizingMask = [.width, .height]
-        c.addSubview(view)
+
+    @MainActor final class Container: NSView {
+        weak var web: WKWebView?
+        private static var owners: [ObjectIdentifier: WeakBox] = [:]
+        private final class WeakBox { weak var c: Container?; init(_ c: Container) { self.c = c } }
+
+        private var isOwner: Bool { web.map { Self.owners[ObjectIdentifier($0)]?.c === self } ?? false }
+
+        func claim() {
+            guard let w = web else { return }
+            Self.owners[ObjectIdentifier(w)] = WeakBox(self)
+            adopt()
+        }
+
+        private func adopt() {
+            guard let w = web, isOwner else { return }
+            if w.superview !== self {
+                w.removeFromSuperview()
+                addSubview(w)
+            }
+            w.frame = bounds
+            w.autoresizingMask = [.width, .height]
+        }
+
+        func refresh() { adopt() }   // only the owner re-adopts; never steal
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if window != nil { claim() }
+        }
+
+        override func layout() {
+            super.layout()
+            if isOwner, let w = web, w.superview === self { w.frame = bounds }
+        }
+    }
+
+    func makeNSView(context: Context) -> Container {
+        let c = Container()
+        c.web = view
+        c.claim()
         return c
     }
-    func updateNSView(_ c: NSView, context: Context) {
-        if view.superview !== c {
-            view.removeFromSuperview()
-            view.frame = c.bounds
-            c.addSubview(view)
-        }
+
+    func updateNSView(_ c: Container, context: Context) {
+        if c.web !== view { c.web = view; c.claim() } else { c.refresh() }
     }
 }
 
