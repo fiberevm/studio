@@ -386,8 +386,28 @@ final class SessionStore: ObservableObject {
         return t
     }
 
-    func newSession(in cwd: String, prompt: String? = nil) -> TerminalSession {
+    /// A new agent session: the default CLI from Settings (Claude Code or Codex) unless `agent` says which.
+    func newSession(in cwd: String, prompt: String? = nil, agent: Agent? = nil) -> TerminalSession {
+        if (agent ?? Agent.preferred) == .codex { return newCodex(in: cwd, prompt: prompt) }
         let t = TerminalSession(cwd: cwd, claudeArgs: prompt.map { [$0] } ?? [], sessionId: nil, fontSize: fontSize)
+        add(t)
+        return t
+    }
+
+    /// A Codex CLI session. `resume` continues the folder's latest Codex conversation instead.
+    func newCodex(in cwd: String, prompt: String? = nil, resume: Bool = false) -> TerminalSession {
+        let args = resume ? ["resume", "--last"] : prompt.map { ["--", $0] } ?? []
+        let t = TerminalSession(cwd: cwd, claudeArgs: args, sessionId: nil, fontSize: fontSize, kind: .codex)
+        add(t)
+        return t
+    }
+
+    /// Reattach to a Codex tab still running in its host session (or continue its last conversation).
+    func reattachCodex(tab: UUID, host: String, cwd: String) -> TerminalSession {
+        if let t = terminals.first(where: { $0.id == tab }) { return t }
+        let alive = SessionHost.exists(host)
+        let t = TerminalSession(cwd: cwd, claudeArgs: alive ? [] : ["resume", "--last"], sessionId: nil, fontSize: fontSize,
+                                kind: .codex, id: tab, host: alive ? host : nil)
         add(t)
         return t
     }

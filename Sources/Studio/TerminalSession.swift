@@ -23,11 +23,13 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     let view: LocalProcessTerminalView
     private(set) var pid: Int32 = 0
     private let claudeArgs: [String]
-    /// .claude runs a Claude Code session; .shell is a plain terminal (⌃`), like VS Code's integrated terminal.
-    enum Kind { case claude, shell, web }
+    /// .claude runs a Claude Code session; .codex runs OpenAI's Codex CLI; .shell is a plain terminal (⌃`),
+    /// like VS Code's integrated terminal.
+    enum Kind { case claude, codex, shell, web }
     let kind: Kind
     var isShell: Bool { kind == .shell }
     var isClaude: Bool { kind == .claude }
+    var isCodex: Bool { kind == .codex }
     var isWeb: Bool { kind == .web }
 
     // MARK: Web panel (kind .web): a browser tab, like a terminal tab
@@ -80,7 +82,7 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     /// ⌘\: swap between Claude's terminal UI and the native view. Only one claude process ever runs
     /// for the conversation: the old one is stopped and the new one resumes it.
     func toggleNative() {
-        guard !isShell else { return }
+        guard isClaude else { return }
         if let n = native {
             n.stop()
             native = nil
@@ -121,6 +123,7 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
         switch kind {
         case .shell: launchShell()
         case .claude: launch(claudeArgs)
+        case .codex: launchCodex(claudeArgs)
         case .web: running = true    // no process; the page lives in webView
         }
     }
@@ -141,7 +144,32 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     func restart() {
         guard !running else { return }
         view.resetToInitialState()
-        if isShell { launchShell() } else { launch(sessionId.map { ["--resume", $0] } ?? claudeArgs) }
+        switch kind {
+        case .shell: launchShell()
+        case .codex: launchCodex(["resume", "--last"])   // the folder's latest Codex conversation
+        default: launch(sessionId.map { ["--resume", $0] } ?? claudeArgs)
+        }
+    }
+
+    /// A Codex CLI session, with the Studio MCP so it can drive the editor too.
+    private func launchCodex(_ args: [String]) {
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        let dir = FileManager.default.fileExists(atPath: cwd) ? cwd : NSHomeDirectory()
+        var opts: [String] = []
+        if let exe = StudioControl.mcpExecutable {
+            // Codex starts MCP servers with a minimal environment, so hand studio-mcp its tab and app explicitly.
+            opts += ["-c", "mcp_servers.studio.command=\"\(exe)\"",
+                     "-c", "mcp_servers.studio.env={STUDIO_TAB=\"\(id.uuidString)\", STUDIO_CONTROL_FILE=\"\(StudioControl.controlFilePath)\"}"]
+        }
+        // options go before a subcommand's own arguments: `codex resume -c … --last`, `codex -c … "prompt"`
+        let full = args.first == "resume" ? ["resume"] + opts + args.dropFirst() : opts + args
+        let cmd = (["exec", "codex"] + full).map(shellQuote).joined(separator: " ")
+        if SessionHost.enabled { startHosted(command: [shell, "-l", "-i", "-c", cmd], dir: dir); return }
+        view.startProcess(executable: shell, args: ["-l", "-i", "-c", cmd],
+                          environment: Self.childEnvironment(tab: id), execName: nil, currentDirectory: dir)
+        pid = view.process.shellPid
+        running = true
+        exitCode = nil
     }
 
     private func launch(_ args: [String]) {

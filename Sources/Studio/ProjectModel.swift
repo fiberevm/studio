@@ -526,6 +526,11 @@ final class ProjectModel: ObservableObject {
                 func token(_ t: TerminalSession?) -> String? {
                     guard let t else { return nil }
                     if t.isWeb { return "web:" + (t.url?.absoluteString ?? "about:blank") }
+                    if t.isCodex {
+                        // like terminals: "codexh:<tab>|<host>|<cwd>", else "codex:<cwd>" (continues its last conversation)
+                        if let h = t.hostName { return "codexh:\(t.id.uuidString)|\(h)|\(t.cwd)" }
+                        return "codex:" + t.cwd
+                    }
                     if t.isShell {
                         // hosted terminals reattach next launch: "shellh:<tab>|<host>|<cwd>"
                         if let h = t.hostName { return "shellh:\(t.id.uuidString)|\(h)|\(t.cwd)" }
@@ -574,6 +579,14 @@ final class ProjectModel: ObservableObject {
                         if parts.count == 3, let tab = UUID(uuidString: parts[0]) {
                             t = store.reattachShell(tab: tab, host: parts[1], cwd: parts[2])
                         } else { t = nil }
+                    } else if sid.hasPrefix("codexh:") {
+                        let parts = sid.dropFirst(7).split(separator: "|", maxSplits: 2).map(String.init)
+                        if parts.count == 3, let tab = UUID(uuidString: parts[0]) {
+                            t = store.reattachCodex(tab: tab, host: parts[1], cwd: parts[2])
+                        } else { t = nil }
+                    } else if sid.hasPrefix("codex:") {
+                        let cwd = String(sid.dropFirst(6))
+                        t = store.newCodex(in: FileManager.default.fileExists(atPath: cwd) ? cwd : folder, resume: true)
                     } else if sid.hasPrefix("shell:") {
                         let cwd = String(sid.dropFirst(6))
                         t = store.newShell(in: FileManager.default.fileExists(atPath: cwd) ? cwd : folder)

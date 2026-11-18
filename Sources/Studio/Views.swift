@@ -760,8 +760,14 @@ struct TabButton: View {
 
     private var tabTitle: String {
         let t = terminal.isWeb ? (terminal.webTitle.isEmpty ? (terminal.url?.host ?? "New tab") : terminal.webTitle)
-            : terminal.isShell ? shellTitle : (item?.title ?? "New session")
+            : terminal.isShell ? shellTitle : terminal.isCodex ? codexTitle : (item?.title ?? "New session")
         return t.count > 28 ? String(t.prefix(27)) + "…" : t
+    }
+
+    /// Codex tabs use the title Codex sets, else "Codex".
+    private var codexTitle: String {
+        let t = terminal.terminalTitle.trimmingCharacters(in: .whitespaces)
+        return t.isEmpty || t == "codex" ? "Codex" : t
     }
 
     /// Shell tabs use the title the shell sets (OSC 0/2), else "zsh — folder".
@@ -776,6 +782,8 @@ struct TabButton: View {
         HStack(spacing: 8) {
             if terminal.isWeb {
                 Image(systemName: "globe").font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 12)
+            } else if terminal.isCodex {
+                Image(systemName: "chevron.left.forwardslash.chevron.right").font(.system(size: 10)).foregroundStyle(.secondary).frame(width: 12)
             } else if terminal.isShell {
                 Image(systemName: "terminal").font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 12)
             } else if StatusDot.isVisible(tabStatus, attention: attention) {
@@ -930,7 +938,7 @@ struct SessionStatusBar: View {
         let st = sid.flatMap { model.store.stats[$0] }
         HStack(spacing: 14) {
             if terminal.isWeb { stat("globe", terminal.url?.host ?? "", help: terminal.url?.absoluteString ?? "") }
-            else if terminal.isShell { stat("folder", abbreviatePath(terminal.cwd), help: "Started in") }
+            else if terminal.isShell || terminal.isCodex { stat("folder", abbreviatePath(terminal.cwd), help: "Started in") }
             if let b = st?.gitBranch { stat("arrow.triangle.branch", b, help: "Git branch") }
             if let m = st?.model { stat("cpu", prettyModel(m), help: "Model: \(m)") }
             if let st {
@@ -1113,7 +1121,7 @@ struct TerminalPane: View {
                 .padding(.leading, 8).padding(.trailing, 8).padding(.vertical, 4)
             if !terminal.running {
                 VStack(spacing: 10) {
-                    Text("\(terminal.isShell ? "Shell" : "Claude") exited\(terminal.exitCode.map { " (code \($0))" } ?? "")")
+                    Text("\(terminal.isShell ? "Shell" : terminal.isCodex ? "Codex" : "Claude") exited\(terminal.exitCode.map { " (code \($0))" } ?? "")")
                         .font(.headline)
                     HStack {
                         Button("Restart") { terminal.restart() }.keyboardShortcut(.defaultAction)

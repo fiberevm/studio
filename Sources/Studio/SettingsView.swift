@@ -10,12 +10,38 @@ enum Pref {
     static let sandboxTTL = "sandbox.boat.ttlMinutes"               // Int, 0 = provider default
     static let sandboxEnvironment = "sandbox.boat.environment"      // "" = account default
     static let sandboxPolicy = "sandbox.policy"                     // "auto" (default) | "ask"
+    static let defaultAgent = "defaultAgent"                        // Agent raw value, default "claude"
 
     static func bool(_ k: String, default d: Bool) -> Bool { UserDefaults.standard.object(forKey: k) as? Bool ?? d }
     static func string(_ k: String) -> String? {
         let s = UserDefaults.standard.string(forKey: k) ?? ""
         return s.isEmpty ? nil : s
     }
+}
+
+/// Whether a command resolves on the user's login-shell PATH (checked once per command; it spawns a shell).
+enum CLI {
+    private static var cache: [String: Bool] = [:]
+    static func installed(_ name: String) -> Bool {
+        if let v = cache[name] { return v }
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
+        p.arguments = ["-l", "-c", "command -v \(name)"]
+        p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
+        let ok = (try? p.run()) != nil && { p.waitUntilExit(); return p.terminationStatus == 0 }()
+        cache[name] = ok
+        return ok
+    }
+}
+
+/// The coding agent CLI a new session runs.
+enum Agent: String, CaseIterable, Identifiable {
+    case claude, codex
+    var id: String { rawValue }
+    var name: String { self == .claude ? "Claude Code" : "Codex" }
+    var command: String { self == .claude ? "claude" : "codex" }
+    /// Settings → Sessions → Default agent.
+    static var preferred: Agent { Pref.string(Pref.defaultAgent).flatMap(Agent.init(rawValue:)) ?? .claude }
 }
 
 /// ⌘, — a VS Code / System Settings style window: sections on the left, the section on the right.
@@ -206,9 +232,19 @@ private struct SessionSettings: View {
     @AppStorage(Pref.closeTabEndsSession) private var closeEnds = true
     @AppStorage(Pref.keepSessionsAlive) private var keepAlive = true
     @AppStorage(Pref.nativePermissionMode) private var nativeMode = ""
+    @AppStorage(Pref.defaultAgent) private var agent = Agent.claude.rawValue
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            Row(title: "Default agent",
+                detail: "The CLI a new session (⌘N, ⌘K, the new_session tool) opens. ⌘P → New Claude Session / New Codex Session opens the other one.") {
+                Picker("", selection: $agent) {
+                    ForEach(Agent.allCases) { a in
+                        Text(a.name + (CLI.installed(a.command) ? "" : " (not installed)")).tag(a.rawValue)
+                    }
+                }
+                .labelsHidden().frame(width: 200)
+            }
             Row(title: "Closing a tab ends its session",
                 detail: "Off: the session keeps running in the background (reopen it from ⌘P). Right-click a tab for the other behavior either way.") {
                 Toggle("", isOn: $closeEnds).labelsHidden().toggleStyle(.switch)

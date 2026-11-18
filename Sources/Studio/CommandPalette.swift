@@ -194,6 +194,8 @@ struct CommandPalette: View {
             Item(id: "cmd:theme", title: "Change Theme…", subtitle: "Preferences: Color Theme", detail: Theme.current.name,
                  leading: .icon("paintpalette"), run: { enterThemes() }),
             cmd("Session: New Session", "⌘N", "plus") { m.newTab() },
+            cmd("Session: New Claude Session", "", "sparkles") { m.select(m.store.newSession(in: m.folder, agent: .claude)) },
+            cmd("Session: New Codex Session", "", "chevron.left.forwardslash.chevron.right") { m.select(m.store.newSession(in: m.folder, agent: .codex)) },
             cmd("Terminal: New Terminal", "⌃`", "terminal") { m.newShellTab() },
             cmd("Web: Open URL…", "", "globe") { m.openWeb(nil, zone: .center) },
             cmd("Session: Next Up (waiting for you)", "⌘J", "arrow.turn.down.right") { m.goToNextUp() },

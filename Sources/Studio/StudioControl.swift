@@ -23,6 +23,8 @@ final class StudioControl {
 
     /// Path of the MCP config handed to `claude --mcp-config`, if the studio-mcp binary is available.
     nonisolated(unsafe) static var mcpConfigPath: String?
+    /// The studio-mcp binary (Codex takes it as `-c mcp_servers.studio.command=…`).
+    nonisolated(unsafe) static var mcpExecutable: String?
     /// Studio's Claude plugin (Studio + Sandbox skills) bundled in the app, if present.
     static let pluginDir: String? = {
         guard let r = Bundle.main.resourcePath else { return nil }
@@ -76,6 +78,7 @@ final class StudioControl {
         // studio-mcp lives next to the app executable (Contents/MacOS) or, in a dev build, next to the binary.
         let exe = (Bundle.main.executablePath.map { ($0 as NSString).deletingLastPathComponent } ?? "") + "/studio-mcp"
         guard FileManager.default.isExecutableFile(atPath: exe) else { Self.mcpConfigPath = nil; return }
+        Self.mcpExecutable = exe
         let cfg: [String: Any] = ["mcpServers": ["studio": ["type": "stdio", "command": exe, "args": [] as [String]]]]
         let url = Self.supportDir.appendingPathComponent("mcp-\(Self.bundleKey).json")
         guard let data = try? JSONSerialization.data(withJSONObject: cfg, options: [.prettyPrinted]) else { return }
@@ -438,7 +441,8 @@ final class StudioControl {
 
         case "new_session":
             let folder = (p["folder"] as? String).map { ($0 as NSString).expandingTildeInPath } ?? model.folder
-            let t = store.newSession(in: folder, prompt: p["prompt"] as? String)
+            let t = store.newSession(in: folder, prompt: p["prompt"] as? String,
+                                     agent: (p["agent"] as? String).flatMap(Agent.init(rawValue:)))
             model.place(t, beside: callerGroup, zone: try zone("split"))
             return ["tab": t.id.uuidString]
 
@@ -603,8 +607,8 @@ final class StudioControl {
                             let item = m.item(for: t)
                             var d: [String: Any] = [
                                 "tab": t.id.uuidString,
-                                "kind": t.isWeb ? "web" : t.isShell ? "terminal" : "claude",
-                                "title": t.isWeb ? (t.webTitle.isEmpty ? (t.url?.absoluteString ?? "web") : t.webTitle) : t.isShell ? (t.terminalTitle.isEmpty ? "terminal" : t.terminalTitle) : (item?.title ?? "New session"),
+                                "kind": t.isWeb ? "web" : t.isShell ? "terminal" : t.isCodex ? "codex" : "claude",
+                                "title": t.isWeb ? (t.webTitle.isEmpty ? (t.url?.absoluteString ?? "web") : t.webTitle) : t.isCodex ? (t.terminalTitle.isEmpty ? "Codex" : t.terminalTitle) : t.isShell ? (t.terminalTitle.isEmpty ? "terminal" : t.terminalTitle) : (item?.title ?? "New session"),
                                 "selected": g.selection == "t:\(t.id)",
                                 "running": t.running,
                             ]
