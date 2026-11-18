@@ -314,12 +314,46 @@ final class SessionStore: ObservableObject {
             }
             guard live[sid] == nil else { continue }                  // running elsewhere → leave it
             guard Self.transcriptExists(sid) else { forgotten.insert(sid); continue } // never prompted
-            let t = TerminalSession(cwd: cwd, claudeArgs: ["--resume", sid], sessionId: sid, fontSize: fontSize,
+            let t = TerminalSession(cwd: Self.resumeDir(sid, fallback: cwd), claudeArgs: ["--resume", sid], sessionId: sid, fontSize: fontSize,
                                     native: TerminalSession.nativeSessions.contains(sid))
             add(t)
             out.append(t)
         }
         return out
+    }
+
+    /// The folder a conversation must be resumed in: the project Claude filed its transcript under
+    /// (~/.claude/projects/<cwd with non-alphanumerics as dashes>/<sid>.jsonl). A saved tab can carry a
+    /// stale folder; resuming there lands on a trust prompt and an empty, MCP-less session.
+    static func resumeDir(_ sid: String, fallback: String) -> String {
+        let fm = FileManager.default
+        guard let dirs = try? fm.contentsOfDirectory(atPath: Paths.projects.path),
+              let dir = dirs.first(where: { fm.fileExists(atPath: Paths.projects.appendingPathComponent($0).appendingPathComponent("\(sid).jsonl").path) })
+        else { return fallback }
+        func encode(_ p: String) -> String { p.replacingOccurrences(of: "[^A-Za-z0-9]", with: "-", options: .regularExpression) }
+        // the fallback or one of its parents usually matches
+        var c = fallback
+        while c.count > 1 {
+            if encode(c) == dir { return c }
+            c = (c as NSString).deletingLastPathComponent
+        }
+        // otherwise rebuild the path from the encoded name, choosing at each dash between "/" and a literal
+        // character by what exists on disk
+        let tokens = dir.split(separator: "-", omittingEmptySubsequences: false).map(String.init)
+        func walk(_ i: Int, _ path: String, _ seg: String) -> String? {
+            if i == tokens.count {
+                let full = path + "/" + seg
+                return fm.fileExists(atPath: full) ? full : nil
+            }
+            let t = tokens[i]
+            if !seg.isEmpty, fm.fileExists(atPath: path + "/" + seg), let r = walk(i + 1, path + "/" + seg, t) { return r }
+            for sep in ["-", ".", "_", " "] where !seg.isEmpty {
+                if let r = walk(i + 1, path, seg + sep + t) { return r }
+            }
+            return seg.isEmpty ? walk(i + 1, path, t) : nil
+        }
+        if tokens.count > 1, let found = walk(2, "", tokens[1]), encode(found) == dir { return found }
+        return fallback
     }
 
     static func transcriptExists(_ sid: String) -> Bool {
@@ -337,7 +371,7 @@ final class SessionStore: ObservableObject {
     /// Resume a session in an embedded terminal (or return the one already open).
     func resume(_ sid: String) -> TerminalSession {
         if let t = terminals.first(where: { $0.sessionId == sid }) { return t }
-        let cwd = records[sid]?.cwd ?? live[sid]?.cwd ?? NSHomeDirectory()
+        let cwd = Self.resumeDir(sid, fallback: records[sid]?.cwd ?? live[sid]?.cwd ?? NSHomeDirectory())
         let t = TerminalSession(cwd: cwd, claudeArgs: ["--resume", sid], sessionId: sid, fontSize: fontSize,
                                 native: TerminalSession.nativeSessions.contains(sid))
         add(t)
