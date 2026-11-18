@@ -147,7 +147,7 @@ final class StudioControl {
         guard Pref.bool(Pref.sandboxEnabled, default: true) else {
             throw ControlError(message: "Sandboxes are turned off in Studio Settings (⌘, → Sandboxes).")
         }
-        let policy = Pref.string(Pref.sandboxPolicy) ?? "ask"
+        let policy = Pref.string(Pref.sandboxPolicy) ?? "auto"   // default: use sandboxes when helpful
         let model = callerTab.flatMap { id in models.first { $0.terminal(id) != nil } } ?? lastActive ?? models.first
         let me = callerTab.flatMap { id in store.terminals.first { $0.id == id } }
 

@@ -9,7 +9,7 @@ enum Pref {
     static let sandboxType = "sandbox.boat.type"                    // small/default/large/xlarge
     static let sandboxTTL = "sandbox.boat.ttlMinutes"               // Int, 0 = provider default
     static let sandboxEnvironment = "sandbox.boat.environment"      // "" = account default
-    static let sandboxPolicy = "sandbox.policy"                     // "ask" | "auto"
+    static let sandboxPolicy = "sandbox.policy"                     // "auto" (default) | "ask"
 
     static func bool(_ k: String, default d: Bool) -> Bool { UserDefaults.standard.object(forKey: k) as? Bool ?? d }
     static func string(_ k: String) -> String? {
@@ -242,7 +242,7 @@ private struct SandboxSettings: View {
     @AppStorage(Pref.sandboxType) private var type = "small"
     @AppStorage(Pref.sandboxTTL) private var ttl = 60
     @AppStorage(Pref.sandboxEnvironment) private var environment = ""
-    @AppStorage(Pref.sandboxPolicy) private var policy = "ask"
+    @AppStorage(Pref.sandboxPolicy) private var policy = "auto"
     @State private var status: [String: Any]?
     @State private var loading = false
 
@@ -259,8 +259,8 @@ private struct SandboxSettings: View {
                     ? "Claude may create a sandbox on its own for builds, tests and risky commands, and stops it when done."
                     : "Claude uses a session's existing sandboxes, and creates one only when you ask.") {
                 Picker("", selection: $policy) {
-                    Text("Only when I ask").tag("ask")
                     Text("When helpful").tag("auto")
+                    Text("Only when I ask").tag("ask")
                 }
                 .labelsHidden().pickerStyle(.segmented).frame(width: 230)
             }

@@ -45,12 +45,12 @@ let tools: [Tool] = [
          description: "Send a message to another Claude session's prompt (as if the user typed it and pressed Return). Use get_state for tab ids. Use sparingly: it starts real work in that session.",
          properties: ["tab": ["type": "string"], "text": ["type": "string"]],
          required: ["tab", "text"]),
-    // Sandboxes (boat.dev). Use the session's own sandboxes freely; create/stop/delete only when the user asks.
+    // Sandboxes (boat.dev). Default policy: use them when helpful; delete only when the user asks.
     Tool(name: "sandbox_list",
          description: "List this session's sandboxes (and every account sandbox with scope=all). Check this before creating one.",
          properties: ["scope": ["type": "string", "enum": ["session", "all"]]], required: []),
     Tool(name: "sandbox_create",
-         description: "Create a remote sandbox (Linux VM) for this session and push the project into it (/home/user/<project>). Costs money: only when the user asks for a sandbox. Returns its id.",
+         description: "Create a remote sandbox (Linux VM) for this session and push the project into it (/home/user/<project>). Follow the policy from sandbox_list (default: create one when it helps — builds, tests, servers, risky or long work). Stop it when done. Returns its id.",
          properties: ["type": ["type": "string", "enum": ["small", "default", "large", "xlarge"]],
                       "ttl_minutes": ["type": "integer", "description": "auto-stop after this many minutes"],
                       "environment": ["type": "string", "description": "named Boat environment (repos, secrets)"],

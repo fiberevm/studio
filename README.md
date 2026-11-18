@@ -64,7 +64,7 @@ Everything here is about one thing: spending your attention only where a session
 | 💾 | **Restarts don't interrupt anything** | Each tab lives in a hidden tmux session, so quitting Studio leaves Claude, its commands and your dev servers running; relaunching reattaches every tab, with the same layout and the same processes. |
 | 🌿 | **Context at a glance** | Each session's status bar shows its git branch, model and tokens in/out, and Studio finds the PR it opened, with CI and review state. |
 | 🖼 | **Drop to paste** | Drag files or screenshots onto a session to paste their paths into the prompt. |
-| ⛵ | **Sandboxes** ([more ↓](#sandboxes)) | Every session can run work in a remote Linux sandbox through `sandbox_*` MCP tools: create one (the project is pushed in), run commands and servers, get an HTTPS URL for a port, open a shell in a split. Claude uses a session's existing sandboxes on its own, and creates or deletes one only when you ask. The sandboxes a session uses show as chips in its status bar, with live state and Open Terminal / Desktop / Stop / Resume / Delete. |
+| ⛵ | **Sandboxes** ([more ↓](#sandboxes)) | Every session can run work in a remote Linux sandbox through `sandbox_*` MCP tools: create one (the project is pushed in), run commands and servers, get an HTTPS URL for a port, open a shell in a split. Claude uses sandboxes when they help (configurable), and deletes one only when you ask. The sandboxes a session uses show as chips in its status bar, with live state and Open Terminal / Desktop / Stop / Resume / Delete. |
 | 🤖 | **Agents drive the editor** | Through the Studio MCP, Claude can open splits, start helper sessions, run commands in a terminal next to it, and rearrange your layout. |
 
 ### Workspace
@@ -93,7 +93,7 @@ Studio gives every Claude session a remote machine of its own whenever the work 
 
 - Every session Studio starts gets the `sandbox_*` MCP tools and a short `studio:sandbox` skill teaching when and how to use them.
 - `sandbox_create` brings up a machine and pushes your project into it, git-tracked files only. Claude then runs commands there with `sandbox_exec`, re-pushes after local edits, and can open a shell for you in a split (`sandbox_terminal`).
-- **You stay in control.** By default Claude uses a session's existing sandboxes on its own but creates a new one only when you ask; set **Settings → Sandboxes → Policy** to *When helpful* to let it decide. Deleting always needs you.
+- **Used when helpful, by default.** Claude brings up a sandbox on its own when it helps (builds, tests, servers, risky or long-running work) and stops it when done. Set **Settings → Sandboxes → Policy** to *Only when I ask* to make that your call. Deleting always needs you.
 - **You can always see them.** Every sandbox a session uses appears as a chip in its status bar (`⛵ name ●`, green when running). The chip's menu has Open Terminal, Open Desktop, Copy ID, Stop / Resume, and Delete.
 - **Defaults in Settings:** machine size, auto-stop time and environment for new sandboxes, plus an off switch per provider.
 
