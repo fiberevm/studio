@@ -44,21 +44,30 @@ final class ProjectModel: ObservableObject {
         }
         RecentProjects.add(folder)
         // Re-render this window whenever global session state changes.
-        store.objectWillChange.sink { [weak self] in
-            self?.objectWillChange.send()
-            DispatchQueue.main.async {
+        // Delivered a run-loop turn later, never synchronously: the store changes while this window is being
+        // built (restoring and reattaching tabs), and telling SwiftUI about it mid-build aborts the app.
+        store.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                self?.objectWillChange.send()
                 self?.consumePendingFocus()
                 self?.saveLayoutSoon()   // new sessions learn their id later; save once they have it
-            }
-        }.store(in: &bag)
-        let restored = store.restoreTerminals(in: folder)
-        if !restoreLayout() {
-            first.tabIds = restored.map(\.id)
-            first.selection = restored.first.map { "t:\($0.id)" }
-        }
-        consumePendingFocus()   // opened from another window's palette
+            }.store(in: &bag)
         watchClicks()
         StudioControl.shared.register(self)
+        // Restore after this window is built, not while SwiftUI is creating it: restoring adds sessions to the
+        // shared store, and changing observed state in the middle of a view update aborts the app.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            let restored = self.store.restoreTerminals(in: folder)
+            if !self.restoreLayout() {
+                first.tabIds = restored.map(\.id)
+                first.selection = restored.first.map { "t:\($0.id)" }
+            }
+            self.objectWillChange.send()
+            self.consumePendingFocus()   // opened from another window's palette
+            self.focusTerminal()
+        }
     }
 
     var name: String { projectName(for: folder) }
