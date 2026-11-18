@@ -110,7 +110,9 @@ More are on the way. Providers plug in through the `SandboxProvider` protocol in
 
 ## Install
 
-Requirements: **macOS 14+**, **Xcode 16+ / Swift 6 toolchain**, and [Claude Code](https://docs.claude.com/en/docs/claude-code) installed and logged in. Recommended: [tmux](https://github.com/tmux/tmux) (`brew install tmux`) so sessions survive Studio restarts. Optional: the [`gh` CLI](https://cli.github.com) for PR detection, and the [`boat` CLI](https://boat.dev) for sandboxes.
+**Download:** grab `Studio.zip` from the [latest release](https://github.com/fiberevm/studio/releases/latest), unzip it and move Studio to Applications. Release builds are signed with a Developer ID and notarized by Apple.
+
+**Build from source** — requirements: **macOS 14+**, **Xcode 16+ / Swift 6 toolchain**, and [Claude Code](https://docs.claude.com/en/docs/claude-code) installed and logged in. Recommended: [tmux](https://github.com/tmux/tmux) (`brew install tmux`) so sessions survive Studio restarts. Optional: the [`gh` CLI](https://cli.github.com) for PR detection, and the [`boat` CLI](https://boat.dev) for sandboxes.
 
 ```bash
 git clone https://github.com/fiberevm/studio.git
@@ -216,6 +218,16 @@ website/                 the one-page download site (static HTML; open website/i
 - [ ] Worktree-per-session with one click
 - [ ] Search across every transcript
 - [ ] Usage and cost overview per session and project
+
+## Releasing
+
+Push a version tag and GitHub Actions ([`.github/workflows/release.yml`](.github/workflows/release.yml)) builds Studio.app, signs it with your Developer ID (hardened runtime), notarizes and staples it, and publishes `Studio.zip` to a GitHub release:
+
+```bash
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+It needs five repository secrets: `MACOS_CERT_P12` (base64 of a *Developer ID Application* .p12), `MACOS_CERT_PASSWORD`, and an App Store Connect API key for notarization: `NOTARY_KEY_P8` (base64 of the .p8), `NOTARY_KEY_ID`, `NOTARY_ISSUER_ID`. Without them it publishes an ad hoc–signed build. Locally: `SIGN_IDENTITY="Developer ID Application: …" VERSION=0.2.0 APP=build/release/Studio.app ./build-app.sh`, then `scripts/notarize.sh build/release/Studio.app build/release/Studio.zip`.
 
 ## Contributing
 

@@ -1,0 +1,94 @@
+# Builds Studio.app on every version tag (v1.2.3), signs and notarizes it when the Apple secrets are set,
+# and publishes Studio.zip to a GitHub release. Without the secrets it still publishes an ad hoc build.
+#
+# Secrets (Settings → Secrets and variables → Actions):
+#   MACOS_CERT_P12          base64 of your "Developer ID Application" certificate + private key (.p12)
+#   MACOS_CERT_PASSWORD     the .p12 password
+#   NOTARY_KEY_P8           base64 of an App Store Connect API key (.p8), role Developer
+#   NOTARY_KEY_ID           that key's ID
+#   NOTARY_ISSUER_ID        the issuer ID shown above the keys list
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build and release (e.g. v0.2.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_16*.app | sort -V | tail -1)"
+          swift --version
+
+      - name: Import signing certificate
+        id: cert
+        env:
+          P12: ${{ secrets.MACOS_CERT_P12 }}
+          P12_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          if [ -z "$P12" ]; then echo "No signing certificate: building ad hoc"; exit 0; fi
+          KC="$RUNNER_TEMP/release.keychain-db"; KC_PW=$(uuidgen)
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KC_PW" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KC_PW" "$KC"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PW" "$KC" >/dev/null
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+          ID=$(security find-identity -v -p codesigning "$KC" | grep -o '"Developer ID Application[^"]*"' | head -1 | tr -d '"')
+          [ -n "$ID" ] || { echo "No Developer ID Application identity in the .p12"; exit 1; }
+          echo "identity=$ID" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        env:
+          SIGN_IDENTITY: ${{ steps.cert.outputs.identity }}
+        run: |
+          VERSION="${TAG#v}" BUILD_NUMBER="${{ github.run_number }}" APP=build/release/Studio.app ./build-app.sh
+
+      - name: Notarize
+        if: steps.cert.outputs.identity != ''
+        env:
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          echo "$NOTARY_KEY_P8" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+          NOTARY_KEY_PATH="$RUNNER_TEMP/notary.p8" scripts/notarize.sh build/release/Studio.app build/release/Studio.zip
+          rm "$RUNNER_TEMP/notary.p8"
+
+      - name: Zip (ad hoc build)
+        if: steps.cert.outputs.identity == ''
+        run: ditto -c -k --keepParent build/release/Studio.app build/release/Studio.zip
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shasum -a 256 build/release/Studio.zip | tee build/release/Studio.zip.sha256
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" build/release/Studio.zip build/release/Studio.zip.sha256 --clobber
+          else
+            gh release create "$TAG" build/release/Studio.zip build/release/Studio.zip.sha256 --title "Studio ${TAG#v}" --generate-notes
+          fi
+
+      - name: Clean up keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/release.keychain-db" 2>/dev/null || true

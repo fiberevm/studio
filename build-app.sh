@@ -1,9 +1,15 @@
 #!/bin/bash
 # Builds Studio.app into ./build. Usage: ./build-app.sh [--open]
+#   APP=path/Studio.app      where to build the bundle (default build/Studio.app)
+#   VERSION=1.2.3            CFBundleShortVersionString (default 0.1); BUILD_NUMBER sets CFBundleVersion
+#   SIGN_IDENTITY="Developer ID Application: …"   sign for distribution (hardened runtime + timestamp),
+#                            ready for scripts/notarize.sh; without it the app is signed ad hoc for local use.
 set -euo pipefail
 cd "$(dirname "$0")"
 swift build -c release
-APP=build/Studio.app
+APP="${APP:-build/Studio.app}"
+VERSION="${VERSION:-0.1}"
+BUILD_NUMBER="${BUILD_NUMBER:-1}"
 # Update the bundle in place (never delete it): deleting a running app's bundle makes the Dock lose its tile.
 # New files are written next to the old ones and renamed over them, so a running copy keeps its old binary.
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
@@ -26,15 +32,24 @@ cat > "$APP/Contents/.Info.plist.new" <<PLIST
   <key>CFBundleExecutable</key><string>Studio</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.1</string>
-  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleShortVersionString</key><string>$VERSION</string>
+  <key>CFBundleVersion</key><string>$BUILD_NUMBER</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSPrincipalClass</key><string>NSApplication</string>
 </dict></plist>
 PLIST
 mv -f "$APP/Contents/.Info.plist.new" "$APP/Contents/Info.plist"
-codesign --force --sign - "$APP" >/dev/null 2>&1 || true
+if [[ -n "${SIGN_IDENTITY:-}" ]]; then
+  # Inside out: the bundled MCP server first, then the app. Hardened runtime and a secure timestamp are
+  # what notarization requires.
+  for bin in "$APP/Contents/MacOS/studio-mcp" "$APP"; do
+    codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$bin"
+  done
+  codesign --verify --strict --deep "$APP"
+else
+  codesign --force --sign - "$APP" >/dev/null 2>&1 || true
+fi
 echo "Built $APP"
 [[ "${1:-}" == "--open" ]] && open "$APP"
 exit 0
