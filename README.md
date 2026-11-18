@@ -14,7 +14,7 @@ Studio tells you which session needs you next, so you can keep six agents busy w
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Built with SwiftTerm](https://img.shields.io/badge/terminal-SwiftTerm-555)](https://github.com/migueldeicaza/SwiftTerm)
 
-[Features](#features) · [Install](#install) · [Shortcuts](#keyboard-shortcuts) · [Studio MCP](#studio-mcp) · [How it works](#how-it-works) · [Contributing](#contributing)
+[Features](#features) · [Install](#install) · [Shortcuts](#keyboard-shortcuts) · [Sandboxes](#sandboxes) · [Studio MCP](#studio-mcp) · [How it works](#how-it-works) · [Contributing](#contributing)
 
 <img src="docs/screenshot.png" alt="Studio: two Claude Code sessions side by side and a terminal, in split panes" width="900">
 
@@ -64,7 +64,7 @@ Everything here is about one thing: spending your attention only where a session
 | 💾 | **Layout survives restarts** | Tabs, splits, pane sizes and terminal tabs come back exactly where they were; Claude sessions are resumed with `claude --resume`. |
 | 🌿 | **Context at a glance** | Each session's status bar shows its git branch, model and tokens in/out, and Studio finds the PR it opened, with CI and review state. |
 | 🖼 | **Drop to paste** | Drag files or screenshots onto a session to paste their paths into the prompt. |
-| ⛵ | **Sandboxes** (boat.dev) | Every session can run work in a remote Linux sandbox through `sandbox_*` MCP tools: create one (the project is pushed in), run commands and servers, get an HTTPS URL for a port, open a shell in a split. Claude uses a session's existing sandboxes on its own, and creates or deletes one only when you ask. The sandboxes a session uses show as chips in its status bar, with live state and Open Terminal / Desktop / Stop / Resume / Delete. |
+| ⛵ | **Sandboxes** ([more ↓](#sandboxes)) | Every session can run work in a remote Linux sandbox through `sandbox_*` MCP tools: create one (the project is pushed in), run commands and servers, get an HTTPS URL for a port, open a shell in a split. Claude uses a session's existing sandboxes on its own, and creates or deletes one only when you ask. The sandboxes a session uses show as chips in its status bar, with live state and Open Terminal / Desktop / Stop / Resume / Delete. |
 | 🤖 | **Agents drive the editor** | Through the Studio MCP, Claude can open splits, start helper sessions, run commands in a terminal next to it, and rearrange your layout. |
 
 ### Workspace
@@ -76,6 +76,34 @@ Everything here is about one thing: spending your attention only where a session
 
 ### Built for agents, too
 - **Studio MCP:** every session Studio starts can drive the editor itself: open splits, start sessions, run commands in terminals, rearrange the layout, change themes. [See the tools ↓](#studio-mcp)
+
+## Sandboxes
+
+Studio gives every Claude session a remote machine of its own whenever the work calls for one.
+
+### Why sandboxes
+
+- **Agents can host themselves.** A session can start the app it's building in a sandbox, open it on an HTTPS URL (`sandbox_url`) and hand you a link to try it, without touching your laptop's ports or CPU.
+- **Agents can orchestrate.** One session can bring up several sandboxes: run the test suite on one, a migration dry run on another, a load test on a third. It keeps going while they work and collects the results.
+- **Parallel work doesn't collide.** Six agents on six machines means no fights over port 3000, no shared `node_modules`, and no branch checkouts clobbering each other.
+- **Risky work stays contained.** Installing unknown dependencies, running generated scripts and `rm -rf`-adjacent cleanups happen on a disposable VM instead of the machine holding your keys.
+- **Long jobs outlive your laptop.** Builds, indexing and soak tests keep running when your lid closes; the sandbox auto-stops (and snapshots) when idle, so it doesn't keep billing.
+
+### How it works
+
+- Every session Studio starts gets the `sandbox_*` MCP tools and a short `studio:sandbox` skill teaching when and how to use them.
+- `sandbox_create` brings up a machine and pushes your project into it, git-tracked files only. Claude then runs commands there with `sandbox_exec`, re-pushes after local edits, and can open a shell for you in a split (`sandbox_terminal`).
+- **You stay in control.** By default Claude uses a session's existing sandboxes on its own but creates a new one only when you ask; set **Settings → Sandboxes → Policy** to *When helpful* to let it decide. Deleting always needs you.
+- **You can always see them.** Every sandbox a session uses appears as a chip in its status bar (`⛵ name ●`, green when running). The chip's menu has Open Terminal, Open Desktop, Copy ID, Stop / Resume, and Delete.
+- **Defaults in Settings:** machine size, auto-stop time and environment for new sandboxes, plus an off switch per provider.
+
+### Supported providers
+
+| Provider | | Status | What you need |
+|---|---|---|---|
+| <a href="https://boat.dev"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/providers/boat-dark.svg"><img src="docs/providers/boat-light.svg" alt="Boat" height="28"></picture></a> | [boat.dev](https://boat.dev) | ✅ Supported | The `boat` CLI, signed in (`boat login`). Linux VMs from 2 to 16 vCPU, snapshots, fork and resume, HTTPS URLs, desktop. |
+
+More are on the way. Providers plug in through the `SandboxProvider` protocol in [`Sources/Studio/Sandbox.swift`](Sources/Studio/Sandbox.swift), so the MCP tools, skill, status bar and Settings work unchanged for any provider that can create a machine, run a command, copy files in and expose a port. PRs welcome.
 
 ## Install
 
