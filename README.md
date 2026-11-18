@@ -37,7 +37,7 @@ happened. Studio is built around one idea: **you should only look at a session w
 
 ### Sessions
 - **Embedded Claude Code** in real terminals ([SwiftTerm](https://github.com/migueldeicaza/SwiftTerm)): it's the real `claude` CLI, so slash commands, hooks, MCP servers and settings all work unchanged.
-- **Codex too.** Set **Settings → Sessions → Default agent** to *Codex* and new sessions (<kbd>⌘N</kbd>, <kbd>⌘K</kbd>, the `new_session` tool) open OpenAI's [Codex CLI](https://github.com/openai/codex) instead, or pick one per tab from <kbd>⌘P</kbd> → *New Claude Session* / *New Codex Session*. Codex tabs get the Studio MCP, survive restarts in tmux like any tab, and otherwise continue the folder's latest Codex conversation (`codex resume --last`). The sidebar, status dots and native view are Claude Code only for now.
+- **Codex too.** Set **Settings → Sessions → Default agent** to *Codex* and new sessions (<kbd>⌘N</kbd>, <kbd>⌘K</kbd>, the `new_session` tool) open OpenAI's [Codex CLI](https://github.com/openai/codex) instead, or pick one per tab from <kbd>⌘P</kbd> → *New Claude Session* / *New Codex Session*. Codex sessions get the same treatment as Claude's: the Studio MCP, titles, status dots and the sidebar (read from Codex's rollouts in `~/.codex/sessions`), *needs you* when an approval prompt is on screen, notifications, ⌘J, ⌘K and snippets, fork (`codex fork`), model and tokens in the status bar, ⌘P history, and restarts that reattach in tmux or resume the exact conversation (`codex resume <id>`). The native view (<kbd>⌘/</kbd>) is Claude Code only.
 - **Imports what's already running.** Studio reads Claude Code's own session files, so sessions started in other terminals show up too.
 - **Closing a tab never loses a conversation.** It ends the session; <kbd>⌘P</kbd> resumes it any time, right where it left off.
 - **Sessions survive restarts.** Every tab runs in a hidden tmux session that Studio only attaches to. Quit or update Studio and Claude keeps working: in-progress turns, shell commands, dev servers and local chains carry on, and the next launch reattaches every tab, with the same layout and the same processes. Without tmux, or with *Settings → Sessions → Keep sessions running* off, Studio resumes conversations with `claude --resume` instead.
@@ -140,11 +140,11 @@ open build/Studio.app --args --resume <session-id>        # resume a specific se
 | <kbd>⌘K</kbd> | Quick prompt: message any session (or several) without switching |
 | <kbd>⌘E</kbd> | Fork the current session into a new pane to the right |
 | <kbd>⌘/</kbd> | Toggle native view (Studio renders the session) / terminal view |
-| <kbd>⌘T</kbd> or <kbd>⌘N</kbd> | New tab with a Claude session in this project |
+| <kbd>⌘T</kbd> or <kbd>⌘N</kbd> | New tab with a session (Claude Code or Codex, per Settings) in this project |
 | <kbd>⌃`</kbd> | New terminal tab |
 | <kbd>⇧⌘N</kbd> | Open another project window |
 | <kbd>⌘[</kbd> / <kbd>⌘]</kbd> | Previous / next tab |
-| <kbd>⌘1</kbd>…<kbd>⌘9</kbd> | Jump to tab |
+| <kbd>⌘1</kbd>…<kbd>⌘9</kbd> | Jump to tab (picking a session anywhere puts the cursor in its input) |
 | <kbd>⌘W</kbd> | Close tab and end its session (resume it any time from <kbd>⌘P</kbd>); in an empty pane, close the pane |
 | <kbd>⇧⌘W</kbd> | Close window |
 | <kbd>⌘,</kbd> | Settings: appearance (themes, text size, sidebar), sessions, sandbox providers, snippets |
@@ -207,6 +207,7 @@ Sources/Studio/          the app
   QuickPrompt.swift        ⌘K and snippets
   StudioControl.swift      control server behind the MCP tools
   TranscriptScanner.swift  reads titles, prompts and replies from transcripts
+  Codex.swift              the same for Codex: reads ~/.codex rollouts (status, titles, tokens), spots approval prompts
 Sources/StudioMCP/       the stdio MCP server bundled next to the app
 Resources/               app icon (SVG source + generated .icns)
 scripts/make-icon.sh     regenerates AppIcon.icns from AppIcon.svg

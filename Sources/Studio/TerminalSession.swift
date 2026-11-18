@@ -30,6 +30,10 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     var isShell: Bool { kind == .shell }
     var isClaude: Bool { kind == .claude }
     var isCodex: Bool { kind == .codex }
+    /// A coding agent's session (Claude Code or Codex), as opposed to a plain terminal or web panel.
+    var isAgent: Bool { kind == .claude || kind == .codex }
+    var agent: Agent? { kind == .claude ? .claude : kind == .codex ? .codex : nil }
+
     var isWeb: Bool { kind == .web }
 
     // MARK: Web panel (kind .web): a browser tab, like a terminal tab
@@ -146,7 +150,8 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
         view.resetToInitialState()
         switch kind {
         case .shell: launchShell()
-        case .codex: launchCodex(["resume", "--last"])   // the folder's latest Codex conversation
+        // the same conversation, else the folder's latest
+        case .codex: launchCodex(["resume"] + (sessionId.map { [$0] } ?? ["--last"]))
         default: launch(sessionId.map { ["--resume", $0] } ?? claudeArgs)
         }
     }
@@ -162,7 +167,7 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
                      "-c", "mcp_servers.studio.env={STUDIO_TAB=\"\(id.uuidString)\", STUDIO_CONTROL_FILE=\"\(StudioControl.controlFilePath)\"}"]
         }
         // options go before a subcommand's own arguments: `codex resume -c … --last`, `codex -c … "prompt"`
-        let full = args.first == "resume" ? ["resume"] + opts + args.dropFirst() : opts + args
+        let full = ["resume", "fork"].contains(args.first) ? [args[0]] + opts + args.dropFirst() : opts + args
         let cmd = (["exec", "codex"] + full).map(shellQuote).joined(separator: " ")
         if SessionHost.enabled { startHosted(command: [shell, "-l", "-i", "-c", cmd], dir: dir); return }
         view.startProcess(executable: shell, args: ["-l", "-i", "-c", cmd],

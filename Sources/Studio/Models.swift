@@ -11,6 +11,7 @@ struct SessionRecord: Identifiable, Hashable, Equatable {
     var activity: Activity?     // what the transcript's last entry says Claude is doing
     var lastActivity: Date
     var transcriptPath: String
+    var agent: Agent = .claude
 
     var displayTitle: String {
         if let t = title, !t.isEmpty { return t }
@@ -46,11 +47,12 @@ enum Activity: Hashable {
         case .tool(let name):
             if name.hasPrefix("mcp__") { return "powerplug" }
             switch name {
-            case "Bash", "BashOutput", "KillShell", "Monitor": return "terminal"
-            case "Edit", "Write", "MultiEdit", "NotebookEdit": return "pencil"
+            case "Bash", "BashOutput", "KillShell", "Monitor",
+                 "shell", "exec", "exec_command", "write_stdin", "local_shell": return "terminal"   // Codex's too
+            case "Edit", "Write", "MultiEdit", "NotebookEdit", "apply_patch": return "pencil"
             case "Read", "NotebookRead": return "doc.text"
             case "Grep", "Glob", "LSP": return "magnifyingglass"
-            case "WebFetch", "WebSearch": return "globe"
+            case "WebFetch", "WebSearch", "web_search": return "globe"
             case "Task", "Agent": return "person.2"
             case "TodoWrite": return "checklist"
             default: return "wrench.and.screwdriver"

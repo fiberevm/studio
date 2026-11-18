@@ -41,6 +41,13 @@ final class SessionStore: ObservableObject {
     /// Session to focus when a project window next looks (folder → session id). Used by the palette.
     private(set) var pendingFocus: [String: String] = [:]
 
+    /// Codex sessions open in tabs, by session id (from their rollouts).
+    @Published private(set) var codex: [String: CodexSession] = [:]
+    /// Codex tabs showing an approval prompt right now.
+    @Published private(set) var codexWaiting: Set<UUID> = []
+    private let codexScanner = CodexScanner()
+    private var screenCheckBusy = false
+
     private let scanner = TranscriptScanner()
     private let historyScanner = TranscriptScanner()
     private let statsReader = StatsReader()
@@ -84,13 +91,26 @@ final class SessionStore: ObservableObject {
     // MARK: Scanning
 
     func rescanTranscripts() {
-        let ids = Set(live.keys).union(terminals.compactMap(\.sessionId))
-        scanQueue.async { [scanner, statsReader] in
+        let ids = Set(live.keys).union(terminals.filter(\.isClaude).compactMap(\.sessionId))
+        let codexIds = Set(terminals.filter(\.isCodex).compactMap(\.sessionId))
+        // Codex tabs that haven't learned their conversation yet (Codex writes it on the first message)
+        let pending = terminals.filter { $0.isCodex && $0.sessionId == nil && $0.running }.map { ($0.id, $0.cwd, $0.createdAt) }
+        scanQueue.async { [scanner, statsReader, codexScanner] in
             let recs = scanner.scan(ids: ids)
-            let dict = Dictionary(recs.map { ($0.id, $0) }, uniquingKeysWith: { a, b in a.lastActivity > b.lastActivity ? a : b })
+            var dict = Dictionary(recs.map { ($0.id, $0) }, uniquingKeysWith: { a, b in a.lastActivity > b.lastActivity ? a : b })
             var st: [String: TranscriptStats] = [:]
             for r in dict.values { st[r.id] = statsReader.stats(for: r.transcriptPath) }
+            var found: [UUID: String] = [:]
+            var taken = codexIds
+            for (tab, cwd, since) in pending {
+                if let id = codexScanner.started(in: cwd, since: since, excluding: taken) { found[tab] = id; taken.insert(id) }
+            }
+            let cx = codexScanner.scan(ids: taken)
+            for (id, c) in cx { dict[id] = c.record; st[id] = c.stats }
             DispatchQueue.main.async {
+                for (tab, id) in found { self.terminals.first { $0.id == tab && $0.sessionId == nil }?.sessionId = id }
+                if !found.isEmpty { self.persistTerminals() }
+                if self.codex != cx { self.codex = cx }
                 if self.records != dict { self.records = dict }
                 if self.stats != st { self.stats = st }
                 self.refreshPRs()
@@ -111,7 +131,7 @@ final class SessionStore: ObservableObject {
 
     func loadHistory() {
         scanQueue.async { [historyScanner] in
-            let all = historyScanner.scan(ids: nil).sorted { $0.lastActivity > $1.lastActivity }
+            let all = (historyScanner.scan(ids: nil) + self.codexScanner.all()).sorted { $0.lastActivity > $1.lastActivity }
             DispatchQueue.main.async { self.history = all }
         }
     }
@@ -157,22 +177,50 @@ final class SessionStore: ObservableObject {
 
         // Transitions that mean "this session needs you": it finished, or it's blocked on you.
         // Nothing happens for a session you're looking at; a finish only notifies after 30s+ of work.
-        let viewed = Set(viewing.values)
-        for (sid, info) in bySid {
-            let prev = lastStatus[sid]
-            let watching = viewed.contains(sid) && NSApp.isActive
-            if info.status == "busy", prev != "busy" { busySince[sid] = Date() }
-            if let prev, prev != info.status {
-                if info.status == "waiting", !watching {
-                    attention.insert(sid)
-                    notify(sid: sid, info: info)
-                } else if prev == "busy", info.status == "idle", !watching {
-                    attention.insert(sid)
-                    if let since = busySince[sid], Date().timeIntervalSince(since) >= 30 { notify(sid: sid, info: info) }
+        // Codex logs no pending approvals, so look for its approval prompt on screen (read through tmux;
+        // only mid-turn, the only time it asks). Off the main thread; the result lands a moment later.
+        let asking = terminals.compactMap { t -> (UUID, String)? in
+            guard t.isCodex, t.running, let h = t.hostName, let sid = t.sessionId, codex[sid]?.busy == true else { return nil }
+            return (t.id, h)
+        }
+        if asking.isEmpty { if !codexWaiting.isEmpty { codexWaiting = [] } }
+        else if !screenCheckBusy {
+            screenCheckBusy = true
+            DispatchQueue.global(qos: .utility).async {
+                let w = Set(asking.filter { SessionHost.screen($0.1).map(CodexScanner.isAskingApproval) == true }.map(\.0))
+                DispatchQueue.main.async {
+                    self.screenCheckBusy = false
+                    if self.codexWaiting != w { self.codexWaiting = w }
                 }
             }
-            if info.status != "busy" { busySince[sid] = nil }
-            lastStatus[sid] = info.status
+        }
+        let waiting = codexWaiting
+
+        let viewed = Set(viewing.values)
+        var states = bySid.map { (sid: $0.key, status: $0.value.status, waitingFor: $0.value.waitingFor, cwd: $0.value.cwd, name: $0.value.name) }
+        for t in terminals where t.isCodex && t.running {
+            guard let sid = t.sessionId else { continue }
+            let s = waiting.contains(t.id) ? "waiting" : codex[sid]?.busy == true ? "busy" : "idle"
+            states.append((sid, s, waiting.contains(t.id) ? "approval" : nil, t.cwd, nil))
+        }
+        for st in states {
+            let sid = st.sid
+            let prev = lastStatus[sid]
+            let watching = viewed.contains(sid) && NSApp.isActive
+            if st.status == "busy", prev != "busy" { busySince[sid] = Date() }
+            if let prev, prev != st.status {
+                if st.status == "waiting", !watching {
+                    attention.insert(sid)
+                    notify(sid: sid, waiting: true, waitingFor: st.waitingFor, cwd: st.cwd, name: st.name)
+                } else if prev == "busy", st.status == "idle", !watching {
+                    attention.insert(sid)
+                    if let since = busySince[sid], Date().timeIntervalSince(since) >= 30 {
+                        notify(sid: sid, waiting: false, waitingFor: nil, cwd: st.cwd, name: st.name)
+                    }
+                }
+            }
+            if st.status != "busy" { busySince[sid] = nil }
+            lastStatus[sid] = st.status
         }
         if live != bySid { live = bySid }
         updateDockBadge()
@@ -206,6 +254,19 @@ final class SessionStore: ObservableObject {
                 status: status, inApp: true, entrypoint: "studio", pid: t.sessionPid,
                 startedAt: t.createdAt, updatedAt: info?.updatedAt ?? t.createdAt,
                 activity: t.native.map { $0.activity } ?? Self.activity(status, rec)))
+        }
+        for t in terminals where t.isCodex {
+            let sid = t.sessionId
+            if let sid { covered.insert(sid) }
+            let c = sid.flatMap { codex[$0] }
+            let rec = sid.flatMap { records[$0] }
+            let status: SessionStatus = !t.running ? .exited : codexWaiting.contains(t.id) ? .waiting : c?.busy == true ? .working : .idle
+            items.append(ActiveItem(
+                key: "t:\(t.id)", sessionId: sid,
+                title: title(rec: rec, info: nil, fallback: "Codex"),
+                cwd: rec?.cwd ?? t.cwd, status: status, inApp: true, entrypoint: "codex", pid: t.sessionPid,
+                startedAt: t.createdAt, updatedAt: rec?.lastActivity ?? t.createdAt,
+                activity: status == .working ? (rec?.activity ?? .thinking) : nil))
         }
         for (sid, info) in live where !covered.contains(sid) {
             let rec = records[sid]
@@ -259,8 +320,9 @@ final class SessionStore: ObservableObject {
         // A --no-restore instance is a throwaway side-by-side copy: never touch the saved tab list.
         guard !CommandLine.arguments.contains("--no-restore") else { return }
         let current: [[String: String]] = terminals.compactMap { t in
-            guard let sid = t.sessionId, t.isClaude else { return nil }
+            guard let sid = t.sessionId, t.isAgent else { return nil }
             var e = ["sid": sid, "cwd": t.cwd, "tab": t.id.uuidString]
+            if t.isCodex { e["agent"] = "codex" }
             if let h = t.hostName, !t.isNative { e["tmux"] = h }   // reattach to it next launch
             return e
         }
@@ -304,6 +366,14 @@ final class SessionStore: ObservableObject {
             // Only this window's own sessions: a window for ~ must not swallow every project under it.
             guard let sid = e["sid"], let cwd = e["cwd"], home(of: e, cwd: cwd) == folder,
                   !terminals.contains(where: { $0.sessionId == sid }) else { continue }
+            if e["agent"] == "codex" {
+                let tab = e["tab"].flatMap(UUID.init(uuidString:)) ?? UUID()
+                let host = e["tmux"].flatMap { SessionHost.enabled && SessionHost.exists($0) ? $0 : nil }
+                guard host != nil || scanQueue.sync(execute: { codexScanner.exists(sid) }) else { forgotten.insert(sid); continue }
+                let t = newCodex(in: cwd, resume: sid, id: tab, host: host)
+                out.append(t)
+                continue
+            }
             // Still running in its host session (Studio was only restarted): reattach, same tab id.
             if let h = e["tmux"], SessionHost.enabled, SessionHost.exists(h) {
                 let t = TerminalSession(cwd: cwd, claudeArgs: ["--resume", sid], sessionId: sid, fontSize: fontSize,
@@ -371,6 +441,9 @@ final class SessionStore: ObservableObject {
     /// Resume a session in an embedded terminal (or return the one already open).
     func resume(_ sid: String) -> TerminalSession {
         if let t = terminals.first(where: { $0.sessionId == sid }) { return t }
+        if let r = records[sid] ?? history.first(where: { $0.id == sid }), r.agent == .codex {
+            return newCodex(in: FileManager.default.fileExists(atPath: r.cwd) ? r.cwd : NSHomeDirectory(), resume: sid)
+        }
         let cwd = Self.resumeDir(sid, fallback: records[sid]?.cwd ?? live[sid]?.cwd ?? NSHomeDirectory())
         let t = TerminalSession(cwd: cwd, claudeArgs: ["--resume", sid], sessionId: sid, fontSize: fontSize,
                                 native: TerminalSession.nativeSessions.contains(sid))
@@ -380,7 +453,8 @@ final class SessionStore: ObservableObject {
 
     /// A copy of a conversation under a new session id (`claude --resume <id> --fork-session`).
     /// The original keeps running untouched; the fork learns its own id once Claude starts.
-    func fork(_ sid: String, cwd: String) -> TerminalSession {
+    func fork(_ sid: String, cwd: String, agent: Agent = .claude) -> TerminalSession {
+        if agent == .codex { return newCodex(in: cwd, fork: sid) }
         let t = TerminalSession(cwd: cwd, claudeArgs: ["--resume", sid, "--fork-session"], sessionId: nil, fontSize: fontSize)
         add(t)
         return t
@@ -394,12 +468,22 @@ final class SessionStore: ObservableObject {
         return t
     }
 
-    /// A Codex CLI session. `resume` continues the folder's latest Codex conversation instead.
-    func newCodex(in cwd: String, prompt: String? = nil, resume: Bool = false) -> TerminalSession {
-        let args = resume ? ["resume", "--last"] : prompt.map { ["--", $0] } ?? []
-        let t = TerminalSession(cwd: cwd, claudeArgs: args, sessionId: nil, fontSize: fontSize, kind: .codex)
+    /// A Codex CLI session: new, continuing conversation `resume` (or the folder's latest with `resumeLast`),
+    /// or a copy of conversation `fork`. `host` reattaches to a tab still running in tmux.
+    func newCodex(in cwd: String, prompt: String? = nil, resume: String? = nil, resumeLast: Bool = false,
+                  fork: String? = nil, id: UUID = UUID(), host: String? = nil) -> TerminalSession {
+        let args = resume.map { ["resume", $0] } ?? fork.map { ["fork", $0] }
+            ?? (resumeLast ? ["resume", "--last"] : prompt.map { ["--", $0] } ?? [])
+        let t = TerminalSession(cwd: cwd, claudeArgs: args, sessionId: resume, fontSize: fontSize, kind: .codex,
+                                id: id, host: host)
         add(t)
         return t
+    }
+
+    /// Whether a tab's conversation is on disk yet (something to fork).
+    func hasConversation(_ t: TerminalSession) -> Bool {
+        guard let sid = t.sessionId else { return false }
+        return t.isCodex ? records[sid] != nil : Self.transcriptExists(sid)
     }
 
     /// Reattach to a Codex tab still running in its host session (or continue its last conversation).
@@ -479,18 +563,19 @@ final class SessionStore: ObservableObject {
     static let canNotify = Bundle.main.bundleIdentifier != nil && Bundle.main.bundlePath.hasSuffix(".app")
 
     /// Only while you're in another app: inside Studio the tab badges already say it.
-    private func notify(sid: String, info: LiveInfo) {
+    private func notify(sid: String, waiting: Bool, waitingFor: String?, cwd: String, name: String?) {
         guard Self.canNotify, !NSApp.isActive else { return }
         let content = UNMutableNotificationContent()
-        content.title = title(rec: records[sid], info: info, fallback: "Claude")
-        if info.status == "waiting" {
-            content.subtitle = "Needs you: \(info.waitingFor ?? "input")"
+        let rec = records[sid]
+        content.title = rec?.title.flatMap { $0.isEmpty ? nil : $0 } ?? name ?? rec?.firstPrompt ?? (rec?.agent == .codex ? "Codex" : "Claude")
+        if waiting {
+            content.subtitle = "Needs you: \(waitingFor ?? "input")"
         }
-        let reply = records[sid]?.lastReply.map { $0.replacingOccurrences(of: "\n", with: " ") }
-        content.body = reply.map { String($0.suffix(180)) } ?? (info.status == "waiting" ? "Blocked until you answer" : "Finished — ready for you")
+        let reply = rec?.lastReply.map { $0.replacingOccurrences(of: "\n", with: " ") }
+        content.body = reply.map { String($0.suffix(180)) } ?? (waiting ? "Blocked until you answer" : "Finished — ready for you")
         content.sound = .default
         content.categoryIdentifier = "session"
-        content.userInfo = ["sid": sid, "cwd": info.cwd]
+        content.userInfo = ["sid": sid, "cwd": cwd]
         let req = UNNotificationRequest(identifier: sid, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(req)
     }

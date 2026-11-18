@@ -78,6 +78,12 @@ enum SessionHost {
     static func kill(_ name: String) { run(["kill-session", "-t", "=" + name]) }
 
     /// The pid of the process running inside the session (claude or the shell), for status lookups.
+    /// The text on the session's screen right now.
+    static func screen(_ name: String) -> String? {
+        let r = run(["capture-pane", "-p", "-t", "=" + name + ":"])
+        return r.ok ? r.out : nil
+    }
+
     static func panePid(_ name: String) -> Int32? {
         // "=name:" — exact session name, its current pane ("=name" alone doesn't resolve to a pane)
         Int32(run(["display-message", "-p", "-t", "=" + name + ":", "#{pane_pid}"]).out)

@@ -219,7 +219,7 @@ struct CommandPalette: View {
             list.insert(cmd("Session: End Session", "", "stop.circle") { m.endSession(t) }, at: 3)
         }
         // Snippets go to the current session in one step; ⌘K offers them for any session or a broadcast.
-        if let t = m.selectedTerminal, t.isClaude {
+        if let t = m.selectedTerminal, t.isAgent {
             for sn in Snippets.all {
                 list.append(Item(id: "snip:\(sn.name)", title: "Snippet: #\(sn.name)", subtitle: sn.text,
                                  leading: .icon("text.quote"), run: { t.submit(sn.text) }))

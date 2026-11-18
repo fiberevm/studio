@@ -115,6 +115,7 @@ final class ProjectModel: ObservableObject {
                 activeGroup.selection = newValue
             }
             changed()
+            focusTerminal()   // picking a session (⌘P, ⌘J, ⌘1…9, the sidebar) puts you in its input
         }
     }
 
@@ -158,9 +159,18 @@ final class ProjectModel: ObservableObject {
         changed()
     }
 
+    /// Put keyboard focus in the selected tab: its terminal, or its page for a web panel. (The native view's
+    /// composer focuses itself when it appears.) A tab that was just selected may not be in the window yet,
+    /// so keep trying for a moment.
     func focusTerminal() {
-        guard let v = selectedTerminal?.view else { return }
-        DispatchQueue.main.async { v.window?.makeFirstResponder(v) }
+        guard let t = selectedTerminal, !t.isNative else { return }
+        let v: NSView = t.isWeb ? t.webView : t.view
+        func attempt(_ left: Int) {
+            guard selectedTerminal === t else { return }   // the selection moved on
+            if let w = v.window { w.makeFirstResponder(v) }
+            else if left > 0 { DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { attempt(left - 1) } }
+        }
+        DispatchQueue.main.async { attempt(20) }
     }
 
     func newTab() { select(store.newSession(in: folder)) }
@@ -180,10 +190,10 @@ final class ProjectModel: ObservableObject {
 
     /// Sessions ⌘K can message: the current one first, then this window's tabs, then other projects'.
     var quickTargets: [TerminalSession] {
-        let claude = store.terminals.filter { $0.isClaude && $0.running }
-        let mine = tabs.filter { $0.isClaude && $0.running }
+        let claude = store.terminals.filter { $0.isAgent && $0.running }
+        let mine = tabs.filter { $0.isAgent && $0.running }
         var out: [TerminalSession] = []
-        if let cur = selectedTerminal, cur.isClaude, cur.running { out.append(cur) }
+        if let cur = selectedTerminal, cur.isAgent, cur.running { out.append(cur) }
         for t in mine + claude where !out.contains(where: { $0 === t }) { out.append(t) }
         return out
     }
@@ -234,10 +244,10 @@ final class ProjectModel: ObservableObject {
 
     /// ⌘E: fork a session into a new pane beside it, so you can try another direction without losing this one.
     func fork(_ t: TerminalSession? = nil, zone: DropZone = .right) {
-        guard let t = t ?? selectedTerminal, t.isClaude else { showToast("Select a Claude session to fork"); return }
-        guard let sid = t.sessionId, SessionStore.transcriptExists(sid) else { showToast("Nothing to fork yet: send a message first"); return }
+        guard let t = t ?? selectedTerminal, let agent = t.agent else { showToast("Select a session to fork"); return }
+        guard let sid = t.sessionId, store.hasConversation(t) else { showToast("Nothing to fork yet: send a message first"); return }
         let g = group(containing: t.id) ?? activeGroup
-        place(store.fork(sid, cwd: t.cwd), beside: g, zone: zone)
+        place(store.fork(sid, cwd: t.cwd, agent: agent), beside: g, zone: zone)
     }
 
     func resume(_ sid: String) { select(store.resume(sid)) }
@@ -254,21 +264,21 @@ final class ProjectModel: ObservableObject {
     /// Close a tab. Without the sidebar there's nowhere for a hidden session to show up, so closing ends it
     /// (⌘P can still resume the conversation). With the sidebar visible, the session keeps running there.
     func close(_ t: TerminalSession) {
-        if !Pref.bool(Pref.closeTabEndsSession, default: true) && t.isClaude { closeKeepingRunning(t) } else { endSession(t) }
+        if !Pref.bool(Pref.closeTabEndsSession, default: true) && t.isAgent { closeKeepingRunning(t) } else { endSession(t) }
     }
 
     /// Close the tab only; a Claude session keeps running (find it with ⌘P). A terminal ends.
     func closeKeepingRunning(_ t: TerminalSession) {
         guard let g = group(containing: t.id) else { return }
         detach(t.id, from: g)   // an emptied pane stays, showing its empty state
-        if !t.isClaude { store.close(t) }   // terminals and web panels have nowhere else to live
+        if !t.isAgent { store.close(t) }   // terminals and web panels have nowhere else to live
         changed()
     }
 
     /// Stop the claude process for good (it can still be resumed later with `claude --resume`).
     func endSession(_ t: TerminalSession) {
         closeKeepingRunning(t)
-        if t.isClaude { store.close(t) }   // a shell or web panel was already ended
+        if t.isAgent { store.close(t) }   // a shell or web panel was already ended
     }
 
     func closeSelectedTab() { if let t = selectedTerminal { close(t) } }
@@ -293,7 +303,7 @@ final class ProjectModel: ObservableObject {
         // Plain terminals live only in this window's layout; end them rather than leave them running unreachable.
         // (Quitting is different: hosted terminals keep running and the next launch reattaches them.)
         if !SessionStore.terminating {
-            for g in groups { for t in tabs(in: g) where !t.isClaude { store.close(t) } }
+            for g in groups { for t in tabs(in: g) where !t.isAgent { store.close(t) } }
         }
         store.endViewing(window: windowId)
         StudioControl.shared.unregister(self)
@@ -526,8 +536,9 @@ final class ProjectModel: ObservableObject {
                 func token(_ t: TerminalSession?) -> String? {
                     guard let t else { return nil }
                     if t.isWeb { return "web:" + (t.url?.absoluteString ?? "about:blank") }
+                    if t.isCodex, let sid = t.sessionId { return sid }   // restored like a Claude tab, by session id
                     if t.isCodex {
-                        // like terminals: "codexh:<tab>|<host>|<cwd>", else "codex:<cwd>" (continues its last conversation)
+                        // not prompted yet: like terminals: "codexh:<tab>|<host>|<cwd>", else "codex:<cwd>" (continues its last conversation)
                         if let h = t.hostName { return "codexh:\(t.id.uuidString)|\(h)|\(t.cwd)" }
                         return "codex:" + t.cwd
                     }
@@ -586,7 +597,7 @@ final class ProjectModel: ObservableObject {
                         } else { t = nil }
                     } else if sid.hasPrefix("codex:") {
                         let cwd = String(sid.dropFirst(6))
-                        t = store.newCodex(in: FileManager.default.fileExists(atPath: cwd) ? cwd : folder, resume: true)
+                        t = store.newCodex(in: FileManager.default.fileExists(atPath: cwd) ? cwd : folder, resumeLast: true)
                     } else if sid.hasPrefix("shell:") {
                         let cwd = String(sid.dropFirst(6))
                         t = store.newShell(in: FileManager.default.fileExists(atPath: cwd) ? cwd : folder)
@@ -615,7 +626,7 @@ final class ProjectModel: ObservableObject {
         guard let node = build(saved) else { return false }
         root = node
         // sessions that were restored but missing from the saved layout go into the first group
-        let leftovers = store.terminals(in: folder).filter { !used.contains($0.id) && $0.sessionId != nil && $0.isClaude }
+        let leftovers = store.terminals(in: folder).filter { !used.contains($0.id) && $0.sessionId != nil && $0.isAgent }
         if let g = root.groups.first { g.tabIds += leftovers.map(\.id) }
         activeGroupId = active ?? root.groups.first?.id ?? activeGroupId
         return true

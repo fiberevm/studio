@@ -357,7 +357,7 @@ struct Sidebar: View {
         Button("Reveal Folder in Finder") { NSWorkspace.shared.open(URL(fileURLWithPath: item.cwd)) }
         if let sid = item.sessionId {
             Button("Copy Session ID") { copy(sid) }
-            Button("Copy Resume Command") { copy("cd \(shellQuote(item.cwd)) && claude --resume \(sid)") }
+            Button("Copy Resume Command") { copy("cd \(shellQuote(item.cwd)) && " + (item.entrypoint == "codex" ? "codex resume \(sid)" : "claude --resume \(sid)")) }
         }
     }
 
@@ -764,11 +764,8 @@ struct TabButton: View {
         return t.count > 28 ? String(t.prefix(27)) + "…" : t
     }
 
-    /// Codex tabs use the title Codex sets, else "Codex".
-    private var codexTitle: String {
-        let t = terminal.terminalTitle.trimmingCharacters(in: .whitespaces)
-        return t.isEmpty || t == "codex" ? "Codex" : t
-    }
+    /// Codex tabs use the conversation's name or first message, else "Codex".
+    private var codexTitle: String { item?.title ?? "Codex" }
 
     /// Shell tabs use the title the shell sets (OSC 0/2), else "zsh — folder".
     private var shellTitle: String {
@@ -819,7 +816,7 @@ struct TabButton: View {
         .onTapGesture { model.peekTab = nil; model.select(terminal, in: group) }
         .onHover { h in
             hovering = h
-            if h, terminal.isClaude {
+            if h, terminal.isAgent {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
                     if hovering, model.dropTarget == nil { model.peekTab = terminal.id }
                 }
@@ -830,8 +827,10 @@ struct TabButton: View {
         .anchorPreference(key: TabAnchors.self, value: .bounds) { [terminal.id: $0] }
         .onDrag { model.peekTab = nil; return TabDrag.provider(terminal) }
         .contextMenu {
-            if terminal.isClaude {
-                Button(terminal.isNative ? "Switch to Terminal View" : "Switch to Native View") { model.toggleNative(terminal) }
+            if terminal.isAgent {
+                if terminal.isClaude {
+                    Button(terminal.isNative ? "Switch to Terminal View" : "Switch to Native View") { model.toggleNative(terminal) }
+                }
                 Button("Fork Session to the Right") { model.fork(terminal) }
                 Button("Fork Session Below") { model.fork(terminal, zone: .bottom) }
                 Divider()
@@ -842,7 +841,7 @@ struct TabButton: View {
             Button("Split Up") { model.split(terminal, .top) }
             Divider()
             Button("Close Tab") { model.close(terminal) }
-            if terminal.isClaude {
+            if terminal.isAgent {
                 Button("Close Tab, Keep Session Running") { model.closeKeepingRunning(terminal) }
             }
         }
@@ -938,14 +937,14 @@ struct SessionStatusBar: View {
         let st = sid.flatMap { model.store.stats[$0] }
         HStack(spacing: 14) {
             if terminal.isWeb { stat("globe", terminal.url?.host ?? "", help: terminal.url?.absoluteString ?? "") }
-            else if terminal.isShell || terminal.isCodex { stat("folder", abbreviatePath(terminal.cwd), help: "Started in") }
+            else if terminal.isShell { stat("folder", abbreviatePath(terminal.cwd), help: "Started in") }
             if let b = st?.gitBranch { stat("arrow.triangle.branch", b, help: "Git branch") }
             if let m = st?.model { stat("cpu", prettyModel(m), help: "Model: \(m)") }
             if let st {
                 stat("arrow.up", formatTokens(st.tokensIn), help: "Tokens sent: \(st.tokensIn.formatted()) (incl. cache)")
                 stat("arrow.down", formatTokens(st.tokensOut), help: "Tokens received: \(st.tokensOut.formatted())")
             }
-            if terminal.isClaude { SandboxChips(registry: model.store.sandboxes, terminal: terminal) }
+            if terminal.isAgent { SandboxChips(registry: model.store.sandboxes, terminal: terminal) }
             Spacer()
         }
         .padding(.horizontal, 10)

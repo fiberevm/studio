@@ -476,7 +476,7 @@ final class StudioControl {
 
         case "send_to_session":
             let t = try tab(defaultToCaller: false)
-            guard t.isClaude else { throw ControlError(message: "send_to_session is for Claude sessions; use run_in_terminal for terminals") }
+            guard t.isAgent else { throw ControlError(message: "send_to_session is for Claude and Codex sessions; use run_in_terminal for terminals") }
             guard let text = p["text"] as? String, !text.isEmpty else { throw ControlError(message: "text is required") }
             t.submit(text)
             return "sent"
@@ -491,8 +491,8 @@ final class StudioControl {
 
         case "fork_session":
             let t = try tab()
-            guard t.isClaude, let sid = t.sessionId else { throw ControlError(message: "that tab isn't a Claude session with a conversation yet") }
-            let f = store.fork(sid, cwd: t.cwd)
+            guard let agent = t.agent, let sid = t.sessionId else { throw ControlError(message: "that tab isn't a session with a conversation yet") }
+            let f = store.fork(sid, cwd: t.cwd, agent: agent)
             model.place(f, beside: model.group(containing: t.id) ?? callerGroup, zone: try zone("split") ?? .right)
             return ["tab": f.id.uuidString]
 
@@ -517,7 +517,7 @@ final class StudioControl {
 
         case "close_tab":
             let t = try tab(defaultToCaller: false)
-            let keep = (p["keep_running"] as? Bool == true || !Pref.bool(Pref.closeTabEndsSession, default: true)) && t.isClaude
+            let keep = (p["keep_running"] as? Bool == true || !Pref.bool(Pref.closeTabEndsSession, default: true)) && t.isAgent
             if keep { model.closeKeepingRunning(t) } else { model.endSession(t) }
             return keep ? "tab closed (session keeps running)" : "tab closed (session ended)"
 
@@ -608,7 +608,7 @@ final class StudioControl {
                             var d: [String: Any] = [
                                 "tab": t.id.uuidString,
                                 "kind": t.isWeb ? "web" : t.isShell ? "terminal" : t.isCodex ? "codex" : "claude",
-                                "title": t.isWeb ? (t.webTitle.isEmpty ? (t.url?.absoluteString ?? "web") : t.webTitle) : t.isCodex ? (t.terminalTitle.isEmpty ? "Codex" : t.terminalTitle) : t.isShell ? (t.terminalTitle.isEmpty ? "terminal" : t.terminalTitle) : (item?.title ?? "New session"),
+                                "title": t.isWeb ? (t.webTitle.isEmpty ? (t.url?.absoluteString ?? "web") : t.webTitle) : t.isShell ? (t.terminalTitle.isEmpty ? "terminal" : t.terminalTitle) : (item?.title ?? "New session"),
                                 "selected": g.selection == "t:\(t.id)",
                                 "running": t.running,
                             ]
