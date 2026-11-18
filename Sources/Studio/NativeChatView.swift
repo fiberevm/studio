@@ -412,7 +412,10 @@ struct MarkdownView: View {
     }
 
     private func inline(_ s: String) -> AttributedString {
-        (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s)
+        // common inline HTML in READMEs: <kbd>⌘K</kbd> → `⌘K`, <br> → newline; other tags stay as text
+        let t = s.replacingOccurrences(of: #"<kbd>(.*?)</kbd>"#, with: "`$1`", options: .regularExpression)
+            .replacingOccurrences(of: #"<br\s*/?>"#, with: "\n", options: .regularExpression)
+        return (try? AttributedString(markdown: t, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(t)
     }
 
     private var blocks: [Block] {
