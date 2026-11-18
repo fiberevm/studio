@@ -207,6 +207,7 @@ Sources/Studio/          the app
 Sources/StudioMCP/       the stdio MCP server bundled next to the app
 Resources/               app icon (SVG source + generated .icns)
 scripts/make-icon.sh     regenerates AppIcon.icns from AppIcon.svg
+website/                 the one-page download site (static HTML; open website/index.html)
 ```
 
 ## Roadmap
