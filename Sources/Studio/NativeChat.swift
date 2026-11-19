@@ -80,6 +80,8 @@ final class NativeChat: ObservableObject {
     private var buffer = Data()
     private var pendingInputs: [String: [String: Any]] = [:]   // permission request id → tool input
     var pid: Int32 { process?.processIdentifier ?? 0 }
+    /// The composer's text view, so selecting the tab can put the cursor in it.
+    weak var inputView: NSView?
     var onSessionId: ((String) -> Void)?
 
     init(cwd: String, tab: UUID, resume sid: String?) {

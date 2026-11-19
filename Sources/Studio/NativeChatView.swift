@@ -120,7 +120,7 @@ struct NativeChatView: View {
             ChatInput(text: $draft, height: $inputHeight, fontSize: size,
                       placeholder: chat.exited ? "Session ended — ⌘/ to switch back to the terminal"
                                                : chat.busy ? "Queue a follow-up…" : "Ask Claude anything…",
-                      onSubmit: send, onEscape: { chat.interrupt() })
+                      onSubmit: send, onEscape: { chat.interrupt() }, register: { chat.inputView = $0 })
                 .frame(height: min(max(inputHeight, line), 240))
             HStack(spacing: 10) {
                 if chat.busy, let start = chat.turnStartedAt {
@@ -439,12 +439,24 @@ struct MarkdownView: View {
     let text: String
     let size: CGFloat
 
-    enum Block: Hashable { case para(String), heading(String, Int), code(String, String), bullet(String, Int), rule,
+    enum Block: Hashable { case para(String), heading(String, Int), code(String, String),
+                           bullet(marker: String, text: String, indent: Int), rule,
                            table(header: [String], rows: [[String]]) }
+    /// A block and whether a blank line came before it in the source. Like the TUI, blocks are spaced by a
+    /// full empty line only where the text has one; lines that follow each other (a bold line and its list,
+    /// list items) stay together.
+    struct Entry: Hashable { let block: Block; let gap: Bool }
+
+    private var lineHeight: CGFloat {
+        ceil(NSLayoutManager().defaultLineHeight(for: NSFont.monospacedSystemFont(ofSize: size, weight: .regular)))
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(blocks.enumerated()), id: \.offset) { _, b in block(b) }
+        let line = lineHeight
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(entries.enumerated()), id: \.offset) { i, e in
+                block(e.block).padding(.top, i == 0 ? 0 : e.gap ? line : 2)
+            }
         }
         .textSelection(.enabled)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -477,12 +489,13 @@ struct MarkdownView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 8).fill(SwiftUI.Color(nsColor: Theme.foreground).opacity(0.06)))
-        case .bullet(let s, let indent):
-            HStack(alignment: .top, spacing: 8) {
-                Text("•").foregroundStyle(.secondary)
+        case .bullet(let marker, let s, let indent):
+            // the TUI's markers: "-" for plain items, the number for ordered ones; wrapped lines hang under the text
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text(marker + " ")
                 Text(inline(s)).fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.leading, CGFloat(indent) * 14)
+            .padding(.leading, CGFloat(indent) * 2 * (size * 0.6))
         case .rule:
             SwiftUI.Color(nsColor: Theme.paneDivider).frame(height: 1)
         case .table(let header, let rows):
@@ -528,27 +541,29 @@ struct MarkdownView: View {
         return a
     }
 
-    private var blocks: [Block] {
-        var out: [Block] = []
+    private var entries: [Entry] {
+        var out: [Entry] = []
+        var gap = false   // a blank line since the last block
+        func add(_ b: Block) { out.append(Entry(block: b, gap: gap)); gap = false }
         var para: [String] = []
         var code: [String]? = nil
         var lang = ""
-        func flushPara() { if !para.isEmpty { out.append(.para(para.joined(separator: "\n"))); para = [] } }
+        func flushPara() { if !para.isEmpty { add(.para(para.joined(separator: "\n"))); para = [] } }
         var tableRows: [[String]]? = nil
         func flushTable() {
-            if let t = tableRows, let h = t.first { out.append(.table(header: h, rows: Array(t.dropFirst()))) }
+            if let t = tableRows, let h = t.first { add(.table(header: h, rows: Array(t.dropFirst()))) }
             tableRows = nil
         }
         for raw in text.components(separatedBy: "\n") {
             let line = raw
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.hasPrefix("```") {
-                if let c = code { out.append(.code(lang, c.joined(separator: "\n"))); code = nil }
+                if let c = code { add(.code(lang, c.joined(separator: "\n"))); code = nil }
                 else { flushPara(); code = []; lang = String(trimmed.dropFirst(3)) }
                 continue
             }
             if code != nil { code!.append(line); continue }
-            if trimmed.isEmpty { flushPara(); flushTable(); continue }
+            if trimmed.isEmpty { flushPara(); flushTable(); if !out.isEmpty { gap = true }; continue }
             // GitHub tables: | a | b |, then |---|---|, then rows
             if trimmed.hasPrefix("|") {
                 flushPara()
@@ -561,20 +576,19 @@ struct MarkdownView: View {
             flushTable()
             if trimmed.hasPrefix("#") {
                 let level = trimmed.prefix(while: { $0 == "#" }).count
-                flushPara(); out.append(.heading(trimmed.dropFirst(level).trimmingCharacters(in: .whitespaces), level)); continue
+                flushPara(); add(.heading(trimmed.dropFirst(level).trimmingCharacters(in: .whitespaces), level)); continue
             }
-            if trimmed == "---" || trimmed == "***" { flushPara(); out.append(.rule); continue }
+            if trimmed == "---" || trimmed == "***" { flushPara(); add(.rule); continue }
             if let r = trimmed.range(of: #"^([-*+]|\d+\.)\s+"#, options: .regularExpression) {
                 flushPara()
                 let indent = (line.count - line.drop(while: { $0 == " " }).count) / 2
                 let marker = trimmed[r].trimmingCharacters(in: .whitespaces)
-                let body = String(trimmed[r.upperBound...])
-                out.append(.bullet(marker.hasSuffix(".") ? "\(marker) \(body)" : body, indent))
+                add(.bullet(marker: marker.hasSuffix(".") ? marker : "-", text: String(trimmed[r.upperBound...]), indent: indent))
                 continue
             }
             para.append(line)
         }
-        if let c = code { out.append(.code(lang, c.joined(separator: "\n"))) }
+        if let c = code { add(.code(lang, c.joined(separator: "\n"))) }
         flushPara()
         flushTable()
         return out
@@ -598,6 +612,8 @@ struct ChatInput: NSViewRepresentable {
     let placeholder: String
     let onSubmit: () -> Void
     let onEscape: () -> Void
+    /// Hands over the text view (to focus it from outside).
+    var register: ((NSTextView) -> Void)? = nil
 
     final class Box: NSTextView {
         var submit: (() -> Void)?
@@ -617,10 +633,6 @@ struct ChatInput: NSViewRepresentable {
                 (placeholder as NSString).draw(at: NSPoint(x: textContainerInset.width + (textContainer?.lineFragmentPadding ?? 0), y: textContainerInset.height),
                                                withAttributes: [.font: f, .foregroundColor: NSColor.tertiaryLabelColor])
             }
-        }
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            DispatchQueue.main.async { self.window?.makeFirstResponder(self) }
         }
     }
 
@@ -660,6 +672,7 @@ struct ChatInput: NSViewRepresentable {
         tv.textContainer?.lineFragmentPadding = 0
         tv.delegate = context.coordinator
         scroll.documentView = tv
+        register?(tv)
         return scroll
     }
 

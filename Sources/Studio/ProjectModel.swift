@@ -159,18 +159,17 @@ final class ProjectModel: ObservableObject {
         changed()
     }
 
-    /// Put keyboard focus in the selected tab: its terminal, or its page for a web panel. (The native view's
-    /// composer focuses itself when it appears.) A tab that was just selected may not be in the window yet,
-    /// so keep trying for a moment.
+    /// Put keyboard focus in the selected tab: its terminal, its page for a web panel, or the input of the
+    /// native view. A tab that was just selected may not be in the window yet, so keep trying for a moment.
     func focusTerminal() {
-        guard let t = selectedTerminal, !t.isNative else { return }
-        let v: NSView = t.isWeb ? t.webView : t.view
+        guard let t = selectedTerminal else { return }
         func attempt(_ left: Int) {
             guard selectedTerminal === t else { return }   // the selection moved on
-            if let w = v.window { w.makeFirstResponder(v) }
+            let v: NSView? = t.isNative ? t.native?.inputView : t.isWeb ? t.webView : t.view
+            if let v, let w = v.window { w.makeFirstResponder(v) }
             else if left > 0 { DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { attempt(left - 1) } }
         }
-        DispatchQueue.main.async { attempt(20) }
+        DispatchQueue.main.async { attempt(40) }   // up to 2s: a native view may still be starting
     }
 
     func newTab() { select(store.newSession(in: folder)) }
@@ -240,6 +239,7 @@ final class ProjectModel: ObservableObject {
         let goingNative = !t.isNative
         t.toggleNative()
         showToast(goingNative ? "Native view" : "Terminal view")
+        focusTerminal()   // into the new view's input once it's up
     }
 
     /// ⌘E: fork a session into a new pane beside it, so you can try another direction without losing this one.
