@@ -46,6 +46,9 @@ final class SessionStore: ObservableObject {
     /// Codex tabs showing an approval prompt right now.
     @Published private(set) var codexWaiting: Set<UUID> = []
     private let codexScanner = CodexScanner()
+    /// agy conversations open in tabs, by conversation id.
+    @Published private(set) var agy: [String: AgySession] = [:]
+    private let agyScanner = AgyScanner()
     private var screenCheckBusy = false
 
     private let scanner = TranscriptScanner()
@@ -95,7 +98,9 @@ final class SessionStore: ObservableObject {
         let codexIds = Set(terminals.filter(\.isCodex).compactMap(\.sessionId))
         // Codex tabs that haven't learned their conversation yet (Codex writes it on the first message)
         let pending = terminals.filter { $0.isCodex && $0.sessionId == nil && $0.running }.map { ($0.id, $0.cwd, $0.createdAt) }
-        scanQueue.async { [scanner, statsReader, codexScanner] in
+        let agyIds = Set(terminals.filter(\.isAgy).compactMap(\.sessionId))
+        let agyPending = terminals.filter { $0.isAgy && $0.sessionId == nil && $0.running }.map { ($0.id, $0.cwd, $0.createdAt) }
+        scanQueue.async { [scanner, statsReader, codexScanner, agyScanner] in
             let recs = scanner.scan(ids: ids)
             var dict = Dictionary(recs.map { ($0.id, $0) }, uniquingKeysWith: { a, b in a.lastActivity > b.lastActivity ? a : b })
             var st: [String: TranscriptStats] = [:]
@@ -107,7 +112,14 @@ final class SessionStore: ObservableObject {
             }
             let cx = codexScanner.scan(ids: taken)
             for (id, c) in cx { dict[id] = c.record; st[id] = c.stats }
+            var agyTaken = agyIds
+            for (tab, cwd, since) in agyPending {
+                if let id = agyScanner.started(in: cwd, since: since, excluding: agyTaken) { found[tab] = id; agyTaken.insert(id) }
+            }
+            let ag = agyScanner.scan(ids: agyTaken)
+            for (id, a) in ag { dict[id] = a.record }
             DispatchQueue.main.async {
+                if self.agy != ag { self.agy = ag }
                 for (tab, id) in found { self.terminals.first { $0.id == tab && $0.sessionId == nil }?.sessionId = id }
                 if !found.isEmpty { self.persistTerminals() }
                 if self.codex != cx { self.codex = cx }
@@ -131,7 +143,7 @@ final class SessionStore: ObservableObject {
 
     func loadHistory() {
         scanQueue.async { [historyScanner] in
-            let all = (historyScanner.scan(ids: nil) + self.codexScanner.all()).sorted { $0.lastActivity > $1.lastActivity }
+            let all = (historyScanner.scan(ids: nil) + self.codexScanner.all() + self.agyScanner.all()).sorted { $0.lastActivity > $1.lastActivity }
             DispatchQueue.main.async { self.history = all }
         }
     }
@@ -203,6 +215,10 @@ final class SessionStore: ObservableObject {
             let s = waiting.contains(t.id) ? "waiting" : codex[sid]?.busy == true ? "busy" : "idle"
             states.append((sid, s, waiting.contains(t.id) ? "approval" : nil, t.cwd, nil))
         }
+        for t in terminals where t.isAgy && t.running {
+            guard let sid = t.sessionId, let a = agy[sid] else { continue }
+            states.append((sid, a.waiting ? "waiting" : a.busy ? "busy" : "idle", a.waiting ? "permission" : nil, t.cwd, nil))
+        }
         for st in states {
             let sid = st.sid
             let prev = lastStatus[sid]
@@ -255,16 +271,17 @@ final class SessionStore: ObservableObject {
                 startedAt: t.createdAt, updatedAt: info?.updatedAt ?? t.createdAt,
                 activity: t.native.map { $0.activity } ?? Self.activity(status, rec)))
         }
-        for t in terminals where t.isCodex {
+        for t in terminals where t.isCodex || t.isAgy {
             let sid = t.sessionId
             if let sid { covered.insert(sid) }
-            let c = sid.flatMap { codex[$0] }
             let rec = sid.flatMap { records[$0] }
-            let status: SessionStatus = !t.running ? .exited : codexWaiting.contains(t.id) ? .waiting : c?.busy == true ? .working : .idle
+            let waiting = t.isCodex ? codexWaiting.contains(t.id) : sid.flatMap { agy[$0] }?.waiting == true
+            let busy = t.isCodex ? sid.flatMap { codex[$0] }?.busy == true : sid.flatMap { agy[$0] }?.busy == true
+            let status: SessionStatus = !t.running ? .exited : waiting ? .waiting : busy ? .working : .idle
             items.append(ActiveItem(
                 key: "t:\(t.id)", sessionId: sid,
-                title: title(rec: rec, info: nil, fallback: "Codex"),
-                cwd: rec?.cwd ?? t.cwd, status: status, inApp: true, entrypoint: "codex", pid: t.sessionPid,
+                title: title(rec: rec, info: nil, fallback: t.agent?.name ?? "Session"),
+                cwd: rec?.cwd ?? t.cwd, status: status, inApp: true, entrypoint: t.agent?.rawValue, pid: t.sessionPid,
                 startedAt: t.createdAt, updatedAt: rec?.lastActivity ?? t.createdAt,
                 activity: status == .working ? (rec?.activity ?? .thinking) : nil))
         }
@@ -322,7 +339,7 @@ final class SessionStore: ObservableObject {
         let current: [[String: String]] = terminals.compactMap { t in
             guard let sid = t.sessionId, t.isAgent else { return nil }
             var e = ["sid": sid, "cwd": t.cwd, "tab": t.id.uuidString]
-            if t.isCodex { e["agent"] = "codex" }
+            if !t.isClaude { e["agent"] = t.agent?.rawValue }
             if let h = t.hostName, !t.isNative { e["tmux"] = h }   // reattach to it next launch
             return e
         }
@@ -366,11 +383,12 @@ final class SessionStore: ObservableObject {
             // Only this window's own sessions: a window for ~ must not swallow every project under it.
             guard let sid = e["sid"], let cwd = e["cwd"], home(of: e, cwd: cwd) == folder,
                   !terminals.contains(where: { $0.sessionId == sid }) else { continue }
-            if e["agent"] == "codex" {
+            if let agent = e["agent"].flatMap(Agent.init(rawValue:)), agent != .claude {
                 let tab = e["tab"].flatMap(UUID.init(uuidString:)) ?? UUID()
                 let host = e["tmux"].flatMap { SessionHost.enabled && SessionHost.exists($0) ? $0 : nil }
-                guard host != nil || scanQueue.sync(execute: { codexScanner.exists(sid) }) else { forgotten.insert(sid); continue }
-                let t = newCodex(in: cwd, resume: sid, id: tab, host: host)
+                guard host != nil || scanQueue.sync(execute: { agent == .codex ? codexScanner.exists(sid) : agyScanner.exists(sid) })
+                else { forgotten.insert(sid); continue }
+                let t = agent == .codex ? newCodex(in: cwd, resume: sid, id: tab, host: host) : newAgy(in: cwd, resume: sid, id: tab, host: host)
                 out.append(t)
                 continue
             }
@@ -441,8 +459,9 @@ final class SessionStore: ObservableObject {
     /// Resume a session in an embedded terminal (or return the one already open).
     func resume(_ sid: String) -> TerminalSession {
         if let t = terminals.first(where: { $0.sessionId == sid }) { return t }
-        if let r = records[sid] ?? history.first(where: { $0.id == sid }), r.agent == .codex {
-            return newCodex(in: FileManager.default.fileExists(atPath: r.cwd) ? r.cwd : NSHomeDirectory(), resume: sid)
+        if let r = records[sid] ?? history.first(where: { $0.id == sid }), r.agent != .claude {
+            let dir = FileManager.default.fileExists(atPath: r.cwd) ? r.cwd : NSHomeDirectory()
+            return r.agent == .codex ? newCodex(in: dir, resume: sid) : newAgy(in: dir, resume: sid)
         }
         let cwd = Self.resumeDir(sid, fallback: records[sid]?.cwd ?? live[sid]?.cwd ?? NSHomeDirectory())
         let t = TerminalSession(cwd: cwd, claudeArgs: ["--resume", sid], sessionId: sid, fontSize: fontSize,
@@ -462,7 +481,11 @@ final class SessionStore: ObservableObject {
 
     /// A new agent session: the default CLI from Settings (Claude Code or Codex) unless `agent` says which.
     func newSession(in cwd: String, prompt: String? = nil, agent: Agent? = nil) -> TerminalSession {
-        if (agent ?? Agent.preferred) == .codex { return newCodex(in: cwd, prompt: prompt) }
+        switch agent ?? Agent.preferred {
+        case .codex: return newCodex(in: cwd, prompt: prompt)
+        case .agy: return newAgy(in: cwd, prompt: prompt)
+        case .claude: break
+        }
         let t = TerminalSession(cwd: cwd, claudeArgs: prompt.map { [$0] } ?? [], sessionId: nil, fontSize: fontSize)
         add(t)
         return t
@@ -480,10 +503,18 @@ final class SessionStore: ObservableObject {
         return t
     }
 
+    /// An Antigravity (`agy`) session: new (with a first prompt), or continuing conversation `resume`.
+    func newAgy(in cwd: String, prompt: String? = nil, resume: String? = nil, id: UUID = UUID(), host: String? = nil) -> TerminalSession {
+        let args = resume.map { ["--conversation", $0] } ?? prompt.map { ["-i", $0] } ?? []
+        let t = TerminalSession(cwd: cwd, claudeArgs: args, sessionId: resume, fontSize: fontSize, kind: .agy, id: id, host: host)
+        add(t)
+        return t
+    }
+
     /// Whether a tab's conversation is on disk yet (something to fork).
     func hasConversation(_ t: TerminalSession) -> Bool {
         guard let sid = t.sessionId else { return false }
-        return t.isCodex ? records[sid] != nil : Self.transcriptExists(sid)
+        return t.isClaude ? Self.transcriptExists(sid) : records[sid] != nil
     }
 
     /// Reattach to a Codex tab still running in its host session (or continue its last conversation).
@@ -567,7 +598,7 @@ final class SessionStore: ObservableObject {
         guard Self.canNotify, !NSApp.isActive else { return }
         let content = UNMutableNotificationContent()
         let rec = records[sid]
-        content.title = rec?.title.flatMap { $0.isEmpty ? nil : $0 } ?? name ?? rec?.firstPrompt ?? (rec?.agent == .codex ? "Codex" : "Claude")
+        content.title = rec?.title.flatMap { $0.isEmpty ? nil : $0 } ?? name ?? rec?.firstPrompt ?? (rec?.agent ?? .claude).name
         if waiting {
             content.subtitle = "Needs you: \(waitingFor ?? "input")"
         }

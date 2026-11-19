@@ -357,7 +357,7 @@ struct Sidebar: View {
         Button("Reveal Folder in Finder") { NSWorkspace.shared.open(URL(fileURLWithPath: item.cwd)) }
         if let sid = item.sessionId {
             Button("Copy Session ID") { copy(sid) }
-            Button("Copy Resume Command") { copy("cd \(shellQuote(item.cwd)) && " + (item.entrypoint == "codex" ? "codex resume \(sid)" : "claude --resume \(sid)")) }
+            Button("Copy Resume Command") { copy("cd \(shellQuote(item.cwd)) && " + (item.entrypoint == "codex" ? "codex resume \(sid)" : item.entrypoint == "agy" ? "agy --conversation \(sid)" : "claude --resume \(sid)")) }
         }
     }
 
@@ -877,12 +877,12 @@ struct TabButton: View {
 
     private var tabTitle: String {
         let t = terminal.isWeb ? (terminal.webTitle.isEmpty ? (terminal.url?.host ?? "New tab") : terminal.webTitle)
-            : terminal.isShell ? shellTitle : terminal.isCodex ? codexTitle : (item?.title ?? "New session")
+            : terminal.isShell ? shellTitle : (terminal.isAgent && !terminal.isClaude) ? agentTitle : (item?.title ?? "New session")
         return t.count > 28 ? String(t.prefix(27)) + "…" : t
     }
 
-    /// Codex tabs use the conversation's name or first message, else "Codex".
-    private var codexTitle: String { item?.title ?? "Codex" }
+    /// Codex and agy tabs use the conversation's name or first message, else the CLI's name.
+    private var agentTitle: String { item?.title ?? terminal.agent?.name ?? "Session" }
 
     /// Shell tabs use the title the shell sets (OSC 0/2), else "zsh — folder".
     private var shellTitle: String {
@@ -896,7 +896,7 @@ struct TabButton: View {
         HStack(spacing: 8) {
             if terminal.isWeb {
                 Image(systemName: "globe").font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 12)
-            } else if terminal.isCodex {
+            } else if terminal.isCodex || terminal.isAgy {
                 Image(systemName: "chevron.left.forwardslash.chevron.right").font(.system(size: 10)).foregroundStyle(.secondary).frame(width: 12)
             } else if terminal.isShell {
                 Image(systemName: "terminal").font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 12)
@@ -948,8 +948,10 @@ struct TabButton: View {
                 if terminal.isClaude {
                     Button(terminal.isNative ? "Switch to Terminal View" : "Switch to Native View") { model.toggleNative(terminal) }
                 }
-                Button("Fork Session to the Right") { model.fork(terminal) }
-                Button("Fork Session Below") { model.fork(terminal, zone: .bottom) }
+                if terminal.agent?.canFork == true {
+                    Button("Fork Session to the Right") { model.fork(terminal) }
+                    Button("Fork Session Below") { model.fork(terminal, zone: .bottom) }
+                }
                 Divider()
             }
             Button("Split Right") { model.split(terminal, .right) }
@@ -1237,7 +1239,7 @@ struct TerminalPane: View {
                 .padding(.leading, 8).padding(.trailing, 8).padding(.vertical, 4)
             if !terminal.running {
                 VStack(spacing: 10) {
-                    Text("\(terminal.isShell ? "Shell" : terminal.isCodex ? "Codex" : "Claude") exited\(terminal.exitCode.map { " (code \($0))" } ?? "")")
+                    Text("\(terminal.isShell ? "Shell" : terminal.agent?.name ?? "Session") exited\(terminal.exitCode.map { " (code \($0))" } ?? "")")
                         .font(.headline)
                     HStack {
                         Button("Restart") { terminal.restart() }.keyboardShortcut(.defaultAction)

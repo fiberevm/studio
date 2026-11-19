@@ -25,14 +25,17 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     private let claudeArgs: [String]
     /// .claude runs a Claude Code session; .codex runs OpenAI's Codex CLI; .shell is a plain terminal (⌃`),
     /// like VS Code's integrated terminal.
-    enum Kind { case claude, codex, shell, web }
+    enum Kind { case claude, codex, agy, shell, web }
     let kind: Kind
     var isShell: Bool { kind == .shell }
     var isClaude: Bool { kind == .claude }
     var isCodex: Bool { kind == .codex }
+    var isAgy: Bool { kind == .agy }
     /// A coding agent's session (Claude Code or Codex), as opposed to a plain terminal or web panel.
-    var isAgent: Bool { kind == .claude || kind == .codex }
-    var agent: Agent? { kind == .claude ? .claude : kind == .codex ? .codex : nil }
+    var isAgent: Bool { agent != nil }
+    var agent: Agent? {
+        switch kind { case .claude: return .claude; case .codex: return .codex; case .agy: return .agy; default: return nil }
+    }
 
     var isWeb: Bool { kind == .web }
 
@@ -128,6 +131,7 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
         case .shell: launchShell()
         case .claude: launch(claudeArgs)
         case .codex: launchCodex(claudeArgs)
+        case .agy: launchCLI(["agy"] + claudeArgs)
         case .web: running = true    // no process; the page lives in webView
         }
     }
@@ -152,14 +156,13 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
         case .shell: launchShell()
         // the same conversation, else the folder's latest
         case .codex: launchCodex(["resume"] + (sessionId.map { [$0] } ?? ["--last"]))
+        case .agy: launchCLI(["agy"] + (sessionId.map { ["--conversation", $0] } ?? ["--continue"]))
         default: launch(sessionId.map { ["--resume", $0] } ?? claudeArgs)
         }
     }
 
     /// A Codex CLI session, with the Studio MCP so it can drive the editor too.
     private func launchCodex(_ args: [String]) {
-        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
-        let dir = FileManager.default.fileExists(atPath: cwd) ? cwd : NSHomeDirectory()
         var opts: [String] = []
         if let exe = StudioControl.mcpExecutable {
             // Codex starts MCP servers with a minimal environment, so hand studio-mcp its tab and app explicitly.
@@ -168,7 +171,15 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
         }
         // options go before a subcommand's own arguments: `codex resume -c … --last`, `codex -c … "prompt"`
         let full = ["resume", "fork"].contains(args.first) ? [args[0]] + opts + args.dropFirst() : opts + args
-        let cmd = (["exec", "codex"] + full).map(shellQuote).joined(separator: " ")
+        launchCLI(["codex"] + full)
+    }
+
+    /// Run an agent CLI (`words`: the command and its arguments) through the login shell, so it resolves on
+    /// the user's PATH like in Terminal; hosted in tmux when sessions are kept alive.
+    private func launchCLI(_ words: [String]) {
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        let dir = FileManager.default.fileExists(atPath: cwd) ? cwd : NSHomeDirectory()
+        let cmd = (["exec"] + words).map(shellQuote).joined(separator: " ")
         if SessionHost.enabled { startHosted(command: [shell, "-l", "-i", "-c", cmd], dir: dir); return }
         view.startProcess(executable: shell, args: ["-l", "-i", "-c", cmd],
                           environment: Self.childEnvironment(tab: id), execName: nil, currentDirectory: dir)

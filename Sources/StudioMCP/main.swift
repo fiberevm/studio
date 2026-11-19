@@ -28,7 +28,7 @@ let tools: [Tool] = [
     Tool(name: "new_session",
          description: "Start a new agent session in a tab (the user's default CLI: Claude Code or Codex, unless agent says which). By default it opens beside you in your group; pass split to open it in a new pane on that side. Optionally give it a first prompt.",
          properties: ["prompt": ["type": "string", "description": "first message for the new session"],
-                      "agent": ["type": "string", "enum": ["claude", "codex"], "description": "which CLI (default: the user's setting)"],
+                      "agent": ["type": "string", "enum": ["claude", "codex", "agy"], "description": "which CLI (default: the user's setting): Claude Code, Codex or Antigravity"],
                       "split": direction,
                       "folder": ["type": "string", "description": "working directory (default: this project)"]],
          required: []),

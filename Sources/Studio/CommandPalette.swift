@@ -196,6 +196,7 @@ struct CommandPalette: View {
             cmd("Session: New Session", "⌘N", "plus") { m.newTab() },
             cmd("Session: New Claude Session", "", "sparkles") { m.select(m.store.newSession(in: m.folder, agent: .claude)) },
             cmd("Session: New Codex Session", "", "chevron.left.forwardslash.chevron.right") { m.select(m.store.newSession(in: m.folder, agent: .codex)) },
+            cmd("Session: New Antigravity Session", "", "chevron.left.forwardslash.chevron.right") { m.select(m.store.newSession(in: m.folder, agent: .agy)) },
             cmd("Terminal: New Terminal", "⌃`", "terminal") { m.newShellTab() },
             cmd("Web: Open URL…", "", "globe") { m.openWeb(nil, zone: .center) },
             cmd("Session: Next Up (waiting for you)", "⌘J", "arrow.turn.down.right") { m.goToNextUp() },

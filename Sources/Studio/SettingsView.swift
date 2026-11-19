@@ -36,10 +36,14 @@ enum CLI {
 
 /// The coding agent CLI a new session runs.
 enum Agent: String, CaseIterable, Identifiable {
-    case claude, codex
+    case claude, codex, agy
     var id: String { rawValue }
-    var name: String { self == .claude ? "Claude Code" : "Codex" }
-    var command: String { self == .claude ? "claude" : "codex" }
+    var name: String {
+        switch self { case .claude: return "Claude Code"; case .codex: return "Codex"; case .agy: return "Antigravity" }
+    }
+    var command: String { self == .claude ? "claude" : rawValue }
+    /// Can copy a conversation into a new session (agy has no fork).
+    var canFork: Bool { self != .agy }
     /// Settings → Sessions → Default agent.
     static var preferred: Agent { Pref.string(Pref.defaultAgent).flatMap(Agent.init(rawValue:)) ?? .claude }
 }
@@ -237,7 +241,7 @@ private struct SessionSettings: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Row(title: "Default agent",
-                detail: "The CLI a new session (⌘N, ⌘K, the new_session tool) opens. ⌘P → New Claude Session / New Codex Session opens the other one.") {
+                detail: "The CLI a new session (⌘N, ⌘K, the new_session tool) opens. ⌘P → New Claude / Codex / Antigravity Session opens another one.") {
                 Picker("", selection: $agent) {
                     ForEach(Agent.allCases) { a in
                         Text(a.name + (CLI.installed(a.command) ? "" : " (not installed)")).tag(a.rawValue)

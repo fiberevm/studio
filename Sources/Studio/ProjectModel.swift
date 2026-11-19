@@ -245,6 +245,7 @@ final class ProjectModel: ObservableObject {
     /// ⌘E: fork a session into a new pane beside it, so you can try another direction without losing this one.
     func fork(_ t: TerminalSession? = nil, zone: DropZone = .right) {
         guard let t = t ?? selectedTerminal, let agent = t.agent else { showToast("Select a session to fork"); return }
+        guard agent.canFork else { showToast("\(agent.name) can't fork a conversation"); return }
         guard let sid = t.sessionId, store.hasConversation(t) else { showToast("Nothing to fork yet: send a message first"); return }
         let g = group(containing: t.id) ?? activeGroup
         place(store.fork(sid, cwd: t.cwd, agent: agent), beside: g, zone: zone)
@@ -536,7 +537,8 @@ final class ProjectModel: ObservableObject {
                 func token(_ t: TerminalSession?) -> String? {
                     guard let t else { return nil }
                     if t.isWeb { return "web:" + (t.url?.absoluteString ?? "about:blank") }
-                    if t.isCodex, let sid = t.sessionId { return sid }   // restored like a Claude tab, by session id
+                    if t.isAgent, !t.isClaude, let sid = t.sessionId { return sid }   // restored like a Claude tab, by session id
+                    if t.isAgy { return "agy:" + t.cwd }   // not prompted yet: a fresh agy there
                     if t.isCodex {
                         // not prompted yet: like terminals: "codexh:<tab>|<host>|<cwd>", else "codex:<cwd>" (continues its last conversation)
                         if let h = t.hostName { return "codexh:\(t.id.uuidString)|\(h)|\(t.cwd)" }
@@ -595,6 +597,9 @@ final class ProjectModel: ObservableObject {
                         if parts.count == 3, let tab = UUID(uuidString: parts[0]) {
                             t = store.reattachCodex(tab: tab, host: parts[1], cwd: parts[2])
                         } else { t = nil }
+                    } else if sid.hasPrefix("agy:") {
+                        let cwd = String(sid.dropFirst(4))
+                        t = store.newAgy(in: FileManager.default.fileExists(atPath: cwd) ? cwd : folder)
                     } else if sid.hasPrefix("codex:") {
                         let cwd = String(sid.dropFirst(6))
                         t = store.newCodex(in: FileManager.default.fileExists(atPath: cwd) ? cwd : folder, resumeLast: true)

@@ -492,6 +492,7 @@ final class StudioControl {
         case "fork_session":
             let t = try tab()
             guard let agent = t.agent, let sid = t.sessionId else { throw ControlError(message: "that tab isn't a session with a conversation yet") }
+            guard agent.canFork else { throw ControlError(message: "\(agent.name) can't fork a conversation") }
             let f = store.fork(sid, cwd: t.cwd, agent: agent)
             model.place(f, beside: model.group(containing: t.id) ?? callerGroup, zone: try zone("split") ?? .right)
             return ["tab": f.id.uuidString]
@@ -607,7 +608,7 @@ final class StudioControl {
                             let item = m.item(for: t)
                             var d: [String: Any] = [
                                 "tab": t.id.uuidString,
-                                "kind": t.isWeb ? "web" : t.isShell ? "terminal" : t.isCodex ? "codex" : "claude",
+                                "kind": t.isWeb ? "web" : t.isShell ? "terminal" : t.agent?.rawValue ?? "claude",
                                 "title": t.isWeb ? (t.webTitle.isEmpty ? (t.url?.absoluteString ?? "web") : t.webTitle) : t.isShell ? (t.terminalTitle.isEmpty ? "terminal" : t.terminalTitle) : (item?.title ?? "New session"),
                                 "selected": g.selection == "t:\(t.id)",
                                 "running": t.running,
