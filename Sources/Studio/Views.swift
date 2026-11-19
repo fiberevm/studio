@@ -245,11 +245,7 @@ struct Sidebar: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Spacer()
-                Button { model.newTab() } label: {
-                    Image(systemName: "plus").font(.system(size: 12)).frame(width: 20, height: 20)
-                }
-                .buttonStyle(.borderless)
-                .help("New session in \(model.name) (⌘N)")
+                NewTabButton(width: 20, height: 20, help: "New session, terminal or browser in \(model.name)")
             }
             .padding(.leading, 16).padding(.trailing, 8)
             .frame(height: 30)
@@ -852,11 +848,7 @@ struct TabStrip: View {
                           attention: t.sessionId.map(model.store.attention.contains) ?? false)
                 Hairline(vertical: true)
             }
-            Button { model.activate(group); model.newTab() } label: {
-                Image(systemName: "plus").font(.system(size: 12)).frame(width: 30, height: topBarHeight)
-            }
-            .buttonStyle(.borderless)
-            .help("New tab (⌘N)")
+            NewTabButton(width: 30, height: topBarHeight, help: "New session, terminal or browser") { model.activate(group) }
             SwiftUI.Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity).background(WindowDragArea())
         }
     }
@@ -1533,7 +1525,9 @@ struct EmptyPane: View {
     @EnvironmentObject var model: ProjectModel
     var body: some View {
         VStack(spacing: 6) {
-            EmptyAction(title: "New Session", key: "⌘N") { model.activate(group); model.newTab() }
+            ForEach(Array(NewTabKind.available.enumerated()), id: \.element) { i, k in
+                EmptyAction(title: k.title, key: i == 0 ? "⌘N" : k.keyLabel) { model.activate(group); k.open(in: model) }
+            }
             if model.groups.count > 1 {
                 EmptyAction(title: "Close Pane", key: "⌘W") { model.closePane(group) }
             }
@@ -1555,7 +1549,7 @@ private struct EmptyAction: View {
                 Text(key).monospaced()
             }
             .font(.system(size: 12))
-            .frame(width: 170)
+            .frame(width: 230)
             .padding(.vertical, 4)
             .contentShape(Rectangle())
             .opacity(hover ? 0.75 : 0.4)

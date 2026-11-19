@@ -172,7 +172,7 @@ final class ProjectModel: ObservableObject {
         DispatchQueue.main.async { attempt(40) }   // up to 2s: a native view may still be starting
     }
 
-    func newTab() { select(store.newSession(in: folder)) }
+    func newTab(_ agent: Agent? = nil) { select(store.newSession(in: folder, agent: agent)) }
 
     private var restored = false
     private var launchObserver: Any?

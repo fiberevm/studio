@@ -97,9 +97,20 @@ struct AppCommands: Commands {
             Button("Toggle Native View") { project?.toggleNative() }
                 .keyboardShortcut("/")
                 .disabled(project == nil)
-            Button("New Terminal") { project?.newShellTab() }
-                .keyboardShortcut("`", modifiers: .control)
-                .disabled(project == nil)
+            Menu("New") {
+                ForEach(Agent.allCases) { a in
+                    Button("\(a.name) Session") { project?.newTab(a) }
+                        .keyboardShortcut(NewTabKind.agent(a).shortcut)
+                        .disabled(project == nil || !AgentChecker.shared.isInstalled(a))
+                }
+                Divider()
+                Button("Terminal") { project?.newShellTab() }
+                    .keyboardShortcut(NewTabKind.terminal.shortcut)
+                    .disabled(project == nil)
+                Button("Web Browser") { project?.openWeb(nil, zone: .center) }
+                    .keyboardShortcut(NewTabKind.browser.shortcut)
+                    .disabled(project == nil)
+            }
             Button("Open Project…") {
                 if let f = pickFolder(prompt: "Open", startingAt: project.map { ($0.folder as NSString).deletingLastPathComponent }) {
                     openWindow(value: f)

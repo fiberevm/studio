@@ -43,6 +43,7 @@ happened. Studio is built around one idea: **you should only look at a session w
 - **Closing a tab never loses a conversation.** It ends the session; <kbd>⌘P</kbd> resumes it any time, right where it left off.
 - **Sessions survive restarts.** Every tab runs in a hidden tmux session that Studio only attaches to. Quit or update Studio and Claude keeps working: in-progress turns, shell commands, dev servers and local chains carry on, and the next launch reattaches every tab, with the same layout and the same processes. Without tmux, or with *Settings → Sessions → Keep sessions running* off, Studio resumes conversations with `claude --resume` instead.
 - **Plain terminals** with <kbd>⌃`</kbd>, next to your sessions, just like VS Code.
+- **One + for everything.** The + in the tab bar and sidebar opens a menu of what a new tab can be: a session for each agent CLI you have installed (default first), a terminal, a web browser, or a session on one of your workers, each with its shortcut.
 - **Drag and drop** files or images onto a session to paste their paths.
 
 ### Productivity features
@@ -182,7 +183,9 @@ open build/Studio.app --args --resume <session-id>        # resume a specific se
 | <kbd>⌘E</kbd> | Fork the current session into a new pane to the right |
 | <kbd>⌘/</kbd> | Toggle native view (Studio renders the session) / terminal view |
 | <kbd>⌘T</kbd> or <kbd>⌘N</kbd> | New tab with a session (Claude Code, Codex or Antigravity, per Settings) in this project |
+| <kbd>⌃⌘1</kbd> / <kbd>⌃⌘2</kbd> / <kbd>⌃⌘3</kbd> | New Claude Code / Codex / Antigravity session, whatever the default |
 | <kbd>⌃`</kbd> | New terminal tab |
+| <kbd>⇧⌘B</kbd> | New web browser tab |
 | <kbd>⇧⌘N</kbd> | Open another project window |
 | <kbd>⌘[</kbd> / <kbd>⌘]</kbd> | Previous / next tab |
 | <kbd>⌘1</kbd>…<kbd>⌘9</kbd> | Jump to tab (picking a session anywhere puts the cursor in its input) |

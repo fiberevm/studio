@@ -16,13 +16,29 @@ final class AgentChecker: ObservableObject {
     }
 
     @Published private(set) var status: [Agent: Status] = [:]
+    /// Which CLIs are on PATH (for the + menu): one quick `command -v` at launch, updated by full checks.
+    @Published private(set) var installed: [Agent: Bool] = [:]
+
+    private init() {
+        Task.detached(priority: .utility) {
+            let script = Agent.allCases.map { "command -v \($0.command) >/dev/null && echo \($0.rawValue)" }.joined(separator: "; ")
+            let out = Self.run(script + "; true", timeout: 8).out
+            let have = Set(out.split(whereSeparator: \.isNewline).map(String.init))
+            await MainActor.run {
+                for a in Agent.allCases where self.installed[a] == nil { self.installed[a] = have.contains(a.rawValue) }
+            }
+        }
+    }
+
+    /// Installed, or not checked yet (so the menu doesn't hide an agent while the check runs). Claude Code always shows.
+    func isInstalled(_ a: Agent) -> Bool { a == .claude || installed[a] ?? true }
 
     func refresh() {
         for a in Agent.allCases {
             status[a] = Status()
             Task.detached(priority: .utility) {
                 let s = Self.check(a)
-                await MainActor.run { self.status[a] = s }
+                await MainActor.run { self.status[a] = s; if !s.checking { self.installed[a] = s.path != nil } }
             }
         }
     }
