@@ -469,38 +469,98 @@ final class AppActivity: ObservableObject {
     }
 }
 
-/// A working session's icon breathing in and out. Drawn at ~10 fps rather than as a repeating symbol effect,
-/// which redraws at the display's full rate (up to 120 fps) for as long as any session works.
+/// Status animations run as Core Animation on a layer of their own, so the render server plays them and
+/// Studio does no work per frame. (Animated inside SwiftUI, every frame re-laid-out and repainted the
+/// whole tab bar or sidebar, which SwiftUI draws as one layer.) They stop while Studio is in the
+/// background (or always run with --animate-in-background, for measuring).
+private func animationsLive(_ a: AppActivity) -> Bool {
+    a.live || CommandLine.arguments.contains("--animate-in-background")
+}
+
+/// A working session's icon breathing in and out: the SwiftUI icon is drawn once into its own layer,
+/// and only that layer's opacity animates.
 struct SlowPulse: ViewModifier {
     let active: Bool
     @ObservedObject private var activity = AppActivity.shared
     func body(content: Content) -> some View {
-        let live = activity.live
         if active {
-            TimelineView(.animation(minimumInterval: 0.1, paused: !live)) { ctx in
-                let t = ctx.date.timeIntervalSinceReferenceDate
-                content.opacity(live ? 0.6 + 0.4 * (0.5 + 0.5 * cos(t * 2 * .pi / 1.6)) : 1)
-            }
+            content.hidden().overlay(PulseHost(content: content, live: animationsLive(activity)))
         } else {
             content
         }
     }
 }
 
-/// Blocked on you (permission prompt, question): a red dot with a slow pulse, so it reads as different from "done".
+private struct PulseHost<C: View>: NSViewRepresentable {
+    let content: C
+    let live: Bool
+    func makeNSView(context: Context) -> NSView {
+        let box = LayerBox()
+        let host = NSHostingView(rootView: AnyView(content))
+        host.translatesAutoresizingMaskIntoConstraints = false
+        box.addSubview(host)
+        NSLayoutConstraint.activate([host.centerXAnchor.constraint(equalTo: box.centerXAnchor),
+                                     host.centerYAnchor.constraint(equalTo: box.centerYAnchor)])
+        return box
+    }
+    func updateNSView(_ box: NSView, context: Context) {
+        (box.subviews.first as? NSHostingView<AnyView>)?.rootView = AnyView(content)
+        guard let layer = box.layer else { return }
+        if live, layer.animation(forKey: "pulse") == nil {
+            let a = CABasicAnimation(keyPath: "opacity")
+            a.fromValue = 1.0; a.toValue = 0.45
+            a.duration = 0.8; a.autoreverses = true; a.repeatCount = .infinity
+            a.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            layer.add(a, forKey: "pulse")
+        } else if !live {
+            layer.removeAnimation(forKey: "pulse")
+        }
+    }
+}
+
+/// A layer-backed view that keeps its animations when it moves between windows or is re-shown.
+private final class LayerBox: NSView {
+    override init(frame: NSRect) { super.init(frame: frame); wantsLayer = true }
+    required init?(coder: NSCoder) { fatalError() }
+    /// What the running animation was built from; rebuild only when it changes.
+    var built: AnyHashable?
+    override var isFlipped: Bool { true }
+    override func hitTest(_ p: NSPoint) -> NSView? { nil }   // clicks go to the tab underneath
+}
+
+/// Blocked on you (permission prompt, question): a red dot with a ring that ripples out, so it reads as different from "done".
 struct NeedsYouDot: View {
     static let red = SwiftUI.Color(red: 0.95, green: 0.30, blue: 0.30)
     @ObservedObject private var activity = AppActivity.shared
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 15, paused: !activity.live)) { ctx in
-            let t = ctx.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.4) / 1.4
-            ZStack {
-                Circle().stroke(Self.red.opacity(0.7 * (1 - t)), lineWidth: 1.5)
-                    .frame(width: 7 + 6 * t, height: 7 + 6 * t)
-                Circle().fill(Self.red).frame(width: 7, height: 7)
-            }
+        NeedsYouLayer(live: animationsLive(activity)).frame(width: 12, height: 12)
+    }
+}
+
+private struct NeedsYouLayer: NSViewRepresentable {
+    let live: Bool
+    func makeNSView(context: Context) -> NSView {
+        let box = LayerBox(frame: NSRect(x: 0, y: 0, width: 12, height: 12))
+        let red = NSColor(NeedsYouDot.red).cgColor
+        let ring = CAShapeLayer()
+        ring.path = CGPath(ellipseIn: CGRect(x: -3.5, y: -3.5, width: 7, height: 7), transform: nil)
+        ring.fillColor = nil; ring.strokeColor = red; ring.lineWidth = 1.5; ring.opacity = 0
+        let dot = CAShapeLayer()
+        dot.path = CGPath(ellipseIn: CGRect(x: -3.5, y: -3.5, width: 7, height: 7), transform: nil)
+        dot.fillColor = red
+        for l in [ring, dot] { l.position = CGPoint(x: 6, y: 6); box.layer?.addSublayer(l) }
+        return box
+    }
+    func updateNSView(_ box: NSView, context: Context) {
+        guard let ring = box.layer?.sublayers?.first else { return }
+        if live, ring.animation(forKey: "ripple") == nil {
+            let scale = CABasicAnimation(keyPath: "transform.scale"); scale.fromValue = 1.0; scale.toValue = 13.0 / 7
+            let fade = CABasicAnimation(keyPath: "opacity"); fade.fromValue = 0.7; fade.toValue = 0.0
+            let g = CAAnimationGroup(); g.animations = [scale, fade]; g.duration = 1.4; g.repeatCount = .infinity
+            ring.add(g, forKey: "ripple")
+        } else if !live {
+            ring.removeAnimation(forKey: "ripple")
         }
-        .frame(width: 12, height: 12)
     }
 }
 
@@ -509,29 +569,52 @@ struct NeedsYouDot: View {
 struct ClaudeSpinner: View {
     var size: CGFloat = 12
     static let orange = SwiftUI.Color(red: 0.91, green: 0.53, blue: 0.33)
-    private static let order = [0, 1, 3, 2]   // top-left → top-right → bottom-right → bottom-left
-    private static let step = 0.16
     @ObservedObject private var activity = AppActivity.shared
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: Self.step, paused: !activity.live)) { ctx in
-            let tick = Int(ctx.date.timeIntervalSinceReferenceDate / Self.step)
-            let cell = (size - 2) / 2
-            let base = SwiftUI.Color(nsColor: Theme.foreground)
-            VStack(spacing: 2) {
-                ForEach(0..<2) { r in
-                    HStack(spacing: 2) {
-                        ForEach(0..<2) { c in
-                            let pos = Self.order.firstIndex(of: r * 2 + c)!
-                            let age = (tick - pos) % 4 + (tick - pos < 0 ? 4 : 0)   // 0 = lit now
-                            RoundedRectangle(cornerRadius: 1)
-                                .fill(age == 0 ? Self.orange : age == 1 ? Self.orange.opacity(0.45) : base.opacity(0.16))
-                                .frame(width: cell, height: cell)
-                        }
-                    }
-                }
-            }
+        SpinnerLayer(size: size, base: NSColor(SwiftUI.Color(nsColor: Theme.foreground).opacity(0.16)),
+                     live: animationsLive(activity))
             .frame(width: size, height: size)
+    }
+}
+
+private struct SpinnerLayer: NSViewRepresentable {
+    let size: CGFloat
+    let base: NSColor
+    let live: Bool
+    private static let order = [0, 1, 3, 2]   // top-left → top-right → bottom-right → bottom-left
+    private static let step = 0.16
+
+    func makeNSView(context: Context) -> NSView {
+        let box = LayerBox(frame: NSRect(x: 0, y: 0, width: size, height: size))
+        let cell = (size - 2) / 2
+        for i in 0..<4 {
+            let l = CALayer()
+            l.cornerRadius = 1
+            l.frame = CGRect(x: CGFloat(i % 2) * (cell + 2), y: CGFloat(i / 2) * (cell + 2), width: cell, height: cell)
+            box.layer?.addSublayer(l)
+        }
+        return box
+    }
+    func updateNSView(_ view: NSView, context: Context) {
+        guard let box = view as? LayerBox else { return }
+        let key = AnyHashable([AnyHashable(live), AnyHashable(base)])
+        guard box.built != key else { return }   // SwiftUI updates often; restarting would stutter
+        box.built = key
+        let orange = NSColor(ClaudeSpinner.orange)
+        let colors = [orange.cgColor, orange.withAlphaComponent(0.45).cgColor, base.cgColor, base.cgColor]
+        for (i, l) in (box.layer?.sublayers ?? []).enumerated() {
+            l.backgroundColor = base.cgColor
+            guard live else { l.removeAnimation(forKey: "walk"); continue }
+            // each pane is lit, then trails, then rests; its turn comes `pos` steps after the first pane's
+            let pos = Self.order.firstIndex(of: i)!
+            let a = CAKeyframeAnimation(keyPath: "backgroundColor")
+            a.values = colors
+            a.calculationMode = .discrete
+            a.duration = Self.step * 4
+            a.repeatCount = .infinity
+            a.timeOffset = Self.step * Double(4 - pos)
+            l.add(a, forKey: "walk")   // re-added on theme changes so the base color follows
         }
     }
 }
