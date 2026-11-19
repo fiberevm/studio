@@ -25,6 +25,31 @@ final class StudioControl {
     nonisolated(unsafe) static var mcpConfigPath: String?
     /// The studio-mcp binary (Codex takes it as `-c mcp_servers.studio.command=…`).
     nonisolated(unsafe) static var mcpExecutable: String?
+    /// The Studio and Sandbox skills as plain instructions, for agents that take instructions rather than
+    /// Claude plugins (Codex's developer_instructions).
+    static let skillText: String? = {
+        guard let dir = pluginDir else { return nil }
+        let parts = ["studio", "sandbox"].compactMap { name -> String? in
+            guard let s = try? String(contentsOfFile: dir + "/skills/\(name)/SKILL.md", encoding: .utf8) else { return nil }
+            // drop the YAML front matter
+            if s.hasPrefix("---"), let end = s.range(of: "\n---", range: s.index(s.startIndex, offsetBy: 3)..<s.endIndex) {
+                return String(s[end.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            return s
+        }
+        return parts.isEmpty ? nil : "You are running inside Studio, which gives you its tools through the `studio` MCP server.\n\n" + parts.joined(separator: "\n\n")
+    }()
+
+    /// The same as a TOML basic string, for `codex -c developer_instructions=…`.
+    static var skillTOML: String? {
+        // never replace instructions the user set in their own Codex config
+        if let cfg = try? String(contentsOf: CodexPaths.home.appendingPathComponent("config.toml"), encoding: .utf8),
+           cfg.range(of: #"(?m)^\s*developer_instructions\s*="#, options: .regularExpression) != nil { return nil }
+        guard let t = skillText, let d = try? JSONSerialization.data(withJSONObject: [t], options: [.withoutEscapingSlashes]),
+              let s = String(data: d, encoding: .utf8) else { return nil }
+        return String(s.dropFirst().dropLast())   // the JSON string literal is a valid TOML basic string
+    }
+
     /// Studio's Claude plugin (Studio + Sandbox skills) bundled in the app, if present.
     static let pluginDir: String? = {
         guard let r = Bundle.main.resourcePath else { return nil }
@@ -570,7 +595,7 @@ final class StudioControl {
 
         case "set_view":
             let t = try tab()
-            guard t.isClaude else { throw ControlError(message: "terminals have no native view") }
+            guard t.isAgent else { throw ControlError(message: "terminals have no native view") }
             guard t.sessionId != nil else { throw ControlError(message: "the session needs a first message before switching views") }
             let wantNative = (p["view"] as? String ?? "native") == "native"
             if wantNative != t.isNative { t.toggleNative() }

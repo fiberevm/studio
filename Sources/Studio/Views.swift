@@ -945,9 +945,7 @@ struct TabButton: View {
         .onDrag { model.peekTab = nil; return TabDrag.provider(terminal) }
         .contextMenu {
             if terminal.isAgent {
-                if terminal.isClaude {
-                    Button(terminal.isNative ? "Switch to Terminal View" : "Switch to Native View") { model.toggleNative(terminal) }
-                }
+                Button(terminal.isNative ? "Switch to Terminal View" : "Switch to Native View") { model.toggleNative(terminal) }
                 if terminal.agent?.canFork == true {
                     Button("Fork Session to the Right") { model.fork(terminal) }
                     Button("Fork Session Below") { model.fork(terminal, zone: .bottom) }
@@ -1059,9 +1057,12 @@ struct SessionStatusBar: View {
             else if terminal.isShell { stat("folder", abbreviatePath(terminal.cwd), help: "Started in") }
             if let b = st?.gitBranch { stat("arrow.triangle.branch", b, help: "Git branch") }
             if let m = st?.model { stat("cpu", prettyModel(m), help: "Model: \(m)") }
-            if let st {
-                stat("arrow.up", formatTokens(st.tokensIn), help: "Tokens sent: \(st.tokensIn.formatted()) (incl. cache)")
-                stat("arrow.down", formatTokens(st.tokensOut), help: "Tokens received: \(st.tokensOut.formatted())")
+            // agy keeps no token counts on disk; its native view reports them per turn
+            let tokens: (Int, Int)? = st.flatMap { $0.tokensIn > 0 ? ($0.tokensIn, $0.tokensOut) : nil }
+                ?? terminal.native.flatMap { $0.tokensIn > 0 ? ($0.tokensIn, $0.tokensOut) : nil }
+            if let (i, o) = tokens {
+                stat("arrow.up", formatTokens(i), help: "Tokens sent: \(i.formatted()) (incl. cache)")
+                stat("arrow.down", formatTokens(o), help: "Tokens received: \(o.formatted())")
             }
             if terminal.isAgent { SandboxChips(registry: model.store.sandboxes, terminal: terminal) }
             Spacer()

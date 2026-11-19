@@ -281,6 +281,7 @@ private struct AgentRow: View {
     let status: AgentChecker.Status
     let isDefault: Bool
     @State private var note: String?
+    @State private var busy = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -295,10 +296,33 @@ private struct AgentRow: View {
                 state
             }
             detail.font(.system(size: 11.5, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
+            if agent == .agy, status.path != nil, let tools = status.studioTools { agyTools(tools) }
             if let note { Text(note).font(.system(size: 11.5)).foregroundStyle(.secondary) }
         }
         .padding(.vertical, 12)
         .overlay(alignment: .bottom) { Hairline() }
+    }
+
+    /// agy has no per-session MCP option: Studio's tools and skills come as an agy plugin, installed on request.
+    @ViewBuilder private func agyTools(_ installed: Bool) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: installed ? "checkmark.circle.fill" : "puzzlepiece.extension")
+                .foregroundStyle(installed ? SwiftUI.Color.green : SwiftUI.Color.secondary)
+            Text(installed ? "Studio tools and skills installed in agy" : "Give agy Studio's tools and skills (the studio MCP server, workers, sandboxes)")
+                .font(.system(size: 12))
+            Spacer()
+            if busy { ProgressView().controlSize(.small) }
+            Button(installed ? "Remove" : "Install") {
+                busy = true
+                Task {
+                    let err = installed ? await AgyPlugin.uninstall() : await AgyPlugin.install()
+                    busy = false
+                    note = err.map { "agy: \($0)" } ?? (installed ? "Removed from agy." : "Installed: new agy sessions have Studio's tools.")
+                    AgentChecker.shared.refresh()
+                }
+            }
+            .disabled(busy)
+        }
     }
 
     @ViewBuilder private var state: some View {

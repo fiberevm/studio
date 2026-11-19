@@ -75,7 +75,7 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
         super.init()
         Theme.apply(to: view, fontSize: fontSize)
         view.processDelegate = self
-        if native, kind == .claude, let sid = sessionId { startNative(sid) } else { start() }
+        if native, agent != nil, let sid = sessionId { startNative(sid) } else { start() }
     }
 
     // MARK: Native (non-TUI) mode
@@ -94,7 +94,7 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     /// ⌘\: swap between Claude's terminal UI and the native view. Only one claude process ever runs
     /// for the conversation: the old one is stopped and the new one resumes it.
     func toggleNative() {
-        guard isClaude else { return }
+        guard isAgent else { return }
         if let n = native {
             n.stop()
             native = nil
@@ -112,7 +112,7 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     }
 
     private func startNative(_ sid: String) {
-        let chat = NativeChat(cwd: cwd, tab: id, resume: sid)
+        let chat = NativeChat(cwd: cwd, tab: id, resume: sid, agent: agent ?? .claude)
         chat.onSessionId = { [weak self] s in self?.sessionId = s }
         native = chat
         nativeObserver = chat.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
@@ -196,6 +196,8 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
             opts += ["-c", "mcp_servers.studio.command=\"\(exe)\"",
                      "-c", "mcp_servers.studio.env={STUDIO_TAB=\"\(id.uuidString)\", STUDIO_CONTROL_FILE=\"\(StudioControl.controlFilePath)\"}"]
         }
+        // the Studio skill, as instructions (Codex doesn't load Claude plugins)
+        if let skill = MainActor.assumeIsolated({ StudioControl.skillTOML }) { opts += ["-c", "developer_instructions=" + skill] }
         // options go before a subcommand's own arguments: `codex resume -c … --last`, `codex -c … "prompt"`
         let full = ["resume", "fork"].contains(args.first) ? [args[0]] + opts + args.dropFirst() : opts + args
         launchCLI(["codex"] + full)

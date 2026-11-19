@@ -252,7 +252,7 @@ final class ProjectModel: ObservableObject {
 
     /// ⌘/: switch the session between Claude's terminal UI and Studio's native view.
     func toggleNative(_ t: TerminalSession? = nil) {
-        guard let t = t ?? selectedTerminal, t.isClaude else { showToast("Select a Claude session"); return }
+        guard let t = t ?? selectedTerminal, t.isAgent else { showToast("Select an agent session"); return }
         guard t.sessionId != nil else { showToast("Send a message first, then switch views"); return }
         let goingNative = !t.isNative
         t.toggleNative()

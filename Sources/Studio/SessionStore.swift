@@ -124,7 +124,10 @@ final class SessionStore: ObservableObject {
                 if let id = agyScanner.started(in: cwd, since: since, excluding: agyTaken) { found[tab] = id; agyTaken.insert(id) }
             }
             let ag = agyTaken.isEmpty ? [:] : agyScanner.scan(ids: agyTaken)
-            for (id, a) in ag { dict[id] = a.record }
+            for (id, a) in ag {
+                dict[id] = a.record
+                if let m = a.model { var t = TranscriptStats(); t.model = m; st[id] = t }   // no token counts on disk
+            }
             DispatchQueue.main.async {
                 if self.agy != ag { self.agy = ag }
                 for (tab, id) in found { self.terminals.first { $0.id == tab && $0.sessionId == nil }?.sessionId = id }
@@ -284,13 +287,14 @@ final class SessionStore: ObservableObject {
             let rec = sid.flatMap { records[$0] }
             let waiting = t.isCodex ? codexWaiting.contains(t.id) : sid.flatMap { agy[$0] }?.waiting == true
             let busy = t.isCodex ? sid.flatMap { codex[$0] }?.busy == true : sid.flatMap { agy[$0] }?.busy == true
-            let status: SessionStatus = !t.running ? .exited : waiting ? .waiting : busy ? .working : .idle
+            let status: SessionStatus = t.native?.status
+                ?? (!t.running ? .exited : waiting ? .waiting : busy ? .working : .idle)
             items.append(ActiveItem(
                 key: "t:\(t.id)", sessionId: sid,
                 title: title(rec: rec, info: nil, fallback: t.agent?.name ?? "Session"),
                 cwd: rec?.cwd ?? t.cwd, status: status, inApp: true, entrypoint: t.agent?.rawValue, pid: t.sessionPid,
                 startedAt: t.createdAt, updatedAt: rec?.lastActivity ?? t.createdAt,
-                activity: status == .working ? (rec?.activity ?? .thinking) : nil))
+                activity: t.native.map { $0.activity } ?? (status == .working ? (rec?.activity ?? .thinking) : nil)))
         }
         let workers = WorkerRegistry.shared
         for t in terminals where t.isWorker {
@@ -408,7 +412,9 @@ final class SessionStore: ObservableObject {
                 let host = e["tmux"].flatMap { SessionHost.enabled && SessionHost.exists($0) ? $0 : nil }
                 guard host != nil || scanQueue.sync(execute: { agent == .codex ? codexScanner.exists(sid) : agyScanner.exists(sid) })
                 else { forgotten.insert(sid); continue }
-                let t = agent == .codex ? newCodex(in: cwd, resume: sid, id: tab, host: host) : newAgy(in: cwd, resume: sid, id: tab, host: host)
+                let native = TerminalSession.nativeSessions.contains(sid)
+                let t = agent == .codex ? newCodex(in: cwd, resume: sid, id: tab, host: native ? nil : host, native: native)
+                                        : newAgy(in: cwd, resume: sid, id: tab, host: native ? nil : host, native: native)
                 out.append(t)
                 continue
             }
@@ -514,11 +520,11 @@ final class SessionStore: ObservableObject {
     /// A Codex CLI session: new, continuing conversation `resume` (or the folder's latest with `resumeLast`),
     /// or a copy of conversation `fork`. `host` reattaches to a tab still running in tmux.
     func newCodex(in cwd: String, prompt: String? = nil, resume: String? = nil, resumeLast: Bool = false,
-                  fork: String? = nil, id: UUID = UUID(), host: String? = nil) -> TerminalSession {
+                  fork: String? = nil, id: UUID = UUID(), host: String? = nil, native: Bool = false) -> TerminalSession {
         let args = resume.map { ["resume", $0] } ?? fork.map { ["fork", $0] }
             ?? (resumeLast ? ["resume", "--last"] : prompt.map { ["--", $0] } ?? [])
         let t = TerminalSession(cwd: cwd, claudeArgs: args, sessionId: resume, fontSize: fontSize, kind: .codex,
-                                id: id, host: host)
+                                native: native, id: id, host: host)
         add(t)
         return t
     }
@@ -533,9 +539,11 @@ final class SessionStore: ObservableObject {
     }
 
     /// An Antigravity (`agy`) session: new (with a first prompt), or continuing conversation `resume`.
-    func newAgy(in cwd: String, prompt: String? = nil, resume: String? = nil, id: UUID = UUID(), host: String? = nil) -> TerminalSession {
+    func newAgy(in cwd: String, prompt: String? = nil, resume: String? = nil, id: UUID = UUID(), host: String? = nil,
+                native: Bool = false) -> TerminalSession {
         let args = resume.map { ["--conversation", $0] } ?? prompt.map { ["-i", $0] } ?? []
-        let t = TerminalSession(cwd: cwd, claudeArgs: args, sessionId: resume, fontSize: fontSize, kind: .agy, id: id, host: host)
+        let t = TerminalSession(cwd: cwd, claudeArgs: args, sessionId: resume, fontSize: fontSize, kind: .agy,
+                                native: native, id: id, host: host)
         add(t)
         return t
     }

@@ -139,8 +139,13 @@ func formatTokens(_ n: Int) -> String {
     }
 }
 
-/// "claude-opus-5-5" → "Opus 5.5"
+/// "claude-opus-5-5" → "Opus 5.5", "gemini-3.8-flash-high" → "Gemini 3.8 Flash (High)"
 func prettyModel(_ id: String) -> String {
+    if id.hasPrefix("gemini-") {
+        var parts = id.split(separator: "-").map { $0.prefix(1).uppercased() + $0.dropFirst() }
+        let level = ["High", "Medium", "Low", "Xhigh", "Thinking"].contains(parts.last ?? "") ? parts.removeLast() : nil
+        return parts.joined(separator: " ") + (level.map { " (\($0))" } ?? "")
+    }
     let parts = id.split(separator: "-").map(String.init)
     guard parts.first == "claude", parts.count >= 2 else { return id }
     let name = parts[1].capitalized

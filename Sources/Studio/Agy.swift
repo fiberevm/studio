@@ -15,6 +15,7 @@ struct AgySession: Equatable {
     var record: SessionRecord
     var busy = false       // generating or running a command
     var waiting = false    // asking for permission
+    var model: String?     // e.g. gemini-3.8-flash-high
 }
 
 /// Reads agy's conversations cheaply: one small read-only query per open conversation per scan.
@@ -27,6 +28,7 @@ final class AgyScanner {
     private var unreadable: Set<String> = []      // databases without a folder (yet)
     private var prompts: [Prompt] = []
     private var historySize: UInt64 = 0
+    private var lastBusy: [String: Date] = [:]    // when each conversation last had a step running
 
     // Step statuses, from agy 1.5: 2 running a command, 8 generating, 9 waiting for permission, 3 done.
     private static let running: Set<Int32> = [2, 8]
@@ -90,8 +92,13 @@ final class AgyScanner {
             let path = AgyPaths.conversations.appendingPathComponent(id + ".db").path
             let statuses = Self.query(path, "SELECT status FROM steps WHERE status != 3").map { Set($0) } ?? []
             s.waiting = statuses.contains(Self.asking)
-            // between steps every step reads done for a moment; a write in the last 3s still counts as working
-            s.busy = !s.waiting && (!statuses.isDisjoint(with: Self.running) || s.record.lastActivity > Date().addingTimeInterval(-3))
+            s.model = Self.model(path)
+            // between steps every step reads done for a moment: still working if it was seconds ago
+            // (agy also writes its database while idle, so file times can't tell)
+            let running = !statuses.isDisjoint(with: Self.running)
+            if running { lastBusy[id] = Date() }
+            s.busy = !s.waiting && (running || lastBusy[id].map { Date().timeIntervalSince($0) < 4 } == true)
+            s.record.lastReply = AgyHistory.lastReply(path)
             out[id] = s
         }
         return out
@@ -116,6 +123,19 @@ final class AgyScanner {
     }
 
     // MARK: SQLite
+
+    private static let modelPattern = try! NSRegularExpression(
+        pattern: #"(gemini-\d[\w.]*(?:-[a-z0-9]+)*|claude-(?:opus|sonnet|haiku)[\w.-]*|gpt-oss[\w.-]*)"#)
+
+    /// The model the conversation runs on, from its newest executor record (a protobuf blob; the id is a plain
+    /// string in it). Prefers ids with a level (…-high), which is what agy's own model list shows.
+    private static func model(_ path: String) -> String? {
+        guard let blob = queryBlob(path, "SELECT data FROM executor_metadata ORDER BY idx DESC LIMIT 1") else { return nil }
+        let text = String(decoding: blob.map { $0 >= 0x20 && $0 < 0x7F ? $0 : 0x20 }, as: UTF8.self)
+        let ns = text as NSString
+        let ids = modelPattern.matches(in: text, range: NSRange(location: 0, length: ns.length)).map { ns.substring(with: $0.range) }
+        return ids.last { $0.range(of: #"-(high|medium|low|xhigh|thinking)$"#, options: .regularExpression) != nil } ?? ids.last
+    }
 
     /// The folder in the conversation's metadata (a file:// URL inside a protobuf blob).
     private static func workspace(_ path: String) -> String? {
@@ -166,4 +186,56 @@ final class AgyScanner {
 func canonicalPath(_ p: String) -> String {
     let r = (p as NSString).resolvingSymlinksInPath
     return r.hasPrefix("/private/") ? String(r.dropFirst(8)) : r
+}
+
+/// Gives agy Studio's tools and skills. agy has no per-session MCP option, so Studio installs a small agy plugin
+/// (once, when you ask, in Settings → Agents): the Studio and Sandbox skills plus the studio MCP server. agy passes
+/// its environment to MCP servers, so each agy tab's tools know which tab they're in.
+enum AgyPlugin {
+    static let name = "studio"
+
+    /// The plugin's source folder, rebuilt from the app bundle on install.
+    static var dir: URL { URL(fileURLWithPath: StudioControl.supportDirPath).appendingPathComponent("agy-plugin", isDirectory: true) }
+
+    /// Whether agy lists the plugin as installed.
+    nonisolated static func isInstalled() -> Bool {
+        let r = AgentChecker.run("agy plugin list --json")
+        guard let d = r.out.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: d) else { return r.out.contains("\"\(name)\"") }
+        let list = (o as? [[String: Any]]) ?? ((o as? [String: Any])?["plugins"] as? [[String: Any]]) ?? []
+        return list.contains { ($0["name"] as? String) == name }
+    }
+
+    /// Build the plugin from this app's bundle and install it in agy. Returns agy's error, if any.
+    @MainActor static func install() async -> String? {
+        do { try write() } catch { return error.localizedDescription }
+        let path = dir.path
+        return await Task.detached {
+            _ = AgentChecker.run("agy plugin uninstall \(name)")   // reinstall over an older copy
+            let r = AgentChecker.run("agy plugin install " + shellQuote(path) + " 2>&1", timeout: 30)
+            return r.code == 0 ? nil : r.out.trimmingCharacters(in: .whitespacesAndNewlines)
+        }.value
+    }
+
+    static func uninstall() async -> String? {
+        await Task.detached {
+            let r = AgentChecker.run("agy plugin uninstall \(name) 2>&1", timeout: 30)
+            return r.code == 0 ? nil : r.out.trimmingCharacters(in: .whitespacesAndNewlines)
+        }.value
+    }
+
+    @MainActor static func write() throws {
+        let fm = FileManager.default
+        try? fm.removeItem(at: dir)
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        let manifest: [String: Any] = ["name": name, "version": "1.0.0",
+                                       "description": "Studio: drive the editor (tabs, splits, terminals, web panels, workers) and sandboxes."]
+        try JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted]).write(to: dir.appendingPathComponent("plugin.json"))
+        if let src = StudioControl.pluginDir {
+            try fm.copyItem(atPath: src + "/skills", toPath: dir.appendingPathComponent("skills").path)
+        }
+        let exe = ((Bundle.main.executablePath ?? "") as NSString).deletingLastPathComponent + "/studio-mcp"
+        let mcp: [String: Any] = ["mcpServers": ["studio": ["command": exe, "args": [] as [String]]]]
+        try JSONSerialization.data(withJSONObject: mcp, options: [.prettyPrinted, .withoutEscapingSlashes])
+            .write(to: dir.appendingPathComponent("mcp_config.json"))
+    }
 }

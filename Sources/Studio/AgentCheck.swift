@@ -12,6 +12,7 @@ final class AgentChecker: ObservableObject {
         var version: String?
         var loggedIn: Bool?        // nil: couldn't tell
         var account: String?       // how it's signed in, e.g. "claude.ai", "ChatGPT"
+        var studioTools: Bool?     // agy: whether Studio's plugin (tools + skills) is installed
     }
 
     @Published private(set) var status: [Agent: Status] = [:]
@@ -68,12 +69,13 @@ final class AgentChecker: ObservableObject {
             // no status command: listing models needs a signed-in account (it asks Google's servers)
             let r = run("agy models", timeout: 20)
             s.loggedIn = r.code == 0 && r.out.contains("\t")
+            s.studioTools = AgyPlugin.isInstalled()
         }
         return s
     }
 
     /// Run a command through the login shell; gives up after `timeout` seconds.
-    nonisolated private static func run(_ script: String, timeout: Double = 10) -> (code: Int32, out: String) {
+    nonisolated static func run(_ script: String, timeout: Double = 10) -> (code: Int32, out: String) {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
         p.arguments = ["-l", "-c", script]

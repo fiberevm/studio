@@ -119,7 +119,7 @@ struct NativeChatView: View {
             Text(">").font(mono).foregroundStyle(TUIColor.fg).frame(height: line)
             ChatInput(text: $draft, height: $inputHeight, fontSize: size,
                       placeholder: chat.exited ? "Session ended — ⌘/ to switch back to the terminal"
-                                               : chat.busy ? "Queue a follow-up…" : "Ask Claude anything…",
+                                               : chat.busy ? "Queue a follow-up…" : "Ask \(chat.agent == .claude ? "Claude" : chat.agent.name) anything…",
                       onSubmit: send, onEscape: { chat.interrupt() }, register: { chat.inputView = $0 })
                 .frame(height: min(max(inputHeight, line), 240))
             HStack(spacing: 10) {
@@ -129,10 +129,9 @@ struct NativeChatView: View {
                     }
                 }
                 Menu {
-                    Button("Supervised — ask before changes") { chat.setPermissionMode("default") }
-                    Button("Auto-accept edits") { chat.setPermissionMode("acceptEdits") }
-                    Button("Plan only") { chat.setPermissionMode("plan") }
-                    Button("Full access") { chat.setPermissionMode("bypassPermissions") }
+                    ForEach(chat.modes, id: \.id) { m in
+                        Button { chat.setPermissionMode(m.id) } label: { Label(m.label, systemImage: m.icon) }
+                    }
                 } label: {
                     Label(modeLabel, systemImage: modeIcon)
                 }
@@ -164,21 +163,10 @@ struct NativeChatView: View {
     }
 
     private var modeLabel: String {
-        switch chat.permissionMode {
-        case "acceptEdits": return "Auto-accept edits"
-        case "plan": return "Plan only"
-        case "bypassPermissions": return "Full access"
-        case "auto": return "Auto"
-        default: return "Supervised"
-        }
+        chat.modes.first { $0.id == chat.permissionMode }?.label ?? (chat.permissionMode == "auto" ? "Auto" : "Supervised")
     }
     private var modeIcon: String {
-        switch chat.permissionMode {
-        case "bypassPermissions": return "lock.open"
-        case "acceptEdits", "auto": return "checkmark.shield"
-        case "plan": return "list.bullet.clipboard"
-        default: return "hand.raised"
-        }
+        chat.modes.first { $0.id == chat.permissionMode }?.icon ?? "hand.raised"
     }
 }
 

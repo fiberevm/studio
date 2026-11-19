@@ -195,8 +195,12 @@ func listSessions() []session {
 			if l, ok := live[f[0]]; ok {
 				s.Status, s.Waiting, s.Convo = l.status, l.waitingFor, l.sessionID
 			}
+		case s.Agent == "codex":
+			codexStatus(&s)
+		case s.Agent == "agy":
+			agyStatus(&s)
 		default:
-			s.Status = "running" // Codex and agy: running or not (Studio reads their detail locally)
+			s.Status = "running"
 		}
 		if s.Agent == "claude" && s.Convo != "" {
 			s.Title, s.LastReply = transcriptSummary(s.Convo)

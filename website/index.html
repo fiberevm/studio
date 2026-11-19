@@ -393,19 +393,19 @@
         <span class="cmd">claude</span>
         <h3>Claude Code<span class="badge">Supported</span></h3>
         <span class="by">Anthropic</span>
-        <p>Everything in Studio, including the native view, which draws the conversation itself with images and inline approvals.</p>
+        <p>Everything in Studio, including the native view with images and inline approvals, driven by Claude Code's own streaming JSON.</p>
       </div>
       <div class="agent">
         <span class="cmd">codex</span>
         <h3>Codex CLI<span class="badge">Supported</span></h3>
         <span class="by">OpenAI</span>
-        <p>Titles, live status and approvals from Codex's own session logs, the Studio MCP, fork, and model and tokens in the status bar.</p>
+        <p>Titles, live status and approvals from Codex's own session logs, the Studio MCP and skill, fork, and a native view that runs each turn in the sandbox you pick.</p>
       </div>
       <div class="agent">
         <span class="cmd">agy</span>
         <h3>Antigravity CLI<span class="badge">Supported</span></h3>
         <span class="by">Google</span>
-        <p>Titles, live status and permission requests read from agy's conversation databases, and exact resume after a restart.</p>
+        <p>Titles, live status and permission requests read from agy's conversation databases, the Studio tools as a one-click agy plugin, and a native view with inline approvals.</p>
       </div>
     </div>
     <div class="matrix-wrap">
@@ -417,13 +417,15 @@
           <tr><td>Message any session from <kbd>⌘K</kbd>, snippets</td><td class="y"></td><td class="y"></td><td class="y"></td></tr>
           <tr><td>Survives restarts, resumes the exact conversation</td><td class="y"></td><td class="y"></td><td class="y"></td></tr>
           <tr><td>Past conversations in <kbd>⌘P</kbd></td><td class="y"></td><td class="y"></td><td class="y"></td></tr>
-          <tr><td>Studio MCP (agents drive the editor) and sandboxes</td><td class="y"></td><td class="y"></td><td class="n"></td></tr>
+          <tr><td>Studio MCP and skill: drive the editor, workers, sandboxes</td><td class="y"></td><td class="y"></td><td class="y"></td></tr>
+          <tr><td>Native view <kbd>⌘/</kbd></td><td class="y"></td><td class="y"></td><td class="y"></td></tr>
+          <tr><td>Sessions on workers</td><td class="y"></td><td class="y"></td><td class="y"></td></tr>
+          <tr><td>Model and tokens in the status bar</td><td class="y"></td><td class="y"></td><td class="y"></td></tr>
           <tr><td>Fork a conversation <kbd>⌘E</kbd></td><td class="y"></td><td class="y"></td><td class="n"></td></tr>
-          <tr><td>Model and tokens in the status bar</td><td class="y"></td><td class="y"></td><td class="n"></td></tr>
-          <tr><td>Native view <kbd>⌘/</kbd></td><td class="y"></td><td class="n"></td><td class="n"></td></tr>
         </tbody>
       </table>
     </div>
+    <p class="more">Antigravity gets Studio's tools from a plugin you install once in Settings → Agents, shows tokens in the native view (agy doesn't record them), and can't fork: agy has no way to copy a conversation.</p>
   </div>
 </section>
 
