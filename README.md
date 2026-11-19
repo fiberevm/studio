@@ -14,7 +14,7 @@ Studio tells you which session needs you next, so you can keep six agents busy w
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Built with SwiftTerm](https://img.shields.io/badge/terminal-SwiftTerm-555)](https://github.com/migueldeicaza/SwiftTerm)
 
-[Website](https://fiberevm.github.io/studio/) · [Features](#features) · [Install](#install) · [Shortcuts](#keyboard-shortcuts) · [Sandboxes](#sandboxes) · [Studio MCP](#studio-mcp) · [How it works](#how-it-works) · [Contributing](#contributing)
+[Website](https://fiberevm.github.io/studio/) · [Features](#features) · [Install](#install) · [Shortcuts](#keyboard-shortcuts) · [Sandboxes](#sandboxes) · [Workers](#workers) · [Studio MCP](#studio-mcp) · [How it works](#how-it-works) · [Contributing](#contributing)
 
 <img src="docs/screenshot.png" alt="Studio: a Claude session in the native view, a web panel showing Boat's docs, and a terminal, in split panes" width="900">
 
@@ -110,6 +110,46 @@ Studio gives every Claude session a remote machine of its own whenever the work 
 
 More are on the way. Providers plug in through the `SandboxProvider` protocol in [`Sources/Studio/Sandbox.swift`](Sources/Studio/Sandbox.swift) (Boat) and [`SandboxAWS.swift`](Sources/Studio/SandboxAWS.swift) (AWS, with its in-VM agent in [`Resources/MicroVMAgent`](Resources/MicroVMAgent)), so the MCP tools, skill, status bar and Settings work unchanged for any provider that can create a machine, run a command, copy files in and expose a port. PRs welcome.
 
+## Workers
+
+Run sessions on your other machines. A **worker** is any Linux (or macOS) box you keep on, typically a beefy desktop or a server on your VPN, running the small `studio-worker` CLI. Once it's paired, Studio can start Claude Code, Codex or Antigravity sessions there and show them in tabs like local ones, and the AIs in your Studio sessions can hand work to sub-agents on it.
+
+- **Sessions live on the worker**, in tmux, so they keep running when your laptop sleeps, Studio quits or the network drops. A worker tab reconnects by itself and says so when the session has really ended.
+- **Status like local tabs:** working, idle, *needs you*, titles and last replies (read from Claude Code's own session files on the worker).
+- **Delegation:** Studio's MCP gives every session `list_workers`, `worker_start_session`, `worker_session`, `worker_send`, `worker_stop_session` and `worker_list_dirs`, and the Studio skill tells it when to delegate and how to write a self-contained task, follow up and report back. A sub-agent it starts opens in a tab beside it, so you can watch.
+
+### Set up a worker
+
+On the machine, as the user whose `claude` / `codex` / `agy` logins you want to use:
+
+```bash
+# 1. install studio-worker (Linux or macOS, amd64 or arm64) into ~/.local/bin
+curl -fsSL https://raw.githubusercontent.com/fiberevm/studio/main/install-worker.sh | sh
+
+# 2. it needs tmux and at least one agent CLI, logged in
+sudo apt install tmux            # or dnf / pacman / brew
+claude auth status               # or: codex login status
+
+# 3. run it in the background (systemd user service) and print the pairing link
+studio-worker install-service
+sudo loginctl enable-linger $USER   # keep it running while you're logged out
+#    …or in the foreground:  studio-worker serve
+```
+
+It prints a link like `studio://worker?url=http://100.101.102.103:7420&token=…&name=devbox`. In Studio, open **Settings → Workers**, paste it, and click **Add Worker**. Then start a session from <kbd>⌘P</kbd> → *Worker: New Session on devbox*, or just ask a session to hand something to it.
+
+`studio-worker pair` prints the link again; `studio-worker rotate-token` replaces the token (pair again afterwards). Settings → Workers also sets the folder new sessions start in.
+
+### Networking
+
+The worker listens on port 7420 and Studio talks to it directly, so the Mac must be able to reach it. It's meant for a private network:
+
+- **Tailscale:** put both machines on the same tailnet. `studio-worker` puts the machine's MagicDNS name (or its `100.x` address) in the link automatically. If you use ACLs, allow your Mac to reach the worker on `tcp:7420`.
+- **Cloudflare Zero Trust:** run `cloudflared` on the worker's network with a private network route for it, connect the Mac with the WARP client, and pair with the address the Mac reaches it on: `studio-worker pair --host 10.0.0.12`.
+- **LAN:** works as is; `--host` picks the address if it guessed the wrong one.
+
+**Security:** every request needs the worker's token (a random 192-bit secret, kept in `~/.config/studio-worker/` on the worker and in a `0600` file in Studio's Application Support on the Mac). Traffic is plain HTTP and WebSocket, so the VPN is what encrypts it: don't expose port 7420 to the internet. Anyone with the token can run commands as that user on the worker, so treat the pairing link like an SSH key.
+
 ## Install
 
 **Download:** grab `Studio.zip` from the [latest release](https://github.com/fiberevm/studio/releases/latest), unzip it and move Studio to Applications. Release builds are signed with a Developer ID and notarized by Apple.
@@ -161,6 +201,7 @@ watcher"*, or *"lay these out as a 2×2 grid"*.
 | Area | Tools |
 |---|---|
 | Inspect | `get_state`, `list_themes` |
+| Workers | `list_workers`, `worker_start_session` (worker, prompt, folder, agent, open, split), `worker_session` (status, last reply, screen), `worker_send`, `worker_stop_session`, `worker_list_dirs` |
 | Sessions, terminals & web | `new_session` (prompt, split, folder, agent: claude / codex / agy), `open_url`, `web_read` / `web_click` / `web_type` / `web_wait` / `web_nav` / `web_screenshot` / `web_eval` (drive a web panel), `fork_session`, `set_view` (native / terminal), `new_terminal` (command, split), `run_in_terminal`, `send_to_session` |
 | Tabs | `split_tab`, `move_tab`, `focus_tab`, `close_tab`, `reorder_tab` |
 | Layout | `set_layout` (single / columns / rows / grid), `resize_pane`, `set_split_sizes`, `equalize_layout`, `merge_pane`, `focus_pane`, `set_sidebar` |
@@ -211,7 +252,11 @@ Sources/Studio/          the app
   Codex.swift              the same for Codex: reads ~/.codex rollouts (status, titles, tokens), spots approval prompts
   Agy.swift                the same for Antigravity: reads agy's conversation databases (status, approvals) and prompt history
   AgentCheck.swift         Settings → Agents: is each CLI installed and logged in
+  Workers.swift            paired workers: pairing, tokens, status polling, their API
 Sources/StudioMCP/       the stdio MCP server bundled next to the app
+Sources/StudioAttach/    studio-attach: a worker tab's terminal (WebSocket ⇄ pty, reconnects on its own)
+worker/                  studio-worker (Go): the CLI that makes a machine a worker (tmux sessions + HTTP/WebSocket API)
+install-worker.sh        installs studio-worker from the latest release
 Resources/               app icon (SVG source + generated .icns)
 scripts/make-icon.sh     regenerates AppIcon.icns from AppIcon.svg
 website/                 the one-page download site (static HTML; hero is a recording of the real app, assets/demo.mp4)
@@ -226,7 +271,7 @@ website/                 the one-page download site (static HTML; hero is a reco
 
 ## Releasing
 
-Push a version tag and GitHub Actions ([`.github/workflows/release.yml`](.github/workflows/release.yml)) builds Studio.app, signs it with your Developer ID (hardened runtime), notarizes and staples it, and publishes `Studio.zip` to a GitHub release:
+Push a version tag and GitHub Actions ([`.github/workflows/release.yml`](.github/workflows/release.yml)) builds Studio.app, signs it with your Developer ID (hardened runtime), notarizes and staples it, and publishes `Studio.zip` to a GitHub release, along with `studio-worker` for Linux and macOS (amd64 and arm64):
 
 ```bash
 git tag v0.2.0 && git push origin v0.2.0

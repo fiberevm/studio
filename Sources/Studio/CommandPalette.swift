@@ -5,6 +5,13 @@ import SwiftUI
 struct CommandPalette: View {
     @EnvironmentObject var model: ProjectModel
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettingsWindow
+
+    private func openSettings(section: String) {
+        SettingsNav.pending = section
+        openSettingsWindow()
+        NotificationCenter.default.post(name: SettingsNav.show, object: section)
+    }
 
     @State private var query: String
     @State private var index = 0
@@ -227,6 +234,23 @@ struct CommandPalette: View {
             }
         }
         list.append(cmd("Snippets: Edit…", "", "square.and.pencil") { NSWorkspace.shared.open(Snippets.file) })
+        // workers: start a session on one, or open one already running there that has no tab
+        let reg = WorkerRegistry.shared
+        for w in reg.workers where reg.isOnline(w.id) {
+            list.append(cmd("Worker: New Session on \(w.name)", "", "server.rack") {
+                Task { @MainActor in
+                    do { _ = try await m.newWorkerSession(w) } catch { m.showToast(error.localizedDescription) }
+                }
+            })
+            for ws in reg.sessions[w.id] ?? [] where ws.running
+                && !s.terminals.contains(where: { $0.remote?.worker == w.id && $0.remote?.session == ws.id }) {
+                list.append(Item(id: "worker:\(w.id):\(ws.id)", title: "Worker: \(w.name) · \(ws.title ?? ws.id)",
+                                 subtitle: ws.cwd, leading: .icon("server.rack"), run: { m.openWorkerSession(w, ws) }))
+            }
+        }
+        if reg.workers.isEmpty {
+            list.append(cmd("Worker: Add a Worker…", "", "server.rack") { openSettings(section: "workers") })
+        }
         for r in RecentProjects.list() where r != m.folder {
             list.append(cmd("Project: Open \(projectName(for: r))", "", "folder") { openWindow(value: r) })
         }

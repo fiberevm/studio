@@ -66,6 +66,21 @@ jobs:
           swift package resolve
           UNIVERSAL=1 VERSION="${TAG#v}" BUILD_NUMBER="${{ github.run_number }}" APP=build/release/Studio.app ./build-app.sh
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: worker/go.mod
+          cache-dependency-path: worker/go.sum
+
+      - name: Build studio-worker
+        run: |
+          # the machine side of Workers: static binaries for Linux and macOS
+          cd worker
+          for t in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+            CGO_ENABLED=0 GOOS=${t%/*} GOARCH=${t#*/} go build -trimpath -ldflags "-s -w -X main.version=${TAG#v}" \
+              -o ../build/release/studio-worker-${t%/*}-${t#*/} .
+          done
+          ls -la ../build/release/studio-worker-*
+
       - name: Notarize
         if: steps.cert.outputs.identity != ''
         env:
@@ -88,8 +103,11 @@ jobs:
         run: |
           cd build/release
           shasum -a 256 Studio.zip | tee Studio.zip.sha256
+          shasum -a 256 studio-worker-* | tee studio-worker.sha256
           {
-            echo "**Install:** download \`Studio.zip\`, unzip it and move Studio to Applications. Universal (Apple silicon and Intel), macOS 14+. Needs [Claude Code](https://docs.claude.com/en/docs/claude-code); \`brew install tmux\` recommended."
+            echo "**Install:** download \`Studio.zip\`, unzip it and move Studio to Applications. Universal (Apple silicon and Intel), macOS 14+. Needs [Claude Code](https://docs.claude.com/en/docs/claude-code) (or Codex, or Antigravity); \`brew install tmux\` recommended."
+            echo
+            echo "**Workers:** on a Linux or macOS machine you want to run sessions on, \`curl -fsSL https://raw.githubusercontent.com/fiberevm/studio/main/install-worker.sh | sh\`, then pair it in Settings → Workers."
             echo
             if [ "$SIGNED" != "true" ]; then
               echo "> **This build isn't notarized yet**, so macOS blocks it on first launch. After moving it to Applications, run once:"
@@ -101,10 +119,10 @@ jobs:
             fi
           } > notes.md
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" Studio.zip Studio.zip.sha256 --clobber
+            gh release upload "$TAG" Studio.zip Studio.zip.sha256 studio-worker-* studio-worker.sha256 --clobber
             gh release edit "$TAG" --notes-file notes.md
           else
-            gh release create "$TAG" Studio.zip Studio.zip.sha256 --title "Studio ${TAG#v}" --notes-file notes.md --generate-notes
+            gh release create "$TAG" Studio.zip Studio.zip.sha256 studio-worker-* studio-worker.sha256 --title "Studio ${TAG#v}" --notes-file notes.md --generate-notes
           fi
 
       - name: Clean up keychain

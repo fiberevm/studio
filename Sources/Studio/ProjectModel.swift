@@ -224,6 +224,24 @@ final class ProjectModel: ObservableObject {
 
     func newShellTab() { select(store.newShell(in: folder)) }
 
+    /// Start a session on a worker and open it in a tab (beside `g` when given, else as a tab here).
+    func newWorkerSession(_ w: Worker, agent: Agent? = nil, folder: String? = nil, prompt: String? = nil,
+                          beside g: GroupNode? = nil, zone: DropZone? = nil) async throws -> TerminalSession {
+        let reg = WorkerRegistry.shared
+        // the default agent if the worker has it, else Claude Code
+        let want = agent ?? Agent.preferred
+        let has = reg.info[w.id]?.agents[want.rawValue]?.installed ?? true
+        let s = try await reg.start(on: w, agent: has ? want : .claude, folder: folder, prompt: prompt)
+        let t = store.newWorkerTab(worker: w.id, session: s.id, cwd: s.cwd)
+        if let g { place(t, beside: g, zone: zone) } else { select(t) }
+        return t
+    }
+
+    /// Open a tab for a session already running on a worker.
+    func openWorkerSession(_ w: Worker, _ s: WorkerSession) {
+        select(store.newWorkerTab(worker: w.id, session: s.id, cwd: s.cwd))
+    }
+
     /// Open a web panel: in a split beside the active pane (or as a tab with zone .center).
     @discardableResult
     func openWeb(_ url: URL?, beside g: GroupNode? = nil, zone: DropZone = .right) -> TerminalSession {
@@ -537,6 +555,7 @@ final class ProjectModel: ObservableObject {
                 func token(_ t: TerminalSession?) -> String? {
                     guard let t else { return nil }
                     if t.isWeb { return "web:" + (t.url?.absoluteString ?? "about:blank") }
+                    if t.isWorker, let r = t.remote { return "worker:\(r.worker)|\(r.session)|\(t.cwd)" }
                     if t.isAgent, !t.isClaude, let sid = t.sessionId { return sid }   // restored like a Claude tab, by session id
                     if t.isAgy { return "agy:" + t.cwd }   // not prompted yet: a fresh agy there
                     if t.isCodex {
@@ -597,6 +616,10 @@ final class ProjectModel: ObservableObject {
                         if parts.count == 3, let tab = UUID(uuidString: parts[0]) {
                             t = store.reattachCodex(tab: tab, host: parts[1], cwd: parts[2])
                         } else { t = nil }
+                    } else if sid.hasPrefix("worker:") {
+                        // a session on a worker: reattach (if it has ended, the tab says so)
+                        let parts = sid.dropFirst(7).split(separator: "|", maxSplits: 2).map(String.init)
+                        t = parts.count == 3 ? store.newWorkerTab(worker: parts[0], session: parts[1], cwd: parts[2]) : nil
                     } else if sid.hasPrefix("agy:") {
                         let cwd = String(sid.dropFirst(4))
                         t = store.newAgy(in: FileManager.default.fileExists(atPath: cwd) ? cwd : folder)

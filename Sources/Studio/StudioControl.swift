@@ -143,6 +143,9 @@ final class StudioControl {
             if method.hasPrefix("web_") {
                 return ["ok": true, "result": try await web(method, params, callerTab: tab)]
             }
+            if method.hasPrefix("worker_") || method == "list_workers" {
+                return ["ok": true, "result": try await worker(method, params, callerTab: tab)]
+            }
             return ["ok": true, "result": try dispatch(method, params, callerTab: tab)]
         } catch let e as ControlError {
             return ["ok": false, "error": e.message]
@@ -152,6 +155,79 @@ final class StudioControl {
     }
 
     struct ControlError: Error { let message: String }
+
+    // MARK: Workers
+
+    /// list_workers and worker_*: start agent sessions on paired workers (machines running studio-worker) and
+    /// work with them, so an AI here can hand tasks to sub-agents on other machines.
+    private func worker(_ method: String, _ p: [String: Any], callerTab: UUID?) async throws -> Any {
+        let reg = WorkerRegistry.shared
+        func session(_ s: WorkerSession) -> [String: Any] {
+            var d: [String: Any] = ["session": s.id, "agent": s.agent, "folder": s.cwd, "status": s.status, "running": s.running]
+            if let t = s.title, !t.isEmpty { d["title"] = t }
+            if let r = s.lastReply, !r.isEmpty { d["last_reply"] = r }
+            if let w = s.waitingFor, !w.isEmpty { d["waiting_for"] = w }
+            return d
+        }
+        if method == "list_workers" {
+            reg.poll()
+            return reg.workers.map { w -> [String: Any] in
+                var d: [String: Any] = ["worker": w.name, "online": reg.isOnline(w.id), "default_folder": w.folder ?? reg.info[w.id]?.home ?? "~"]
+                if let i = reg.info[w.id] {
+                    d["host"] = "\(i.hostname) (\(i.os)/\(i.arch))"
+                    d["agents"] = i.agents.filter { $0.value.installed }.map { $0.key }.sorted()
+                } else if let e = reg.lastError[w.id] { d["error"] = e }
+                d["sessions"] = (reg.sessions[w.id] ?? []).map(session)
+                return d
+            }
+        }
+        guard let name = p["worker"] as? String, let w = reg.find(name) else {
+            let names = reg.workers.map(\.name).joined(separator: ", ")
+            throw ControlError(message: reg.workers.isEmpty ? "No workers are paired (Settings → Workers)."
+                                                            : "worker must be one of: \(names)")
+        }
+        func sid() throws -> String {
+            guard let s = p["session"] as? String, !s.isEmpty else { throw ControlError(message: "session is required") }
+            return s
+        }
+        do {
+            switch method {
+            case "worker_start_session":
+                guard let prompt = p["prompt"] as? String, !prompt.isEmpty else { throw ControlError(message: "prompt is required") }
+                let agent = (p["agent"] as? String).flatMap(Agent.init(rawValue:))
+                let folder = p["folder"] as? String
+                // open it in a tab beside the caller (so the user can watch it work), unless asked not to
+                if (p["open"] as? Bool) != false, let model = callerTab.flatMap({ id in models.first { $0.terminal(id) != nil } }) ?? lastActive ?? models.first {
+                    let g = callerTab.flatMap { model.group(containing: $0) } ?? model.activeGroup
+                    let zone: DropZone = { switch (p["split"] as? String)?.lowercased() {
+                        case "left": return .left; case "down", "bottom": return .bottom; case "up", "top": return .top
+                        case "tab", "center", "here": return .center; default: return .right } }()
+                    let t = try await model.newWorkerSession(w, agent: agent, folder: folder, prompt: prompt, beside: g, zone: zone)
+                    return ["worker": w.name, "session": t.remote?.session ?? "", "tab": t.id.uuidString]
+                }
+                let s = try await reg.start(on: w, agent: agent ?? .claude, folder: folder, prompt: prompt)
+                return ["worker": w.name, "session": s.id]
+            case "worker_send":
+                guard let text = p["text"] as? String, !text.isEmpty else { throw ControlError(message: "text is required") }
+                try await reg.send(on: w, session: try sid(), text: text)
+                return "sent"
+            case "worker_session":
+                let id = try sid()
+                var d = session(try await reg.status(on: w, session: id))
+                // Claude sessions report their last reply; for the others (or on request) include the screen
+                if p["screen"] as? Bool == true || d["last_reply"] == nil { d["screen"] = try await reg.screen(on: w, session: id) }
+                return d
+            case "worker_stop_session":
+                try await reg.stop(on: w, session: try sid())
+                return "stopped"
+            case "worker_list_dirs":
+                return try await reg.dirs(on: w, path: p["path"] as? String)
+            default:
+                throw ControlError(message: "unknown worker method \(method)")
+            }
+        } catch let e as ControlError { throw e }
+        catch { throw ControlError(message: "\(w.name): \(error.localizedDescription)") }
+    }
 
     // MARK: Web panels
 
@@ -619,7 +695,7 @@ final class StudioControl {
                             let item = m.item(for: t)
                             var d: [String: Any] = [
                                 "tab": t.id.uuidString,
-                                "kind": t.isWeb ? "web" : t.isShell ? "terminal" : t.agent?.rawValue ?? "claude",
+                                "kind": t.isWeb ? "web" : t.isShell ? "terminal" : t.isWorker ? "worker" : t.agent?.rawValue ?? "claude",
                                 "title": t.isWeb ? (t.webTitle.isEmpty ? (t.url?.absoluteString ?? "web") : t.webTitle) : t.isShell ? (t.terminalTitle.isEmpty ? "terminal" : t.terminalTitle) : (item?.title ?? "New session"),
                                 "selected": g.selection == "t:\(t.id)",
                                 "running": t.running,

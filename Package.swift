@@ -18,5 +18,10 @@ let package = Package(
             name: "studio-mcp",
             path: "Sources/StudioMCP"
         ),
+        // A tab's terminal for a session on a worker (a machine running studio-worker): WebSocket ⇄ the tab's pty.
+        .executableTarget(
+            name: "studio-attach",
+            path: "Sources/StudioAttach"
+        ),
     ]
 )

@@ -12,7 +12,7 @@ if [[ -n "${UNIVERSAL:-}" ]]; then
   swift build -c release --arch arm64
   swift build -c release --arch x86_64
   BIN=.build/universal; mkdir -p "$BIN"
-  for b in Studio studio-mcp; do
+  for b in Studio studio-mcp studio-attach; do
     lipo -create .build/arm64-apple-macosx/release/$b .build/x86_64-apple-macosx/release/$b -output "$BIN/$b"
   done
 else
@@ -27,6 +27,7 @@ BUILD_NUMBER="${BUILD_NUMBER:-1}"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN/Studio" "$APP/Contents/MacOS/.Studio.new" && mv -f "$APP/Contents/MacOS/.Studio.new" "$APP/Contents/MacOS/Studio"
 cp "$BIN/studio-mcp" "$APP/Contents/MacOS/.studio-mcp.new" && mv -f "$APP/Contents/MacOS/.studio-mcp.new" "$APP/Contents/MacOS/studio-mcp"
+cp "$BIN/studio-attach" "$APP/Contents/MacOS/.studio-attach.new" && mv -f "$APP/Contents/MacOS/.studio-attach.new" "$APP/Contents/MacOS/studio-attach"
 # Studio's Claude plugin (skills), loaded into every session it starts with --plugin-dir
 rm -rf "$APP/Contents/Resources/.StudioPlugin.new" && cp -R Resources/StudioPlugin "$APP/Contents/Resources/.StudioPlugin.new" \
   && rm -rf "$APP/Contents/Resources/StudioPlugin" && mv "$APP/Contents/Resources/.StudioPlugin.new" "$APP/Contents/Resources/StudioPlugin"
@@ -55,7 +56,7 @@ mv -f "$APP/Contents/.Info.plist.new" "$APP/Contents/Info.plist"
 if [[ -n "${SIGN_IDENTITY:-}" ]]; then
   # Inside out: the bundled MCP server first, then the app. Hardened runtime and a secure timestamp are
   # what notarization requires.
-  for bin in "$APP/Contents/MacOS/studio-mcp" "$APP"; do
+  for bin in "$APP/Contents/MacOS/studio-mcp" "$APP/Contents/MacOS/studio-attach" "$APP"; do
     codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$bin"
   done
   codesign --verify --strict --deep "$APP"

@@ -160,6 +160,16 @@
   .more { margin-top: 14px; color: var(--faint); font-size: 14px; }
   .more a { color: var(--muted); }
 
+  /* workers */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 8px; }
+  .step { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .step .n { font: 600 12px var(--mono); color: var(--accent); }
+  .step h3 { margin: 0; font-size: 17px; }
+  .step p { margin: 0; color: var(--muted); font-size: 15px; }
+  .step pre { margin: 6px 0 0; font-size: 12.5px; white-space: pre-wrap; word-break: break-all; }
+  .nets { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+  .nets span { font-size: 13px; color: var(--muted); border: 1px solid var(--line-2); border-radius: 999px; padding: 4px 12px; }
+
   /* providers */
   .providers { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 8px; }
   .provider { display: flex; gap: 18px; align-items: flex-start; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; }
@@ -194,7 +204,7 @@
     .split, .split.rev { grid-template-columns: 1fr; gap: 36px; }
     .split.rev .copy { order: 0; }
     .cards, .why { grid-template-columns: 1fr 1fr; }
-    .agents { grid-template-columns: 1fr; }
+    .agents, .steps { grid-template-columns: 1fr; }
     .keys { grid-template-columns: 1fr 1fr; }
     .providers, .install { grid-template-columns: 1fr; }
     nav .links { display: none; }
@@ -241,6 +251,7 @@
       <a href="#attention">Features</a>
       <a href="#agents">Agents</a>
       <a href="#sandboxes">Sandboxes</a>
+      <a href="#workers">Workers</a>
       <a href="#shortcuts">Shortcuts</a>
       <a href="#download">Install</a>
       <a href="https://github.com/fiberevm/studio">GitHub</a>
@@ -437,6 +448,38 @@
       </div>
     </div>
     <p class="more">More providers are on the way. They plug in through one Swift protocol, so <a href="https://github.com/fiberevm/studio/blob/main/Sources/Studio/Sandbox.swift">adding one</a> is a small PR.</p>
+  </div>
+</section>
+
+<section id="workers">
+  <div class="wrap">
+    <h2>Run sessions on your other machines.</h2>
+    <p class="sub">Turn an always-on Linux box (a desktop under the desk, a GPU server, a VM) into a <b>worker</b>. Studio starts Claude Code, Codex or Antigravity sessions on it and shows them in tabs like local ones, and the AIs in your sessions can hand tasks to sub-agents there.</p>
+    <div class="why">
+      <div><b>Keeps going without you.</b>Sessions run in tmux on the worker: close the laptop, quit Studio, lose Wi-Fi. The tab reconnects when you're back.</div>
+      <div><b>Agents delegate.</b>Through the Studio MCP and skill, a session can start sub-agents on a worker with a self-contained task, check on them and report back. Each one opens in a tab beside it.</div>
+      <div><b>Your network, your machine.</b>No relay: Studio talks to the worker directly over your VPN, with a token only you have.</div>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <span class="n">1 · install</span>
+        <h3>Install the worker</h3>
+        <p>On the machine, Linux or macOS. It needs tmux and an agent CLI you're logged in to.</p>
+        <pre>curl -fsSL https://raw.githubusercontent.com/fiberevm/studio/main/install-worker.sh | sh</pre>
+      </div>
+      <div class="step">
+        <span class="n">2 · run</span>
+        <h3>Start it</h3>
+        <p>As a systemd service, so it survives reboots. It prints a pairing link.</p>
+        <pre>studio-worker install-service</pre>
+      </div>
+      <div class="step">
+        <span class="n">3 · pair</span>
+        <h3>Paste the link in Studio</h3>
+        <p><b>Settings → Workers</b>, paste <code>studio://worker?…</code>, done. Then <kbd>⌘P</kbd> → <i>New Session on devbox</i>, or ask a session to delegate.</p>
+      </div>
+    </div>
+    <div class="nets"><span>Tailscale</span><span>Cloudflare Zero Trust</span><span>LAN</span><span>Linux · macOS</span><span>amd64 · arm64</span></div>
   </div>
 </section>
 

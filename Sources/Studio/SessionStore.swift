@@ -73,6 +73,8 @@ final class SessionStore: ObservableObject {
     init() {
         Self.current = self
         StudioControl.shared.start(store: self)
+        // worker tabs' titles and status come from the worker registry
+        WorkerRegistry.shared.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &bag)
         refreshLive()
         rescanTranscripts()
         liveTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
@@ -289,6 +291,19 @@ final class SessionStore: ObservableObject {
                 cwd: rec?.cwd ?? t.cwd, status: status, inApp: true, entrypoint: t.agent?.rawValue, pid: t.sessionPid,
                 startedAt: t.createdAt, updatedAt: rec?.lastActivity ?? t.createdAt,
                 activity: status == .working ? (rec?.activity ?? .thinking) : nil))
+        }
+        let workers = WorkerRegistry.shared
+        for t in terminals where t.isWorker {
+            guard let r = t.remote else { continue }
+            let s = workers.session(r.worker, r.session)
+            let name = workers.worker(r.worker)?.name ?? "worker"
+            let status: SessionStatus = !t.running ? .exited : !workers.isOnline(r.worker) ? .inactive : s?.sessionStatus ?? .starting
+            let title = s?.title.flatMap { $0.isEmpty ? nil : $0 } ?? "New session"
+            items.append(ActiveItem(
+                key: "t:\(t.id)", sessionId: nil, title: "\(name) · \(title)",
+                cwd: t.cwd, status: status, inApp: true, entrypoint: "worker", pid: nil,
+                startedAt: t.createdAt, updatedAt: s?.created ?? t.createdAt,
+                activity: status == .working ? .thinking : nil))
         }
         for (sid, info) in live where !covered.contains(sid) {
             let rec = records[sid]
@@ -508,6 +523,15 @@ final class SessionStore: ObservableObject {
         return t
     }
 
+    /// A tab for a session on a worker.
+    func newWorkerTab(worker: String, session: String, cwd: String) -> TerminalSession {
+        if let t = terminals.first(where: { $0.remote?.worker == worker && $0.remote?.session == session }) { return t }
+        let t = TerminalSession(cwd: cwd, claudeArgs: [], sessionId: nil, fontSize: fontSize, kind: .worker,
+                                remote: (worker, session))
+        add(t)
+        return t
+    }
+
     /// An Antigravity (`agy`) session: new (with a first prompt), or continuing conversation `resume`.
     func newAgy(in cwd: String, prompt: String? = nil, resume: String? = nil, id: UUID = UUID(), host: String? = nil) -> TerminalSession {
         let args = resume.map { ["--conversation", $0] } ?? prompt.map { ["-i", $0] } ?? []
@@ -560,6 +584,10 @@ final class SessionStore: ObservableObject {
     }
 
     func close(_ t: TerminalSession) {
+        // closing a worker tab ends its session there too (quitting Studio doesn't: it reattaches next launch)
+        if t.isWorker, !Self.terminating, let r = t.remote, let w = WorkerRegistry.shared.worker(r.worker) {
+            Task { try? await WorkerRegistry.shared.stop(on: w, session: r.session) }
+        }
         t.terminate()
         if let sid = t.sessionId { forgotten.insert(sid) }
         terminals.removeAll { $0 === t }

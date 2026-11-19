@@ -25,12 +25,16 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     private let claudeArgs: [String]
     /// .claude runs a Claude Code session; .codex runs OpenAI's Codex CLI; .shell is a plain terminal (⌃`),
     /// like VS Code's integrated terminal.
-    enum Kind { case claude, codex, agy, shell, web }
+    enum Kind { case claude, codex, agy, worker, shell, web }
     let kind: Kind
     var isShell: Bool { kind == .shell }
     var isClaude: Bool { kind == .claude }
     var isCodex: Bool { kind == .codex }
     var isAgy: Bool { kind == .agy }
+    /// A session on a worker (a machine running studio-worker); this tab is only its terminal.
+    var isWorker: Bool { kind == .worker }
+    /// For .worker: which worker and which of its sessions.
+    let remote: (worker: String, session: String)?
     /// A coding agent's session (Claude Code or Codex), as opposed to a plain terminal or web panel.
     var isAgent: Bool { agent != nil }
     var agent: Agent? {
@@ -59,8 +63,9 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     }
 
     init(cwd: String, claudeArgs: [String], sessionId: String?, fontSize: CGFloat = 12, kind: Kind = .claude,
-         native: Bool = false, id: UUID = UUID(), host: String? = nil) {
+         native: Bool = false, id: UUID = UUID(), host: String? = nil, remote: (worker: String, session: String)? = nil) {
         self.id = id
+        self.remote = remote
         self.hostName = host
         self.kind = kind
         self.cwd = cwd
@@ -132,6 +137,7 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
         case .claude: launch(claudeArgs)
         case .codex: launchCodex(claudeArgs)
         case .agy: launchCLI(["agy"] + claudeArgs)
+        case .worker: launchWorker()
         case .web: running = true    // no process; the page lives in webView
         }
     }
@@ -157,8 +163,29 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
         // the same conversation, else the folder's latest
         case .codex: launchCodex(["resume"] + (sessionId.map { [$0] } ?? ["--last"]))
         case .agy: launchCLI(["agy"] + (sessionId.map { ["--conversation", $0] } ?? ["--continue"]))
+        case .worker: launchWorker()
         default: launch(sessionId.map { ["--resume", $0] } ?? claudeArgs)
         }
+    }
+
+    /// The session lives on the worker (in its tmux); this runs studio-attach, which bridges the tab to it and
+    /// reconnects by itself after sleep or a network drop.
+    private func launchWorker() {
+        guard let r = remote else { return }
+        let found: (url: String, token: String)? = MainActor.assumeIsolated {
+            WorkerRegistry.shared.worker(r.worker).map { ($0.url, WorkerRegistry.shared.token($0.id)) }
+        }
+        guard let w = found else {
+            view.feed(text: "\r\nThis worker isn't paired anymore (Settings → Workers).\r\n")
+            return
+        }
+        let exe = ((Bundle.main.executablePath ?? "") as NSString).deletingLastPathComponent + "/studio-attach"
+        let env = Self.childEnvironment(tab: id) + ["STUDIO_WORKER_TOKEN=\(w.token)"]
+        view.startProcess(executable: exe, args: [w.url, r.session], environment: env, execName: nil,
+                          currentDirectory: NSHomeDirectory())
+        pid = view.process.shellPid
+        running = true
+        exitCode = nil
     }
 
     /// A Codex CLI session, with the Studio MCP so it can drive the editor too.

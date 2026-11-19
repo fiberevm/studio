@@ -33,11 +33,21 @@ enum Agent: String, CaseIterable, Identifiable {
     static var preferred: Agent { Pref.string(Pref.defaultAgent).flatMap(Agent.init(rawValue:)) ?? .claude }
 }
 
+/// Opening Settings on a given section (from ⌘P): read when the window opens, or posted to an open one.
+enum SettingsNav {
+    nonisolated(unsafe) static var pending: String?
+    static let show = Notification.Name("studio.settings.section")
+}
+
 /// ⌘, — a VS Code / System Settings style window: sections on the left, the section on the right.
 struct SettingsView: View {
     @EnvironmentObject var store: SessionStore
     // debug/screenshot aid: --settings <section> opens Settings on that section
     @State private var section: Section = {
+        if let p = SettingsNav.pending, let s = Section.allCases.first(where: { $0.rawValue.lowercased() == p }) {
+            SettingsNav.pending = nil
+            return s
+        }
         let a = CommandLine.arguments
         if let i = a.firstIndex(of: "--settings"), i + 1 < a.count,
            let s = Section.allCases.first(where: { $0.rawValue.lowercased() == a[i + 1].lowercased() }) { return s }
@@ -45,12 +55,13 @@ struct SettingsView: View {
     }()
 
     enum Section: String, CaseIterable, Identifiable {
-        case appearance = "Appearance", agents = "Agents", sessions = "Sessions", sandboxes = "Sandboxes", snippets = "Snippets", about = "About"
+        case appearance = "Appearance", agents = "Agents", workers = "Workers", sessions = "Sessions", sandboxes = "Sandboxes", snippets = "Snippets", about = "About"
         var id: String { rawValue }
         var icon: String {
             switch self {
             case .appearance: return "paintbrush"
             case .agents: return "terminal"
+            case .workers: return "server.rack"
             case .sessions: return "rectangle.stack"
             case .sandboxes: return "sailboat"
             case .snippets: return "text.quote"
@@ -80,6 +91,7 @@ struct SettingsView: View {
                         switch section {
                         case .appearance: AppearanceSettings()
                         case .agents: AgentSettings()
+                        case .workers: WorkerSettings()
                         case .sessions: SessionSettings()
                         case .sandboxes: SandboxSettings(registry: store.sandboxes)
                         case .snippets: SnippetSettings()
@@ -102,6 +114,9 @@ struct SettingsView: View {
         .ignoresSafeArea()
         .frame(minWidth: 760, minHeight: 520)
         .preferredColorScheme(Theme.current.isLight ? .light : .dark)   // match Studio's theme
+        .onReceive(NotificationCenter.default.publisher(for: SettingsNav.show)) { n in
+            if let p = n.object as? String, let s = Section.allCases.first(where: { $0.rawValue.lowercased() == p }) { section = s }
+        }
     }
 }
 
@@ -335,6 +350,103 @@ private struct AgentRow: View {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(cmd, forType: .string)
             note = "No Studio window is open: `\(cmd)` is copied, run it in a terminal."
+        }
+    }
+}
+
+// MARK: - Workers
+
+/// Machines running `studio-worker` (an always-on Linux box on Tailscale, Cloudflare Zero Trust or a LAN):
+/// pair one with the link it prints, then start sessions on it from ⌘P, and let Studio's AIs hand work to it.
+private struct WorkerSettings: View {
+    @ObservedObject private var registry = WorkerRegistry.shared
+    @State private var link = ""
+    @State private var error: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Row(title: "Add a worker",
+                detail: "On the machine, run `studio-worker serve` (or `studio-worker install-service` to keep it running) and paste the studio://worker link it prints. The machine must be reachable from this Mac: on the same Tailscale tailnet, Cloudflare Zero Trust private network, or LAN.") {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        TextField("studio://worker?url=…&token=…", text: $link)
+                            .textFieldStyle(.roundedBorder).font(.system(size: 12, design: .monospaced))
+                            .onSubmit(add)
+                        Button("Add Worker", action: add).disabled(link.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                    if let error { Text(error).font(.system(size: 12)).foregroundStyle(.red) }
+                }
+            }
+            Group_(title: "Connected workers")
+            if registry.workers.isEmpty {
+                Text("None yet. Install the worker on a Linux machine:")
+                    .font(.system(size: 12)).foregroundStyle(.secondary).padding(.top, 8)
+                Text("curl -fsSL https://raw.githubusercontent.com/fiberevm/studio/main/install-worker.sh | sh")
+                    .font(.system(size: 11.5, design: .monospaced)).textSelection(.enabled).padding(.top, 4)
+            }
+            ForEach(registry.workers) { w in WorkerRow(worker: w) }
+        }
+    }
+
+    private func add() {
+        do { try registry.pair(link); link = ""; error = nil }
+        catch { self.error = error.localizedDescription }
+    }
+}
+
+private struct WorkerRow: View {
+    let worker: Worker
+    @ObservedObject private var registry = WorkerRegistry.shared
+    @State private var folder = ""
+    @State private var confirmRemove = false
+
+    var body: some View {
+        let info = registry.info[worker.id]
+        let sessions = registry.sessions[worker.id] ?? []
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 8) {
+                Image(systemName: "server.rack").foregroundStyle(.secondary)
+                Text(worker.name).font(.system(size: 13, weight: .semibold))
+                Spacer()
+                HStack(spacing: 5) {
+                    Circle().fill(info != nil ? SwiftUI.Color.green : SwiftUI.Color.secondary).frame(width: 6, height: 6)
+                    Text(info != nil ? "Online" : "Offline").font(.system(size: 12))
+                }
+                Button("Remove") { confirmRemove = true }.buttonStyle(.borderless).font(.system(size: 12))
+            }
+            Text(worker.url + (info.map { " · \($0.hostname) · \($0.os)/\($0.arch) · studio-worker \($0.version)" } ?? ""))
+                .font(.system(size: 11.5, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
+            if let info {
+                HStack(spacing: 14) {
+                    ForEach(Agent.allCases) { a in
+                        let ai = info.agents[a.rawValue]
+                        HStack(spacing: 4) {
+                            Image(systemName: ai?.installed == true ? "checkmark.circle.fill" : "minus.circle")
+                                .foregroundStyle(ai?.installed == true ? SwiftUI.Color.green : SwiftUI.Color.secondary)
+                            Text(a.name + (ai?.version.map { " \($0)" } ?? ""))
+                        }
+                        .font(.system(size: 12))
+                    }
+                }
+                Text(sessions.isEmpty ? "No sessions" : "\(sessions.count) session\(sessions.count == 1 ? "" : "s"): " + sessions.prefix(3).map { $0.title ?? $0.id }.joined(separator: ", "))
+                    .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+            } else if let err = registry.lastError[worker.id] {
+                Text("Can't reach it: \(err)").font(.system(size: 12)).foregroundStyle(.orange)
+            }
+            HStack(spacing: 8) {
+                Text("New sessions start in").font(.system(size: 12)).foregroundStyle(.secondary)
+                TextField(info?.home ?? "~", text: $folder)
+                    .textFieldStyle(.roundedBorder).font(.system(size: 12, design: .monospaced)).frame(width: 260)
+                    .onSubmit { registry.setFolder(worker.id, folder) }
+            }
+        }
+        .padding(.vertical, 12)
+        .overlay(alignment: .bottom) { Hairline() }
+        .onAppear { folder = worker.folder ?? "" }
+        .alert("Remove \(worker.name)?", isPresented: $confirmRemove) {
+            Button("Remove", role: .destructive) { registry.remove(worker.id) }
+        } message: {
+            Text("Its sessions keep running on the machine; pair it again to see them.")
         }
     }
 }
