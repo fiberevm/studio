@@ -1,4 +1,31 @@
-import Foundation
+import AppKit
+
+/// An image in the conversation (pasted into a prompt, or returned by a tool such as a screenshot).
+/// Compared by id; the bytes are decoded into an NSImage only when drawn.
+struct ChatImage: Identifiable, Equatable {
+    let id: String
+    let data: Data
+    static func == (a: ChatImage, b: ChatImage) -> Bool { a.id == b.id }
+
+    private static let cache = NSCache<NSString, NSImage>()
+    var image: NSImage? {
+        if let i = Self.cache.object(forKey: id as NSString) { return i }
+        guard let i = NSImage(data: data) else { return nil }
+        Self.cache.setObject(i, forKey: id as NSString)
+        return i
+    }
+
+    /// Images in a message's content blocks ({"type":"image","source":{"type":"base64","data":…}}).
+    static func all(in content: Any?, prefix: String) -> [ChatImage] {
+        guard let blocks = content as? [[String: Any]] else { return [] }
+        return blocks.enumerated().compactMap { n, b in
+            guard b["type"] as? String == "image", let src = b["source"] as? [String: Any],
+                  src["type"] as? String == "base64", let s = src["data"] as? String,
+                  let d = Data(base64Encoded: s) else { return nil }
+            return ChatImage(id: "\(prefix)#img\(n)", data: d)
+        }
+    }
+}
 
 /// One entry in a native (non-TUI) conversation view.
 struct ChatItem: Identifiable, Equatable {
@@ -16,6 +43,7 @@ struct ChatItem: Identifiable, Equatable {
     var duration: Double? = nil                            // note: how long the turn took
     var isError = false
     var decided: Bool? = nil                                // permission: nil = pending, true = allowed
+    var images: [ChatImage] = []                            // a prompt's pasted images, a tool's returned ones
 }
 
 /// Drives `claude -p` with streaming JSON in and out, so Studio can draw the conversation itself.
@@ -237,6 +265,7 @@ final class NativeChat: ObservableObject {
         guard let tid = b["tool_use_id"] as? String, let i = items.firstIndex(where: { $0.id == tid }) else { return }
         items[i].output = Self.text(of: b["content"])
         items[i].isError = b["is_error"] as? Bool ?? false
+        items[i].images = ChatImage.all(in: b["content"], prefix: tid)
     }
 
     private func note(_ s: String) { items.append(ChatItem(id: UUID().uuidString, kind: .note(s))) }
@@ -249,12 +278,14 @@ final class NativeChat: ObservableObject {
         guard let dirs = try? fm.contentsOfDirectory(atPath: Paths.projects.path) else { return }
         for d in dirs {
             let path = Paths.projects.appendingPathComponent(d).appendingPathComponent("\(sid).jsonl").path
-            guard let data = fm.contents(atPath: path) else { continue }
-            for line in data.split(separator: 0x0A) {
+            guard let fh = FileHandle(forReadingAtPath: path) else { continue }
+            defer { try? fh.close() }
+            // streamed (transcripts reach hundreds of MB); the view keeps only the last 400 entries anyway
+            _ = forEachLine(fh, from: 0) { line in
                 guard let o = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
-                      o["isSidechain"] as? Bool != true, o["isMeta"] as? Bool != true else { continue }
-                if o["type"] as? String == "permission-mode", let m = o["permissionMode"] as? String { lastMode = m; continue }
-                guard let msg = o["message"] as? [String: Any] else { continue }
+                      o["isSidechain"] as? Bool != true, o["isMeta"] as? Bool != true else { return }
+                if o["type"] as? String == "permission-mode", let m = o["permissionMode"] as? String { lastMode = m; return }
+                guard let msg = o["message"] as? [String: Any] else { return }
                 switch o["type"] as? String {
                 case "user":
                     if let s = msg["content"] as? String {
@@ -263,11 +294,18 @@ final class NativeChat: ObservableObject {
                             items.append(ChatItem(id: o["uuid"] as? String ?? UUID().uuidString, kind: .user(t)))
                         }
                     } else if let blocks = msg["content"] as? [[String: Any]] {
-                        for b in blocks {
-                            if b["type"] as? String == "tool_result" { attachResult(b) }
-                            else if b["type"] as? String == "text", let t = b["text"] as? String, !t.hasPrefix("<") {
-                                items.append(ChatItem(id: UUID().uuidString, kind: .user(t)))
-                            }
+                        for b in blocks where b["type"] as? String == "tool_result" { attachResult(b) }
+                        // a prompt with pasted images: its text blocks and images as one message
+                        let texts = blocks.compactMap { b -> String? in
+                            guard b["type"] as? String == "text", let t = b["text"] as? String, !t.hasPrefix("<") else { return nil }
+                            return t
+                        }
+                        let id = o["uuid"] as? String ?? UUID().uuidString
+                        let imgs = ChatImage.all(in: blocks, prefix: id)
+                        if !texts.isEmpty || !imgs.isEmpty {
+                            var item = ChatItem(id: id, kind: .user(texts.joined(separator: "\n")))
+                            item.images = imgs
+                            items.append(item)
                         }
                     }
                 case "assistant":
@@ -275,10 +313,11 @@ final class NativeChat: ObservableObject {
                     for (n, b) in (msg["content"] as? [[String: Any]] ?? []).enumerated() { addAssistantBlock(b, id: "\(mid)#\(n)") }
                 default: break
                 }
+                // keep the view light: the last 400 entries are plenty of context
+                if items.count > 800 { items.removeFirst(items.count - 400) }
             }
             break
         }
-        // keep the view light: the last 400 entries are plenty of context
         if items.count > 400 { items = Array(items.suffix(400)) }
     }
 

@@ -1,15 +1,41 @@
 import SwiftUI
 import AppKit
 
-/// Studio's own rendering of a Claude conversation, modeled on T3 Code: your messages as quiet bubbles on the
-/// right, Claude's answer full width, and the tool calls in between folded into a compact work log that
-/// collapses to one line once the answer is in. Approvals sit inline; the composer is a rounded box with
-/// its controls underneath and Send turning into Stop while Claude works.
+/// The colors Claude Code's terminal UI draws with, taken from the theme's ANSI palette the same way the
+/// TUI's are, so the native view looks like the terminal it replaces (and follows theme changes).
+@MainActor enum TUIColor {
+    private static func ansi(_ i: Int) -> SwiftUI.Color { SwiftUI.Color(nsColor: Theme.current.ansi[i]) }
+    static var fg: SwiftUI.Color { SwiftUI.Color(nsColor: Theme.foreground) }
+    static var dim: SwiftUI.Color { fg.opacity(0.6) }                 // secondary text (SGR dim)
+    static var success: SwiftUI.Color { ansi(10) }                    // ● of a finished tool call
+    static var error: SwiftUI.Color { ansi(9) }
+    static var warning: SwiftUI.Color { ansi(11) }
+    static var code: SwiftUI.Color { ansi(12) }                       // `inline code`
+    static var claude: SwiftUI.Color { ClaudeSpinner.orange }
+    /// The band behind your messages.
+    static var promptBand: SwiftUI.Color { Theme.current.isLight ? fg.opacity(0.07) : ansi(8) }
+}
+
+/// Opens an image full size (a modal over the window).
+private struct ZoomImageKey: EnvironmentKey { static let defaultValue: (ChatImage) -> Void = { _ in } }
+extension EnvironmentValues {
+    var zoomImage: (ChatImage) -> Void {
+        get { self[ZoomImageKey.self] }
+        set { self[ZoomImageKey.self] = newValue }
+    }
+}
+
+/// Studio's own rendering of a Claude conversation, laid out and colored like Claude Code's terminal UI:
+/// everything left aligned, your messages on a band with a `>`, Claude's answers after a ●, and the tool
+/// calls in between folded into a work log that collapses to one line once the answer is in. Approvals sit
+/// inline; images show as thumbnails that open full size. The composer is a `>` prompt in the terminal font
+/// with the model on the left and the permission mode beside Send on the right.
 struct NativeChatView: View {
     @ObservedObject var chat: NativeChat
     @EnvironmentObject var model: ProjectModel
     @State private var draft = ""
     @State private var inputHeight: CGFloat = 20
+    @State private var zoomed: ChatImage?
 
     private var size: CGFloat { model.store.fontSize }
     private var mono: Font { .system(size: size, design: .monospaced) }
@@ -25,9 +51,8 @@ struct NativeChatView: View {
                         }
                         SwiftUI.Color.clear.frame(height: 1).id("bottom")
                     }
-                    .padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 8)
-                    .frame(maxWidth: 860)
-                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .onChange(of: chat.items.count) { _, _ in withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) } }
                 .onChange(of: chat.streaming) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
@@ -37,7 +62,10 @@ struct NativeChatView: View {
             composer
         }
         .font(mono)
+        .foregroundStyle(TUIColor.fg)
         .background(SwiftUI.Color(nsColor: Theme.background))
+        .environment(\.zoomImage) { zoomed = $0 }
+        .sheet(item: $zoomed) { ImageModal(image: $0) }
     }
 
     // MARK: Turns
@@ -82,17 +110,23 @@ struct NativeChatView: View {
 
     // MARK: Composer
 
+    /// One line, like Claude Code's input: `>`, the text (growing to more lines as you type), then the
+    /// elapsed time while working, the permission mode and Send. On the terminal background, monospaced.
     private var composer: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let font = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+        let line = ceil(NSLayoutManager().defaultLineHeight(for: font)) + 2   // + the text view's 1pt insets
+        return HStack(alignment: .top, spacing: 10) {
+            Text(">").font(mono).foregroundStyle(TUIColor.fg).frame(height: line)
             ChatInput(text: $draft, height: $inputHeight, fontSize: size,
                       placeholder: chat.exited ? "Session ended — ⌘/ to switch back to the terminal"
                                                : chat.busy ? "Queue a follow-up…" : "Ask Claude anything…",
                       onSubmit: send, onEscape: { chat.interrupt() })
-                .frame(height: min(max(inputHeight, 20), 240))
+                .frame(height: min(max(inputHeight, line), 240))
             HStack(spacing: 10) {
-                if let m = chat.model {
-                    Label(prettyModel(m), systemImage: "cpu").labelStyle(.titleAndIcon)
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                if chat.busy, let start = chat.turnStartedAt {
+                    TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                        Text(elapsed(ctx.date.timeIntervalSince(start))).foregroundStyle(TUIColor.dim).monospacedDigit()
+                    }
                 }
                 Menu {
                     Button("Supervised — ask before changes") { chat.setPermissionMode("default") }
@@ -100,31 +134,27 @@ struct NativeChatView: View {
                     Button("Plan only") { chat.setPermissionMode("plan") }
                     Button("Full access") { chat.setPermissionMode("bypassPermissions") }
                 } label: {
-                    Label(modeLabel, systemImage: modeIcon).font(.system(size: 11))
+                    Label(modeLabel, systemImage: modeIcon)
                 }
                 .menuStyle(.borderlessButton).fixedSize()
-                .foregroundStyle(.secondary)
-                Spacer()
-                if chat.busy, let start = chat.turnStartedAt {
-                    TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                        Text(elapsed(ctx.date.timeIntervalSince(start))).font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
-                    }
-                }
+                .foregroundStyle(TUIColor.dim)
+                .help("Permission mode")
                 Button(action: { chat.busy && draft.isEmpty ? chat.interrupt() : send() }) {
                     Image(systemName: chat.busy && draft.isEmpty ? "stop.fill" : "arrow.up")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(SwiftUI.Color(nsColor: Theme.background))
-                        .frame(width: 24, height: 24)
-                        .background(Circle().fill(SwiftUI.Color(nsColor: Theme.foreground).opacity(draft.isEmpty && !chat.busy ? 0.25 : 0.9)))
+                        .frame(width: 20, height: 20)
+                        .background(Circle().fill(TUIColor.fg.opacity(draft.isEmpty && !chat.busy ? 0.25 : 0.9)))
                 }
                 .buttonStyle(.plain)
                 .help(chat.busy && draft.isEmpty ? "Stop (esc)" : "Send (↵)")
             }
+            .font(.system(size: size - 1, design: .monospaced))
+            .frame(height: line)
         }
-        // flat, edge to edge, in the chrome color — like VS Code's panels
-        .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 6)
+        .padding(.horizontal, 16).padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(SwiftUI.Color(nsColor: Theme.chrome))
+        .background(SwiftUI.Color(nsColor: Theme.background))
     }
 
     private func send() {
@@ -172,14 +202,19 @@ private struct TurnView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let p = turn.prompt, case .user(let text) = p.kind {
-                HStack {
-                    Spacer(minLength: 80)
-                    Text(text)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 12).padding(.vertical, 8)
-                        .background(RoundedRectangle(cornerRadius: 10).fill(fg.opacity(0.08)))
+                // like the TUI: your message on a full-width band, after a ">"
+                VStack(alignment: .leading, spacing: 8) {
+                    if !text.isEmpty {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(">")
+                            Text(text).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    if !p.images.isEmpty { ImageStrip(images: p.images).padding(.leading, text.isEmpty ? 0 : 16) }
                 }
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(TUIColor.promptBand)
             }
 
             if !turn.work.isEmpty {
@@ -193,7 +228,7 @@ private struct TurnView: View {
                                 .rotationEffect(.degrees(open ? 90 : 0))
                             Text(workSummary)
                         }
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(TUIColor.dim)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -206,20 +241,25 @@ private struct TurnView: View {
                         .padding(.leading, 6)
                         .overlay(alignment: .leading) { fg.opacity(0.12).frame(width: 1) }
                         .transition(.opacity)
+                    } else if !workImages.isEmpty {
+                        // screenshots and other images stay in view when the log folds away
+                        ImageStrip(images: workImages).padding(.leading, 14)
                     }
                 }
             }
 
             ForEach(turn.answer) { item in
-                if case .text(let t) = item.kind { MarkdownView(text: t, size: size) }
+                if case .text(let t) = item.kind { Answer(text: t, size: size) }
             }
             if live && !chat.streaming.isEmpty {
-                MarkdownView(text: chat.streaming, size: size)
+                Answer(text: chat.streaming, size: size)
             } else if live && turn.answer.isEmpty && turn.work.isEmpty {
-                HStack(spacing: 8) { ClaudeSpinner(); Text("Thinking…").foregroundStyle(.secondary) }
+                HStack(spacing: 8) { ClaudeSpinner(); Text("Thinking…").foregroundStyle(TUIColor.dim) }
             }
         }
     }
+
+    private var workImages: [ChatImage] { turn.work.flatMap(\.images) }
 
     private var workSummary: String {
         let steps = turn.work.filter { if case .tool = $0.kind { return true }; return false }.count
@@ -232,12 +272,12 @@ private struct TurnView: View {
     private func workRow(_ item: ChatItem) -> some View {
         switch item.kind {
         case .tool(_, let name, let summary):
-            ToolRow(name: name, summary: summary, output: item.output, isError: item.isError, size: size)
+            ToolRow(name: name, summary: summary, output: item.output, isError: item.isError, images: item.images, size: size)
         case .permission(_, let tool, let summary, let input):
             PermissionRow(item: item, tool: tool, summary: summary, input: input, chat: chat)
         case .text(let t):
             Text(t.replacingOccurrences(of: "\n", with: " "))
-                .foregroundStyle(.secondary).lineLimit(2)
+                .foregroundStyle(TUIColor.dim).lineLimit(2)
                 .padding(.leading, 8)
         default:
             EmptyView()
@@ -247,12 +287,14 @@ private struct TurnView: View {
 
 // MARK: - Work log rows
 
-/// One line per tool call: icon, name, target. Click to see its output.
+/// One line per tool call, as the TUI draws it: `● Name(target)`, the dot green when it worked and red when it
+/// failed. Click to see its output; images it returned (screenshots) show underneath.
 private struct ToolRow: View {
     let name: String
     let summary: String
     let output: String?
     let isError: Bool
+    let images: [ChatImage]
     let size: CGFloat
     @State private var expanded = false
 
@@ -261,15 +303,11 @@ private struct ToolRow: View {
             HStack(spacing: 7) {
                 Group {
                     if output == nil { ClaudeSpinner(size: 10) }
-                    else {
-                        Image(systemName: isError ? "exclamationmark.triangle" : Activity.tool(name).symbol)
-                            .foregroundStyle(isError ? NeedsYouDot.red : .secondary)
-                    }
+                    else { Text("●").foregroundStyle(isError ? TUIColor.error : TUIColor.success) }
                 }
-                .font(.system(size: 10.5))
                 .frame(width: 14)
-                Text(name).foregroundStyle(.secondary)
-                Text(summary).foregroundStyle(.tertiary).lineLimit(1).truncationMode(.middle)
+                (Text(name).bold() + Text(summary.isEmpty ? "" : "(\(summary))").foregroundColor(TUIColor.dim))
+                    .lineLimit(1).truncationMode(.middle)
                 Spacer(minLength: 0)
             }
             .contentShape(Rectangle())
@@ -279,7 +317,7 @@ private struct ToolRow: View {
             if expanded, let out = output {
                 ScrollView {
                     Text(out).font(.system(size: size - 1, design: .monospaced))
-                        .foregroundStyle(isError ? NeedsYouDot.red.opacity(0.9) : .secondary)
+                        .foregroundStyle(isError ? TUIColor.error : TUIColor.dim)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(8)
@@ -288,7 +326,74 @@ private struct ToolRow: View {
                 .background(RoundedRectangle(cornerRadius: 6).fill(SwiftUI.Color(nsColor: Theme.foreground).opacity(0.05)))
                 .padding(.leading, 30)
             }
+            if !images.isEmpty { ImageStrip(images: images).padding(.leading, 30) }
         }
+    }
+}
+
+/// Claude's prose after a ●, the way the TUI marks its messages.
+private struct Answer: View {
+    let text: String
+    let size: CGFloat
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("●").foregroundStyle(TUIColor.fg)
+            MarkdownView(text: text, size: size)
+        }
+    }
+}
+
+/// Thumbnails of a message's images; click one to see it full size.
+private struct ImageStrip: View {
+    let images: [ChatImage]
+    @Environment(\.zoomImage) private var zoom
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(images) { img in
+                    if let ns = img.image {
+                        Image(nsImage: ns).resizable().interpolation(.high).scaledToFit()
+                            .frame(maxWidth: 320, maxHeight: 180)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(SwiftUI.Color(nsColor: Theme.paneDivider)))
+                            .contentShape(Rectangle())
+                            .onTapGesture { zoom(img) }
+                            .modifier(PointingHandCursor())
+                            .help("Click to enlarge")
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// An image full size, as large as the screen allows; esc, click or Close dismisses it.
+private struct ImageModal: View {
+    let image: ChatImage
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        let ns = image.image
+        let screen = NSScreen.main?.visibleFrame.size ?? CGSize(width: 1400, height: 900)
+        let natural = ns?.size ?? .zero
+        let scale = min(1, (screen.width * 0.85) / max(natural.width, 1), (screen.height * 0.8) / max(natural.height, 1))
+        VStack(spacing: 0) {
+            if let ns {
+                Image(nsImage: ns).resizable().interpolation(.high).scaledToFit()
+                    .frame(width: max(natural.width * scale, 200), height: max(natural.height * scale, 120))
+                    .onTapGesture { dismiss() }
+            }
+            HStack {
+                Text("\(Int(natural.width)) × \(Int(natural.height))").font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+                Spacer()
+                Button("Copy") {
+                    NSPasteboard.general.clearContents()
+                    if let ns { NSPasteboard.general.writeObjects([ns]) }
+                }
+                Button("Close") { dismiss() }.keyboardShortcut(.cancelAction)
+            }
+            .padding(10)
+        }
+        .background(SwiftUI.Color(nsColor: Theme.background))
     }
 }
 
@@ -415,7 +520,12 @@ struct MarkdownView: View {
         // common inline HTML in READMEs: <kbd>⌘K</kbd> → `⌘K`, <br> → newline; other tags stay as text
         let t = s.replacingOccurrences(of: #"<kbd>(.*?)</kbd>"#, with: "`$1`", options: .regularExpression)
             .replacingOccurrences(of: #"<br\s*/?>"#, with: "\n", options: .regularExpression)
-        return (try? AttributedString(markdown: t, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(t)
+        var a = (try? AttributedString(markdown: t, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(t)
+        // inline code in the TUI's code color
+        for run in a.runs where run.inlinePresentationIntent?.contains(.code) == true {
+            a[run.range].foregroundColor = TUIColor.code
+        }
+        return a
     }
 
     private var blocks: [Block] {
@@ -504,7 +614,7 @@ struct ChatInput: NSViewRepresentable {
         override func draw(_ r: NSRect) {
             super.draw(r)
             if string.isEmpty, let f = font {
-                (placeholder as NSString).draw(at: NSPoint(x: textContainerInset.width + 5, y: textContainerInset.height),
+                (placeholder as NSString).draw(at: NSPoint(x: textContainerInset.width + (textContainer?.lineFragmentPadding ?? 0), y: textContainerInset.height),
                                                withAttributes: [.font: f, .foregroundColor: NSColor.tertiaryLabelColor])
             }
         }
@@ -547,6 +657,7 @@ struct ChatInput: NSViewRepresentable {
         tv.isVerticallyResizable = true
         tv.autoresizingMask = [.width]
         tv.textContainer?.widthTracksTextView = true
+        tv.textContainer?.lineFragmentPadding = 0
         tv.delegate = context.coordinator
         scroll.documentView = tv
         return scroll
