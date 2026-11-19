@@ -19,21 +19,6 @@ enum Pref {
     }
 }
 
-/// Whether a command resolves on the user's login-shell PATH (checked once per command; it spawns a shell).
-enum CLI {
-    private static var cache: [String: Bool] = [:]
-    static func installed(_ name: String) -> Bool {
-        if let v = cache[name] { return v }
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
-        p.arguments = ["-l", "-c", "command -v \(name)"]
-        p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
-        let ok = (try? p.run()) != nil && { p.waitUntilExit(); return p.terminationStatus == 0 }()
-        cache[name] = ok
-        return ok
-    }
-}
-
 /// The coding agent CLI a new session runs.
 enum Agent: String, CaseIterable, Identifiable {
     case claude, codex, agy
@@ -60,11 +45,12 @@ struct SettingsView: View {
     }()
 
     enum Section: String, CaseIterable, Identifiable {
-        case appearance = "Appearance", sessions = "Sessions", sandboxes = "Sandboxes", snippets = "Snippets", about = "About"
+        case appearance = "Appearance", agents = "Agents", sessions = "Sessions", sandboxes = "Sandboxes", snippets = "Snippets", about = "About"
         var id: String { rawValue }
         var icon: String {
             switch self {
             case .appearance: return "paintbrush"
+            case .agents: return "terminal"
             case .sessions: return "rectangle.stack"
             case .sandboxes: return "sailboat"
             case .snippets: return "text.quote"
@@ -93,6 +79,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         switch section {
                         case .appearance: AppearanceSettings()
+                        case .agents: AgentSettings()
                         case .sessions: SessionSettings()
                         case .sandboxes: SandboxSettings(registry: store.sandboxes)
                         case .snippets: SnippetSettings()
@@ -230,25 +217,137 @@ private struct ThemeSwatches: View {
     }
 }
 
+// MARK: - Agents
+
+/// The agent CLIs Studio can run: which one new sessions open, and for each whether it's installed and
+/// logged in, with a way to log in or install it.
+private struct AgentSettings: View {
+    @AppStorage(Pref.defaultAgent) private var agent = Agent.claude.rawValue
+    @ObservedObject private var checker = AgentChecker.shared
+    @State private var lastCheck = Date.distantPast
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Row(title: "Default agent",
+                detail: "The CLI a new session opens: ⌘N, ⌘K and the new_session tool. ⌘P → New Claude / Codex / Antigravity Session opens another one.") {
+                Picker("", selection: $agent) {
+                    ForEach(Agent.allCases) { a in
+                        let missing = checker.status[a].map { !$0.checking && $0.path == nil } ?? false
+                        Text(a.name + (missing ? " (CLI not found)" : "")).tag(a.rawValue)
+                    }
+                }
+                .labelsHidden().frame(width: 240)
+            }
+            HStack {
+                Group_(title: "Agent CLIs")
+                Spacer()
+                Button { refresh(force: true) } label: { Label("Check Again", systemImage: "arrow.clockwise") }
+                    .buttonStyle(.borderless).font(.system(size: 12)).padding(.top, 20).padding(.bottom, 2)
+                    .disabled(checker.status.values.contains { $0.checking })
+            }
+            ForEach(Agent.allCases) { a in
+                AgentRow(agent: a, status: checker.status[a] ?? .init(), isDefault: a.rawValue == agent)
+            }
+        }
+        .onAppear { refresh(force: true) }
+        // back from logging in, in a terminal: check again (at most every 10s)
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in refresh(force: false) }
+    }
+
+    private func refresh(force: Bool) {
+        guard force || Date().timeIntervalSince(lastCheck) > 10 else { return }
+        lastCheck = Date()
+        checker.refresh()
+    }
+}
+
+private struct AgentRow: View {
+    let agent: Agent
+    let status: AgentChecker.Status
+    let isDefault: Bool
+    @State private var note: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text(agent.name).font(.system(size: 13, weight: .semibold))
+                if isDefault {
+                    Text("Default").font(.system(size: 10, weight: .semibold))
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(SwiftUI.Color(nsColor: Theme.accent).opacity(0.25))
+                }
+                Spacer()
+                state
+            }
+            detail.font(.system(size: 11.5, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
+            if let note { Text(note).font(.system(size: 11.5)).foregroundStyle(.secondary) }
+        }
+        .padding(.vertical, 12)
+        .overlay(alignment: .bottom) { Hairline() }
+    }
+
+    @ViewBuilder private var state: some View {
+        if status.checking {
+            HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Checking…").foregroundStyle(.secondary) }
+        } else if status.path == nil {
+            pill("CLI not found", .secondary)
+        } else if status.loggedIn == true {
+            pill("Logged in" + (status.account.map { " · \($0)" } ?? ""), .green)
+        } else {
+            HStack(spacing: 8) {
+                pill(status.loggedIn == false ? "Not logged in" : "Couldn't check login", .orange)
+                Button("Log In…") { logIn() }
+            }
+        }
+    }
+
+    @ViewBuilder private var detail: some View {
+        if status.checking { Text(" ") }
+        else if let path = status.path {
+            Text([status.version, abbreviatePath(path)].compactMap { $0 }.joined(separator: " · "))
+        } else {
+            HStack(spacing: 8) {
+                Text(AgentChecker.installHint(agent))
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(AgentChecker.installHint(agent), forType: .string)
+                    note = "Copied. Run it in a terminal, then Check Again."
+                } label: { Image(systemName: "doc.on.doc") }
+                .buttonStyle(.borderless).help("Copy")
+            }
+        }
+    }
+
+    private func pill(_ text: String, _ color: SwiftUI.Color) -> some View {
+        HStack(spacing: 5) {
+            Circle().fill(color).frame(width: 6, height: 6)
+            Text(text).font(.system(size: 12))
+        }
+        .foregroundStyle(color == .secondary ? .secondary : .primary)
+    }
+
+    /// The login is interactive (a browser opens, or a code to paste): run it in a Studio terminal tab.
+    private func logIn() {
+        let cmd = AgentChecker.loginCommand(agent)
+        if StudioControl.shared.openTerminal(running: cmd) {
+            note = "Opened a terminal tab running `\(cmd)`. Finish there; this updates when you come back."
+        } else {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(cmd, forType: .string)
+            note = "No Studio window is open: `\(cmd)` is copied, run it in a terminal."
+        }
+    }
+}
+
 // MARK: - Sessions
 
 private struct SessionSettings: View {
     @AppStorage(Pref.closeTabEndsSession) private var closeEnds = true
     @AppStorage(Pref.keepSessionsAlive) private var keepAlive = true
     @AppStorage(Pref.nativePermissionMode) private var nativeMode = ""
-    @AppStorage(Pref.defaultAgent) private var agent = Agent.claude.rawValue
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Row(title: "Default agent",
-                detail: "The CLI a new session (⌘N, ⌘K, the new_session tool) opens. ⌘P → New Claude / Codex / Antigravity Session opens another one.") {
-                Picker("", selection: $agent) {
-                    ForEach(Agent.allCases) { a in
-                        Text(a.name + (CLI.installed(a.command) ? "" : " (not installed)")).tag(a.rawValue)
-                    }
-                }
-                .labelsHidden().frame(width: 200)
-            }
             Row(title: "Closing a tab ends its session",
                 detail: "Off: the session keeps running in the background (reopen it from ⌘P). Right-click a tab for the other behavior either way.") {
                 Toggle("", isOn: $closeEnds).labelsHidden().toggleStyle(.switch)

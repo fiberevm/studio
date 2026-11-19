@@ -91,6 +91,17 @@ final class StudioControl {
     func register(_ m: ProjectModel) { windows[m.windowId] = WeakModel(model: m); lastActive = m }
     func unregister(_ m: ProjectModel) { windows.removeValue(forKey: m.windowId) }
     func noteActive(_ m: ProjectModel) { lastActive = m }
+
+    /// Open a terminal tab beside the active pane of the frontmost project window and run `cmd` in it
+    /// (Settings → Agents → Log In…). False if no project window is open.
+    func openTerminal(running cmd: String) -> Bool {
+        guard let store, let model = lastActive ?? models.first else { return false }
+        let t = store.newShell(in: model.folder)
+        model.place(t, beside: model.activeGroup, zone: .right)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { t.type(cmd + "\r") }
+        model.focusTerminal()
+        return true
+    }
     private var models: [ProjectModel] { windows.values.compactMap(\.model) }
 
     // MARK: Connection handling
