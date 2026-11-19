@@ -156,13 +156,8 @@ final class CodexScanner {
         defer { try? fh.close() }
         let size = (try? fh.seekToEnd()) ?? 0
         guard size > st.offset else { return st.session }
-        try? fh.seek(toOffset: st.offset)
-        let data = (try? fh.readToEnd()) ?? Data()
-        guard let lastNL = data.lastIndex(of: 0x0A) else { return st.session }   // partial line: next time
-        let complete = data[data.startIndex...lastNL]
-        st.offset += UInt64(complete.count)
-        for line in complete.split(separator: 0x0A) {
-            guard let o = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { continue }
+        st.offset = forEachLine(fh, from: st.offset) { line in
+            guard let o = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { return }
             Self.apply(o, to: &st.session)
         }
         files[path] = st

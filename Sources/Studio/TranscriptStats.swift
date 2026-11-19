@@ -1,5 +1,54 @@
 import Foundation
 
+/// Reads a file's complete lines from `offset` on, 256 KB at a time into buffers that are reused, so a
+/// transcript of hundreds of MB never sits in memory whole and leaves no trail of big freed blocks behind
+/// (the allocator keeps those for reuse rather than returning them). Each chunk's parsed objects are freed
+/// before the next read. Returns the offset just past the last complete line; a partial last line is left
+/// for next time.
+func forEachLine(_ fh: FileHandle, from offset: UInt64, _ body: (Data) -> Void) -> UInt64 {
+    let fd = fh.fileDescriptor
+    var pos = offset
+    var fileOffset = off_t(offset)
+    var chunk = [UInt8](repeating: 0, count: 256 << 10)
+    var pending = Data(capacity: 512 << 10)   // unfinished line + new bytes; grows only to the longest line
+    while true {
+        let n = chunk.withUnsafeMutableBytes { pread(fd, $0.baseAddress, $0.count, fileOffset) }
+        guard n > 0 else { break }
+        fileOffset += off_t(n)
+        chunk.withUnsafeBytes { pending.append($0.bindMemory(to: UInt8.self).baseAddress!, count: n) }
+        // find line ends with memchr; Data's generic collection methods go byte by byte
+        var ends: [Int] = []
+        pending.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
+            guard let base = raw.baseAddress else { return }
+            var at = 0
+            while at < raw.count, let hit = memchr(base + at, 0x0A, raw.count - at) {
+                let i = base.distance(to: UnsafeRawPointer(hit))
+                ends.append(i)
+                at = i + 1
+            }
+        }
+        guard let last = ends.last else { continue }
+        autoreleasepool {
+            var start = 0
+            for e in ends {
+                if e > start { body(pending.subdata(in: start..<e)) }
+                start = e + 1
+            }
+        }
+        pos += UInt64(last + 1)
+        pending.removeSubrange(0..<(last + 1))
+    }
+    return pos
+}
+
+/// Whether `line` contains `tag` (memmem: far faster than Data.range(of:) on every line of a transcript).
+func contains(_ line: Data, _ tag: Data) -> Bool {
+    line.withUnsafeBytes { l in tag.withUnsafeBytes { t in
+        memmem(l.baseAddress, l.count, t.baseAddress, t.count) != nil
+    } }
+}
+
+
 /// Running totals for a transcript: tokens, latest model and git branch.
 struct TranscriptStats: Equatable {
     var tokensIn = 0       // input + cache creation + cache read (everything sent to the model)
@@ -19,6 +68,8 @@ final class StatsReader {
         var seen = Set<String>()
         var prCreateCalls = Set<String>()   // tool_use ids of `gh pr create` commands
     }
+    private static let assistantTag = Data(#""type":"assistant""#.utf8)
+    private static let toolResultTag = Data(#""tool_result""#.utf8)
     fileprivate static let prURL = try! NSRegularExpression(pattern: #"https://github\.com/[\w.-]+/[\w.-]+/pull/\d+"#)
     private var states: [String: State] = [:]
 
@@ -29,21 +80,19 @@ final class StatsReader {
         let size = (try? fh.seekToEnd()) ?? 0
         if size < st.offset { st = State() }            // file was rewritten
         guard size > st.offset else { return st.stats }
-        try? fh.seek(toOffset: st.offset)
-        let data = (try? fh.readToEnd()) ?? Data()
-        // only consume complete lines; a partial last line is re-read next time
-        guard let lastNL = data.lastIndex(of: 0x0A) else { return st.stats }
-        let complete = data[data.startIndex...lastNL]
-        st.offset += UInt64(complete.count)
-        for line in complete.split(separator: 0x0A) {
-            guard let o = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { continue }
+        st.offset = forEachLine(fh, from: st.offset) { line in
+            // Only assistant messages (usage, model, branch, `gh pr create` calls) and the results of
+            // those calls matter; skip parsing everything else, which is most of a transcript.
+            let assistant = contains(line, Self.assistantTag)
+            guard assistant || (!st.prCreateCalls.isEmpty && contains(line, Self.toolResultTag)),
+                  let o = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { return }
             if let b = o["gitBranch"] as? String, !b.isEmpty, b != "HEAD" { st.stats.gitBranch = b }
             Self.scanPRs(o, &st)
             guard o["type"] as? String == "assistant", o["isSidechain"] as? Bool != true,
-                  let msg = o["message"] as? [String: Any] else { continue }
+                  let msg = o["message"] as? [String: Any] else { return }
             if let m = msg["model"] as? String, m != "<synthetic>" { st.stats.model = m }
             let id = msg["id"] as? String ?? UUID().uuidString
-            guard !st.seen.contains(id), let u = msg["usage"] as? [String: Any] else { continue }
+            guard !st.seen.contains(id), let u = msg["usage"] as? [String: Any] else { return }
             st.seen.insert(id)
             func n(_ k: String) -> Int { (u[k] as? NSNumber)?.intValue ?? 0 }
             st.stats.tokensIn += n("input_tokens") + n("cache_creation_input_tokens") + n("cache_read_input_tokens")

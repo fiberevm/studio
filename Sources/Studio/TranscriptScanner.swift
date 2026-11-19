@@ -6,14 +6,29 @@ final class TranscriptScanner {
     private var cache: [String: (mtime: Date, record: SessionRecord?)] = [:]
     private let chunk = 256 * 1024
 
+    /// Where each session's transcript was last found, so a scan of known sessions lists no folders.
+    private var pathById: [String: URL] = [:]
+    private var lastFullList = Date.distantPast
+
     /// Parses only the transcripts for the given session ids (the ones shown in the sidebar).
     func scan(ids: Set<String>?) -> [SessionRecord] {
         let fm = FileManager.default
-        guard let dirs = try? fm.contentsOfDirectory(at: Paths.projects, includingPropertiesForKeys: nil) else { return [] }
         var out: [SessionRecord] = []
         var seen = Set<String>()
-        for dir in dirs {
-            guard let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { continue }
+        let files: [URL]
+        // Known sessions are read straight from their files. Listing every project folder to find the rest
+        // (sessions with no transcript yet, or running elsewhere) happens at most every 15s.
+        if let ids, let known = Optional(ids.compactMap { pathById[$0] }),
+           known.allSatisfy({ fm.fileExists(atPath: $0.path) }),
+           known.count == ids.count || Date().timeIntervalSince(lastFullList) < 15 {
+            files = known
+        } else {
+            if ids != nil { lastFullList = Date() }
+            guard let dirs = try? fm.contentsOfDirectory(at: Paths.projects, includingPropertiesForKeys: nil) else { return [] }
+            files = dirs.flatMap { (try? fm.contentsOfDirectory(at: $0, includingPropertiesForKeys: nil)) ?? [] }
+            for f in files where f.pathExtension == "jsonl" { pathById[f.deletingPathExtension().lastPathComponent] = f }
+        }
+        do {
             for f in files where f.pathExtension == "jsonl" && (ids?.contains(f.deletingPathExtension().lastPathComponent) ?? true) {
                 let path = f.path
                 seen.insert(path)

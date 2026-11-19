@@ -95,6 +95,11 @@ final class SessionStore: ObservableObject {
 
     func rescanTranscripts() {
         let ids = Set(live.keys).union(terminals.filter(\.isClaude).compactMap(\.sessionId))
+        // Token stats read a whole transcript (some are hundreds of MB): only for sessions Studio shows them
+        // for, the tabs and sidebar rows of open windows, not every Claude running on the machine.
+        let folders = restoredFolders
+        let statIds = Set(terminals.filter(\.isClaude).compactMap(\.sessionId))
+            .union(live.values.filter { i in folders.contains { isInside(i.cwd, $0) } }.map(\.sessionId))
         let codexIds = Set(terminals.filter(\.isCodex).compactMap(\.sessionId))
         // Codex tabs that haven't learned their conversation yet (Codex writes it on the first message)
         let pending = terminals.filter { $0.isCodex && $0.sessionId == nil && $0.running }.map { ($0.id, $0.cwd, $0.createdAt) }
@@ -104,19 +109,19 @@ final class SessionStore: ObservableObject {
             let recs = scanner.scan(ids: ids)
             var dict = Dictionary(recs.map { ($0.id, $0) }, uniquingKeysWith: { a, b in a.lastActivity > b.lastActivity ? a : b })
             var st: [String: TranscriptStats] = [:]
-            for r in dict.values { st[r.id] = statsReader.stats(for: r.transcriptPath) }
+            for r in dict.values where statIds.contains(r.id) { st[r.id] = statsReader.stats(for: r.transcriptPath) }
             var found: [UUID: String] = [:]
             var taken = codexIds
             for (tab, cwd, since) in pending {
                 if let id = codexScanner.started(in: cwd, since: since, excluding: taken) { found[tab] = id; taken.insert(id) }
             }
-            let cx = codexScanner.scan(ids: taken)
+            let cx = taken.isEmpty ? [:] : codexScanner.scan(ids: taken)   // no Codex tabs: don't touch ~/.codex
             for (id, c) in cx { dict[id] = c.record; st[id] = c.stats }
             var agyTaken = agyIds
             for (tab, cwd, since) in agyPending {
                 if let id = agyScanner.started(in: cwd, since: since, excluding: agyTaken) { found[tab] = id; agyTaken.insert(id) }
             }
-            let ag = agyScanner.scan(ids: agyTaken)
+            let ag = agyTaken.isEmpty ? [:] : agyScanner.scan(ids: agyTaken)
             for (id, a) in ag { dict[id] = a.record }
             DispatchQueue.main.async {
                 if self.agy != ag { self.agy = ag }
