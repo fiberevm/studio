@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Studio — the IDE for agents that keeps you in flow</title>
-<meta name="description" content="Studio is a native macOS workspace for running many Claude Code sessions at once: tabs, split panes, a command palette, and a queue of the sessions that need you.">
+<meta name="description" content="Studio is a native macOS workspace for running many coding agents at once (Claude Code, Codex and Antigravity): tabs, split panes, a command palette, sandboxes, and a queue of the sessions that need you.">
 <meta property="og:title" content="Studio — the IDE for agents that keeps you in flow">
-<meta property="og:description" content="A native macOS workspace for running many Claude Code sessions at once.">
+<meta property="og:description" content="A native macOS workspace for running many coding agents at once: Claude Code, Codex and Antigravity.">
 <meta property="og:image" content="assets/hero.webp">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -137,6 +137,29 @@
   .card h3 { margin: 0 0 6px; font-size: 17px; letter-spacing: -.01em; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .card p { margin: 0; color: var(--muted); font-size: 15px; }
 
+  /* agents */
+  .agents { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .agent { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; display: flex; flex-direction: column; gap: 10px; }
+  .agent .cmd { align-self: flex-start; font: 13px var(--mono); color: var(--text); background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 8px; padding: 5px 10px; }
+  .agent .cmd::before { content: "> "; color: var(--faint); }
+  .agent h3 { margin: 4px 0 0; font-size: 17px; }
+  .agent p { margin: 0; color: var(--muted); font-size: 15px; }
+  .agent .by { color: var(--faint); font-size: 13px; }
+  .matrix-wrap { margin-top: 24px; overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); }
+  table.matrix { width: 100%; border-collapse: collapse; font-size: 14.5px; min-width: 560px; }
+  .matrix th, .matrix td { padding: 11px 16px; text-align: left; border-bottom: 1px solid var(--line); }
+  .matrix tr:last-child td { border-bottom: 0; }
+  .matrix th { font-weight: 600; color: var(--text); background: var(--surface); }
+  .matrix td { color: var(--muted); }
+  .matrix td.y, .matrix td.n { text-align: center; width: 120px; }
+  .matrix th.c { text-align: center; }
+  .matrix td.y::before { content: "✓"; color: #3fb950; font-weight: 700; }
+  .matrix td.n::before { content: "—"; color: var(--faint); }
+  .list-label { margin: 0 0 14px; font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
+  .badge { font: 600 11.5px var(--sans); color: #3fb950; border: 1px solid rgba(63,185,80,.4); border-radius: 999px; padding: 1px 8px; margin-left: 6px; vertical-align: 2px; }
+  .more { margin-top: 14px; color: var(--faint); font-size: 14px; }
+  .more a { color: var(--muted); }
+
   /* providers */
   .providers { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 8px; }
   .provider { display: flex; gap: 18px; align-items: flex-start; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; }
@@ -171,6 +194,7 @@
     .split, .split.rev { grid-template-columns: 1fr; gap: 36px; }
     .split.rev .copy { order: 0; }
     .cards, .why { grid-template-columns: 1fr 1fr; }
+    .agents { grid-template-columns: 1fr; }
     .keys { grid-template-columns: 1fr 1fr; }
     .providers, .install { grid-template-columns: 1fr; }
     nav .links { display: none; }
@@ -200,6 +224,12 @@
   .demo-steps li.on, .demo-steps li.done { color: var(--text); }
   .demo-steps li.done span, .demo-steps li.on span { color: var(--muted); }
   @media (max-width: 700px) { .demo-steps { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 600px) {
+    table.matrix { min-width: 0; font-size: 13.5px; }
+    .matrix th, .matrix td { padding: 10px 8px; }
+    .matrix td.y, .matrix td.n { width: 58px; }
+    .matrix th.c { font-size: 12px; }
+  }
 </style>
 </head>
 <body>
@@ -209,6 +239,7 @@
     <a class="brand" href="#"><img src="assets/icon.svg" alt="">Studio</a>
     <div class="links">
       <a href="#attention">Features</a>
+      <a href="#agents">Agents</a>
       <a href="#sandboxes">Sandboxes</a>
       <a href="#shortcuts">Shortcuts</a>
       <a href="#download">Install</a>
@@ -227,7 +258,7 @@
       <li><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="8" fill="currentColor"/><path d="M4.6 8.3l2.2 2.2 4.6-4.8" fill="none" stroke="#0d1016" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>Sandbox support</li>
       <li><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="8" fill="currentColor"/><path d="M4.6 8.3l2.2 2.2 4.6-4.8" fill="none" stroke="#0d1016" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>Open source</li>
     </ul>
-    <p class="lede">Studio is a native workspace for Claude Code: tabs, split panes and a command palette like VS Code, where every pane is a live Claude session, a terminal or a web page.</p>
+    <p class="lede">Studio is a native workspace for coding agents (Claude Code, Codex and Antigravity): tabs, split panes and a command palette like VS Code, where every pane is a live agent session, a terminal or a web page.</p>
     <div class="cta">
       <a class="btn primary" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.zip">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.3 1.88-3.4 1.97-3.46-1.07-1.57-2.74-1.78-3.33-1.8-1.42-.15-2.77.83-3.49.83-.72 0-1.83-.81-3.01-.79-1.55.02-2.98.9-3.78 2.29-1.61 2.8-.41 6.94 1.16 9.21.77 1.11 1.68 2.36 2.88 2.31 1.16-.05 1.6-.75 3-.75s1.79.75 3.01.72c1.25-.02 2.04-1.13 2.8-2.25.88-1.29 1.24-2.54 1.26-2.6-.03-.01-2.42-.93-2.47-3.71ZM14.1 5.86c.64-.78 1.07-1.85.95-2.92-.92.04-2.03.61-2.69 1.38-.59.68-1.11 1.77-.97 2.82 1.03.08 2.07-.52 2.71-1.28Z"/></svg>
@@ -290,7 +321,7 @@
 <section id="features">
   <div class="wrap">
     <h2>Built for people who run a lot of agents.</h2>
-    <p class="sub">It's the real <code>claude</code> CLI in a real terminal, so your slash commands, hooks, MCP servers and settings work unchanged. Studio adds the workspace around it.</p>
+    <p class="sub">It's the real CLI in a real terminal, so your slash commands, hooks, MCP servers and settings work unchanged. Studio adds the workspace around it.</p>
     <div class="cards">
       <div class="card">
         <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 3v18M3 12h9"/></svg></div>
@@ -341,6 +372,50 @@
   </div>
 </section>
 
+<section id="agents">
+  <div class="wrap">
+    <h2>Bring the agent you use.</h2>
+    <p class="sub">Studio runs each agent's own CLI in a real terminal, logged in with your own account. Pick the default in <b>Settings → Agents</b>, which also shows each CLI's version and login, and open any other one from <kbd>⌘P</kbd>. Mix them in the same window.</p>
+    <p class="list-label">Supported CLIs</p>
+    <div class="agents">
+      <div class="agent">
+        <span class="cmd">claude</span>
+        <h3>Claude Code<span class="badge">Supported</span></h3>
+        <span class="by">Anthropic</span>
+        <p>Everything in Studio, including the native view, which draws the conversation itself with images and inline approvals.</p>
+      </div>
+      <div class="agent">
+        <span class="cmd">codex</span>
+        <h3>Codex CLI<span class="badge">Supported</span></h3>
+        <span class="by">OpenAI</span>
+        <p>Titles, live status and approvals from Codex's own session logs, the Studio MCP, fork, and model and tokens in the status bar.</p>
+      </div>
+      <div class="agent">
+        <span class="cmd">agy</span>
+        <h3>Antigravity CLI<span class="badge">Supported</span></h3>
+        <span class="by">Google</span>
+        <p>Titles, live status and permission requests read from agy's conversation databases, and exact resume after a restart.</p>
+      </div>
+    </div>
+    <div class="matrix-wrap">
+      <table class="matrix">
+        <thead><tr><th>In Studio</th><th class="c">Claude Code</th><th class="c">Codex</th><th class="c">Antigravity</th></tr></thead>
+        <tbody>
+          <tr><td>Tabs, splits, titles and the session sidebar</td><td class="y"></td><td class="y"></td><td class="y"></td></tr>
+          <tr><td>Live status, <i>needs you</i> on approvals, notifications, <kbd>⌘J</kbd></td><td class="y"></td><td class="y"></td><td class="y"></td></tr>
+          <tr><td>Message any session from <kbd>⌘K</kbd>, snippets</td><td class="y"></td><td class="y"></td><td class="y"></td></tr>
+          <tr><td>Survives restarts, resumes the exact conversation</td><td class="y"></td><td class="y"></td><td class="y"></td></tr>
+          <tr><td>Past conversations in <kbd>⌘P</kbd></td><td class="y"></td><td class="y"></td><td class="y"></td></tr>
+          <tr><td>Studio MCP (agents drive the editor) and sandboxes</td><td class="y"></td><td class="y"></td><td class="n"></td></tr>
+          <tr><td>Fork a conversation <kbd>⌘E</kbd></td><td class="y"></td><td class="y"></td><td class="n"></td></tr>
+          <tr><td>Model and tokens in the status bar</td><td class="y"></td><td class="y"></td><td class="n"></td></tr>
+          <tr><td>Native view <kbd>⌘/</kbd></td><td class="y"></td><td class="n"></td><td class="n"></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
 <section id="sandboxes">
   <div class="wrap">
     <h2>Give every agent a machine of its own.</h2>
@@ -350,16 +425,18 @@
       <div><b>Agents orchestrate.</b>Tests on one machine, a migration dry run on another, a load test on a third, all at once.</div>
       <div><b>Risky work stays contained.</b>Unknown dependencies and generated scripts run on a disposable VM, not the machine holding your keys.</div>
     </div>
+    <p class="list-label">Supported sandbox providers</p>
     <div class="providers">
       <div class="provider">
         <img src="assets/boat-dark.svg" alt="Boat">
-        <div><h3>boat.dev</h3><p>Linux VMs from 2 to 16 vCPU with snapshots, fork and resume, HTTPS URLs and a desktop you can open in a pane.</p></div>
+        <div><h3>boat.dev<span class="badge">Supported</span></h3><p>Linux VMs from 2 to 16 vCPU with snapshots, fork and resume, HTTPS URLs and a desktop you can open in a pane.</p></div>
       </div>
       <div class="provider">
         <img src="assets/aws-lambda.svg" alt="AWS Lambda">
-        <div><h3>AWS Lambda MicroVMs</h3><p>Firecracker VMs in your own AWS account, up to 8 hours, with suspend and resume that keeps memory and processes. One-click setup.</p></div>
+        <div><h3>AWS Lambda MicroVMs<span class="badge">Supported</span></h3><p>Firecracker VMs in your own AWS account, up to 8 hours, with suspend and resume that keeps memory and processes. One-click setup.</p></div>
       </div>
     </div>
+    <p class="more">More providers are on the way. They plug in through one Swift protocol, so <a href="https://github.com/fiberevm/studio/blob/main/Sources/Studio/Sandbox.swift">adding one</a> is a small PR.</p>
   </div>
 </section>
 
