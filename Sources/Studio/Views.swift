@@ -439,7 +439,7 @@ struct StatusDot: View {
         Image(systemName: name)
             .font(.system(size: 10.5, weight: .semibold))
             .foregroundStyle(color)
-            .symbolEffect(.pulse, options: .repeating, isActive: pulse)
+            .modifier(SlowPulse(active: pulse))
             .contentTransition(.symbolEffect(.replace))
     }
 
@@ -455,11 +455,44 @@ struct StatusDot: View {
     }
 }
 
+/// Whether status animations should run: only while Studio is the active app. Every animation frame
+/// redraws the whole tab bar or sidebar layer, so they stop when nobody's looking.
+final class AppActivity: ObservableObject {
+    static let shared = AppActivity()
+    @Published private(set) var live = true
+    private var tokens: [Any] = []
+    private init() {
+        live = NSApp?.isActive ?? true
+        let nc = NotificationCenter.default
+        tokens.append(nc.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in self?.live = true })
+        tokens.append(nc.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in self?.live = false })
+    }
+}
+
+/// A working session's icon breathing in and out. Drawn at ~10 fps rather than as a repeating symbol effect,
+/// which redraws at the display's full rate (up to 120 fps) for as long as any session works.
+struct SlowPulse: ViewModifier {
+    let active: Bool
+    @ObservedObject private var activity = AppActivity.shared
+    func body(content: Content) -> some View {
+        let live = activity.live
+        if active {
+            TimelineView(.animation(minimumInterval: 0.1, paused: !live)) { ctx in
+                let t = ctx.date.timeIntervalSinceReferenceDate
+                content.opacity(live ? 0.6 + 0.4 * (0.5 + 0.5 * cos(t * 2 * .pi / 1.6)) : 1)
+            }
+        } else {
+            content
+        }
+    }
+}
+
 /// Blocked on you (permission prompt, question): a red dot with a slow pulse, so it reads as different from "done".
 struct NeedsYouDot: View {
     static let red = SwiftUI.Color(red: 0.95, green: 0.30, blue: 0.30)
+    @ObservedObject private var activity = AppActivity.shared
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30)) { ctx in
+        TimelineView(.animation(minimumInterval: 1 / 15, paused: !activity.live)) { ctx in
             let t = ctx.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.4) / 1.4
             ZStack {
                 Circle().stroke(Self.red.opacity(0.7 * (1 - t)), lineWidth: 1.5)
@@ -478,9 +511,10 @@ struct ClaudeSpinner: View {
     static let orange = SwiftUI.Color(red: 0.91, green: 0.53, blue: 0.33)
     private static let order = [0, 1, 3, 2]   // top-left → top-right → bottom-right → bottom-left
     private static let step = 0.16
+    @ObservedObject private var activity = AppActivity.shared
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: Self.step)) { ctx in
+        TimelineView(.animation(minimumInterval: Self.step, paused: !activity.live)) { ctx in
             let tick = Int(ctx.date.timeIntervalSinceReferenceDate / Self.step)
             let cell = (size - 2) / 2
             let base = SwiftUI.Color(nsColor: Theme.foreground)
