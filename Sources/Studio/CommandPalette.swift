@@ -112,7 +112,7 @@ struct CommandPalette: View {
     private var placeholder: String {
         switch mode {
         case .themes: return "Select Color Theme  ·  ↑↓ preview  ·  ⏎ keep  ·  esc back"
-        case .switcher: return "Switch to an open session"
+        case .switcher: return "Switch to a session in \(model.name)"
         case .main: return "Search sessions by name or project, or type > for commands"
         }
     }
@@ -197,14 +197,13 @@ struct CommandPalette: View {
         return out
     }
 
-    /// ⌘K: running sessions in every project, most recently active first (this project's ahead of others'),
-    /// the one you're on last. Picking one focuses it in its project's window.
+    /// ⌘K: this project's running sessions, most recently active first, the one you're on last.
+    /// Picking one focuses it here.
     private var switchItems: [Item] {
         let current = model.selectedSessionId
-        let items = model.store.allActiveItems.filter { $0.sessionId != nil }.sorted {
+        let items = model.items.filter { $0.sessionId != nil }.sorted {
             if ($0.sessionId == current) != ($1.sessionId == current) { return $1.sessionId == current }
-            let a = isInside($0.cwd, model.folder), b = isInside($1.cwd, model.folder)
-            return a != b ? a : $0.updatedAt > $1.updatedAt
+            return $0.updatedAt > $1.updatedAt
         }
         return items.map { item in
             let sid = item.sessionId!

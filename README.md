@@ -31,7 +31,7 @@ happened. Studio is built around one idea: **you should only look at a session w
 - **One window per project.** Open `~/code/api` and `~/code/web` side by side; each window holds that repo's sessions and worktrees.
 - **Know who's waiting.** Tabs show a working indicator, a pulsing red dot when Claude is blocked on you, and an unread dot when it finished while you were elsewhere.
 - **Jump, don't scan.** <kbd>⌘J</kbd> takes you to the session that has waited longest; press it again for the next one. It's inbox zero for agents.
-- **Jump between sessions.** <kbd>⌘K</kbd> searches your open sessions in every project; pick one and Studio focuses it in its project's window, ready to type.
+- **Jump between sessions.** <kbd>⌘K</kbd> searches this project's open sessions; pick one and it's focused, ready to type.
 - **Talk without switching.** <kbd>⇧⌘K</kbd> sends a message to any session, or to several at once, without leaving the pane you're in.
 
 ## Features
@@ -180,7 +180,7 @@ open build/Studio.app --args --resume <session-id>        # resume a specific se
 | <kbd>⌘P</kbd> | Go to session: search running and past sessions in every project (type `>` for commands) |
 | <kbd>⇧⌘P</kbd> | Command palette, including Color Theme |
 | <kbd>⌘J</kbd> | Next up: the session that has waited longest for you |
-| <kbd>⌘K</kbd> | Switch to an open session (any project) |
+| <kbd>⌘K</kbd> | Switch to an open session in this project |
 | <kbd>⇧⌘K</kbd> | Quick prompt: message any session (or several) without switching |
 | <kbd>⌘E</kbd> | Fork the current session into a new pane to the right |
 | <kbd>⌘/</kbd> | Toggle native view (Studio renders the session) / terminal view |
