@@ -21,7 +21,7 @@ struct CommandPalette: View {
     @FocusState private var focused: Bool
     @StateObject private var keys = KeyMonitor()
 
-    enum Mode { case main, themes }
+    enum Mode { case main, themes, switcher }
 
     struct Item: Identifiable {
         enum Leading { case status(SessionStatus), icon(String), none }
@@ -35,7 +35,10 @@ struct CommandPalette: View {
         var preview: (() -> Void)? = nil
     }
 
-    init(initial: String) { _query = State(initialValue: initial) }
+    init(initial: String, switcher: Bool = false) {
+        _query = State(initialValue: initial)
+        _mode = State(initialValue: switcher ? .switcher : .main)
+    }
 
     var body: some View {
         let items = results
@@ -109,6 +112,7 @@ struct CommandPalette: View {
     private var placeholder: String {
         switch mode {
         case .themes: return "Select Color Theme  ·  ↑↓ preview  ·  ⏎ keep  ·  esc back"
+        case .switcher: return "Switch to an open session"
         case .main: return "Search sessions by name or project, or type > for commands"
         }
     }
@@ -149,6 +153,8 @@ struct CommandPalette: View {
         switch mode {
         case .themes:
             return filter(themeItems, by: query)
+        case .switcher:
+            return filter(switchItems, by: query)
         case .main:
             if query.hasPrefix(">") {
                 return filter(commandItems, by: String(query.dropFirst()).trimmingCharacters(in: .whitespaces))
@@ -191,6 +197,23 @@ struct CommandPalette: View {
         return out
     }
 
+    /// ⌘K: running sessions in every project, most recently active first (this project's ahead of others'),
+    /// the one you're on last. Picking one focuses it in its project's window.
+    private var switchItems: [Item] {
+        let current = model.selectedSessionId
+        let items = model.store.allActiveItems.filter { $0.sessionId != nil }.sorted {
+            if ($0.sessionId == current) != ($1.sessionId == current) { return $1.sessionId == current }
+            let a = isInside($0.cwd, model.folder), b = isInside($1.cwd, model.folder)
+            return a != b ? a : $0.updatedAt > $1.updatedAt
+        }
+        return items.map { item in
+            let sid = item.sessionId!
+            return Item(id: "sw:\(sid)", title: item.title, subtitle: projectName(for: item.cwd),
+                        detail: item.status.label, leading: .status(item.status),
+                        run: { open(sid: sid, cwd: item.cwd) })
+        }
+    }
+
     private var commandItems: [Item] {
         let m = model
         let s = model.store
@@ -207,7 +230,8 @@ struct CommandPalette: View {
             cmd("Terminal: New Terminal", "⌃`", "terminal") { m.newShellTab() },
             cmd("Web: Open URL…", "", "globe") { m.openWeb(nil, zone: .center) },
             cmd("Session: Next Up (waiting for you)", "⌘J", "arrow.turn.down.right") { m.goToNextUp() },
-            cmd("Session: Quick Prompt…", "⌘K", "text.bubble") { m.quickPrompt = true },
+            cmd("Session: Switch to Open Session…", "⌘K", "rectangle.stack") { m.paletteSwitcher = true; m.palette = "" },
+            cmd("Session: Quick Prompt…", "⇧⌘K", "text.bubble") { m.quickPrompt = true },
             cmd("Session: Fork to the Right", "⌘E", "arrow.triangle.branch") { m.fork() },
             cmd("View: Toggle Native View (Studio rendering instead of the terminal UI)", "⌘/", "text.alignleft") { m.toggleNative() },
             cmd("Session: Close Tab", "⌘W", "xmark") { m.closeSelectedTab() },
@@ -226,7 +250,7 @@ struct CommandPalette: View {
         if let t = m.selectedTerminal {
             list.insert(cmd("Session: End Session", "", "stop.circle") { m.endSession(t) }, at: 3)
         }
-        // Snippets go to the current session in one step; ⌘K offers them for any session or a broadcast.
+        // Snippets go to the current session in one step; ⇧⌘K offers them for any session or a broadcast.
         if let t = m.selectedTerminal, t.isAgent {
             for sn in Snippets.all {
                 list.append(Item(id: "snip:\(sn.name)", title: "Snippet: #\(sn.name)", subtitle: sn.text,

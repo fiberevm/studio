@@ -100,7 +100,8 @@ struct ProjectView: View {
                     // click outside closes it
                     SwiftUI.Color.black.opacity(0.001)
                         .onTapGesture { model.palette = nil; model.focusTerminal() }
-                    CommandPalette(initial: initial)
+                    CommandPalette(initial: initial, switcher: model.paletteSwitcher)
+                        .id(model.paletteSwitcher)
                         .padding(.top, 34)
                 }
             }
@@ -152,7 +153,7 @@ struct ProjectView: View {
                     }
                 }
             }
-            // debug: open ⌘K once a Claude session is running in this window
+            // debug: open ⇧⌘K once a Claude session is running in this window
             if CommandLine.arguments.contains("--quick-demo") {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 9) { if !model.tabs.isEmpty { model.quickPrompt = true } }
             }

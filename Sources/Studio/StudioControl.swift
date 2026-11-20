@@ -685,6 +685,7 @@ final class StudioControl {
             return ["visible": model.sidebarVisible, "width": Int(model.sidebarWidth)]
 
                 case "open_palette":
+            model.paletteSwitcher = p["switcher"] as? Bool ?? false
             model.palette = p["text"] as? String ?? ""
             return "palette open"
 

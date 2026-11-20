@@ -155,16 +155,19 @@ struct AppCommands: Commands {
                 .keyboardShortcut("0")
         }
         CommandGroup(before: .toolbar) {
-            Button("Go to Session…") { project?.palette = "" }
+            Button("Go to Session…") { project?.paletteSwitcher = false; project?.palette = "" }
                 .keyboardShortcut("p")
                 .disabled(project == nil)
             Button("Next Up: Session Waiting for You") { project?.goToNextUp() }
                 .keyboardShortcut("j")
                 .disabled(project == nil)
-            Button("Quick Prompt…") { project?.palette = nil; project?.quickPrompt = true }
+            Button("Switch to Open Session…") { project?.quickPrompt = false; project?.paletteSwitcher = true; project?.palette = "" }
                 .keyboardShortcut("k")
                 .disabled(project == nil)
-            Button("Command Palette…") { project?.palette = ">" }
+            Button("Quick Prompt…") { project?.palette = nil; project?.quickPrompt = true }
+                .keyboardShortcut("k", modifiers: [.command, .shift])
+                .disabled(project == nil)
+            Button("Command Palette…") { project?.paletteSwitcher = false; project?.palette = ">" }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
                 .disabled(project == nil)
             Divider()

@@ -179,8 +179,8 @@ let tools: [Tool] = [
          description: "Close a tab. This ends the session (or terminal) unless keep_running is true; an ended Claude conversation can still be resumed later.",
          properties: ["tab": ["type": "string"], "keep_running": ["type": "boolean", "description": "keep a Claude session running in the background"]],
          required: ["tab"]),
-    Tool(name: "open_palette", description: "Open the command palette for the user, optionally pre-filled (start with '>' for commands).",
-         properties: ["text": ["type": "string"]], required: []),
+    Tool(name: "open_palette", description: "Open the command palette for the user, optionally pre-filled (start with '>' for commands). switcher: true opens the ⌘K open-session switcher instead.",
+         properties: ["text": ["type": "string"], "switcher": ["type": "boolean"]], required: []),
     Tool(name: "open_project", description: "Open (or bring forward) the Studio window for a project folder.",
          properties: ["folder": ["type": "string"]], required: ["folder"]),
 ]

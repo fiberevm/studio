@@ -31,13 +31,14 @@ happened. Studio is built around one idea: **you should only look at a session w
 - **One window per project.** Open `~/code/api` and `~/code/web` side by side; each window holds that repo's sessions and worktrees.
 - **Know who's waiting.** Tabs show a working indicator, a pulsing red dot when Claude is blocked on you, and an unread dot when it finished while you were elsewhere.
 - **Jump, don't scan.** <kbd>⌘J</kbd> takes you to the session that has waited longest; press it again for the next one. It's inbox zero for agents.
-- **Talk without switching.** <kbd>⌘K</kbd> sends a message to any session, or to several at once, without leaving the pane you're in.
+- **Jump between sessions.** <kbd>⌘K</kbd> searches your open sessions in every project; pick one and Studio focuses it in its project's window, ready to type.
+- **Talk without switching.** <kbd>⇧⌘K</kbd> sends a message to any session, or to several at once, without leaving the pane you're in.
 
 ## Features
 
 ### Sessions
 - **Embedded Claude Code** in real terminals ([SwiftTerm](https://github.com/migueldeicaza/SwiftTerm)): it's the real `claude` CLI, so slash commands, hooks, MCP servers and settings all work unchanged.
-- **Codex and Antigravity too.** Set **Settings → Agents → Default agent** to *Codex* or *Antigravity* and new sessions (<kbd>⌘N</kbd>, <kbd>⌘K</kbd>, the `new_session` tool) open OpenAI's [Codex CLI](https://github.com/openai/codex) or Google's Antigravity CLI (`agy`) instead, or pick one per tab from <kbd>⌘P</kbd> → *New Claude / Codex / Antigravity Session*. They get the same treatment as Claude Code: titles, status dots and the sidebar, *needs you* on approval prompts, notifications, ⌘J, ⌘K and snippets, ⌘P history, the native view, model and tokens in the status bar, sessions on workers, and restarts that reattach in tmux or resume the exact conversation (`codex resume <id>`, `agy --conversation <id>`). Studio reads their own records: Codex's rollouts in `~/.codex/sessions`, agy's conversation databases in `~/.gemini/antigravity-cli`. Codex gets the Studio MCP and skill on every session; agy has no per-session MCP option, so **Settings → Agents → Antigravity → Install** adds them once as an agy plugin. In the native view, Codex runs each turn with `codex exec --json` in the sandbox you pick (read only, workspace, full access); agy runs its stream-json mode, and when it needs a permission it can't ask for headless, the view shows **Approve**, which restarts it with just that action allowed for the session. Fork is Claude Code and Codex only (agy can't copy a conversation), and agy terminal tabs show the model but not tokens (agy doesn't record them; its native view does).
+- **Codex and Antigravity too.** Set **Settings → Agents → Default agent** to *Codex* or *Antigravity* and new sessions (<kbd>⌘N</kbd>, <kbd>⇧⌘K</kbd>, the `new_session` tool) open OpenAI's [Codex CLI](https://github.com/openai/codex) or Google's Antigravity CLI (`agy`) instead, or pick one per tab from <kbd>⌘P</kbd> → *New Claude / Codex / Antigravity Session*. They get the same treatment as Claude Code: titles, status dots and the sidebar, *needs you* on approval prompts, notifications, ⌘J, ⌘K and snippets, ⌘P history, the native view, model and tokens in the status bar, sessions on workers, and restarts that reattach in tmux or resume the exact conversation (`codex resume <id>`, `agy --conversation <id>`). Studio reads their own records: Codex's rollouts in `~/.codex/sessions`, agy's conversation databases in `~/.gemini/antigravity-cli`. Codex gets the Studio MCP and skill on every session; agy has no per-session MCP option, so **Settings → Agents → Antigravity → Install** adds them once as an agy plugin. In the native view, Codex runs each turn with `codex exec --json` in the sandbox you pick (read only, workspace, full access); agy runs its stream-json mode, and when it needs a permission it can't ask for headless, the view shows **Approve**, which restarts it with just that action allowed for the session. Fork is Claude Code and Codex only (agy can't copy a conversation), and agy terminal tabs show the model but not tokens (agy doesn't record them; its native view does).
 - **Agents at a glance.** **Settings → Agents** shows each CLI Studio can run (Claude Code, Codex, Antigravity): its version and path, or *CLI not found* with the install command, and whether it's logged in. *Log In…* opens a terminal tab running its login.
 - **Imports what's already running.** Studio reads Claude Code's own session files, so sessions started in other terminals show up too.
 - **Closing a tab never loses a conversation.** It ends the session; <kbd>⌘P</kbd> resumes it any time, right where it left off.
@@ -55,12 +56,12 @@ Everything here is about one thing: spending your attention only where a session
 | ⏭ | **Next up** <kbd>⌘J</kbd> | Jumps to the session that has waited longest for you. Sessions blocked on a permission prompt or question come first, across every project window. Press it again for the next one; you'll see *All caught up* when the queue is empty. |
 | 👀 | **Hover peek** | Rest on a tab for half a second to see the session's status, how long it's been in that state, Claude's last message and your last prompt, without switching to it. |
 | 🔴 | **Needs-you badge** | A pulsing red dot means Claude is blocked on you (permission, question). A blue dot means it finished while you were looking elsewhere. A walking pane-grid means it's working. Idle sessions stay quiet. |
-| 💬 | **Quick prompt** <kbd>⌘K</kbd> | Type a message and send it to any session without leaving the pane you're in. ↑↓ picks the session; the current one is first. |
-| 📣 | **Broadcast** | In <kbd>⌘K</kbd>, press <kbd>⇥</kbd> to tick several sessions and send them all the same message (*"rebase on main"*, *"run the tests"*). |
+| 💬 | **Quick prompt** <kbd>⇧⌘K</kbd> | Type a message and send it to any session without leaving the pane you're in. ↑↓ picks the session; the current one is first. |
+| 📣 | **Broadcast** | In <kbd>⇧⌘K</kbd>, press <kbd>⇥</kbd> to tick several sessions and send them all the same message (*"rebase on main"*, *"run the tests"*). |
 | 🖋 | **Native view** <kbd>⌘/</kbd> | Swap any session from Claude Code's terminal UI to Studio's own rendering (`claude -p` streaming JSON), laid out and colored like the TUI it replaces, in the theme's terminal palette: left aligned and monospaced, your messages on a band after a `>`, Claude's answers after a ● with real markdown (headings, lists, tables, code in the code color), and tool calls as `● Read(file)` rows (green when they worked, red when they failed) folded into a work log that collapses to *Worked for 14s · 6 steps* once the answer is in. Images (pasted into prompts, or returned by tools like screenshots) show as thumbnails; click one to see it full size. Approvals sit inline with **Decline / Approve**. The input is a `>` line with the permission mode (Supervised, Auto-accept edits, Plan, Full access) and Send on the right; Send turns into Stop while Claude works. Same conversation, one process, same permission mode as the terminal; remembered per session. |
 | 🍴 | **Fork** <kbd>⌘E</kbd> | Copy the current conversation into a new session in a split beside it, then take it a different direction. The original keeps going untouched. Also in the tab right-click menu (right or below). |
-| ✨ | **Start from a prompt** | <kbd>⌘↵</kbd> in <kbd>⌘K</kbd> starts a new session with your message already sent. |
-| 🧩 | **Snippets** | Reusable prompts: type `#` in <kbd>⌘K</kbd> (`#tests`, `#review`, `#pr`, `#rebase`, `#summary`, `#continue`), pick one in <kbd>⌘P</kbd> to send it to the current session, or press <kbd>⌘S</kbd> to save what you typed. Stored as plain JSON you can edit. |
+| ✨ | **Start from a prompt** | <kbd>⌘↵</kbd> in <kbd>⇧⌘K</kbd> starts a new session with your message already sent. |
+| 🧩 | **Snippets** | Reusable prompts: type `#` in <kbd>⇧⌘K</kbd> (`#tests`, `#review`, `#pr`, `#rebase`, `#summary`, `#continue`), pick one in <kbd>⌘P</kbd> to send it to the current session, or press <kbd>⌘S</kbd> to save what you typed. Stored as plain JSON you can edit. |
 | 🔔 | **Notifications that matter** | Only while you're in another app, only when a session is blocked on you or finished 30+ seconds of work, never for the one you're watching. Each shows Claude's last words; clicking it opens the session. |
 | 🔍 | **Go to anything** <kbd>⌘P</kbd> | Fuzzy-search every running and past session in every project, plus all commands. Picking a session in another project opens that project's window. |
 | 🧷 | **Nothing is ever lost** | Closing a tab ends the session, but the conversation is one <kbd>⌘P</kbd> away and resumes where it left off. Right-click → *Close Tab, Keep Session Running* to leave it working in the background. Emptied panes stay put with a quiet *New Session* action. |
@@ -179,7 +180,8 @@ open build/Studio.app --args --resume <session-id>        # resume a specific se
 | <kbd>⌘P</kbd> | Go to session: search running and past sessions in every project (type `>` for commands) |
 | <kbd>⇧⌘P</kbd> | Command palette, including Color Theme |
 | <kbd>⌘J</kbd> | Next up: the session that has waited longest for you |
-| <kbd>⌘K</kbd> | Quick prompt: message any session (or several) without switching |
+| <kbd>⌘K</kbd> | Switch to an open session (any project) |
+| <kbd>⇧⌘K</kbd> | Quick prompt: message any session (or several) without switching |
 | <kbd>⌘E</kbd> | Fork the current session into a new pane to the right |
 | <kbd>⌘/</kbd> | Toggle native view (Studio renders the session) / terminal view |
 | <kbd>⌘T</kbd> or <kbd>⌘N</kbd> | New tab with a session (Claude Code, Codex or Antigravity, per Settings) in this project |
@@ -249,7 +251,7 @@ Sources/Studio/          the app
   SessionStore.swift       shared session state, live status, notifications, next up
   Views.swift              window, tab strip, panes, peek card, status bar
   CommandPalette.swift     ⌘P / ⇧⌘P
-  QuickPrompt.swift        ⌘K and snippets
+  QuickPrompt.swift        ⇧⌘K and snippets
   StudioControl.swift      control server behind the MCP tools
   TranscriptScanner.swift  reads titles, prompts and replies from transcripts
   Codex.swift              the same for Codex: reads ~/.codex rollouts (status, titles, tokens), spots approval prompts

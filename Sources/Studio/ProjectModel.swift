@@ -13,6 +13,8 @@ final class ProjectModel: ObservableObject {
     @Published private(set) var activeGroupId: UUID
     /// Command palette: nil when closed, otherwise the text it opened with ("" for sessions, ">" for commands).
     @Published var palette: String?
+    /// ⌘K: the palette as a quick switcher over open sessions only.
+    @Published var paletteSwitcher = false
     /// Sidebar visibility and width (⌘B, drag its edge, or the Studio MCP). Shared by all windows.
     private var sidebarPref: Any?
     @Published var sidebarVisible: Bool = UserDefaults.standard.object(forKey: "sidebarVisible.v2") as? Bool ?? false {
@@ -184,10 +186,10 @@ final class ProjectModel: ObservableObject {
         newTab()
     }
 
-    /// ⌘K quick prompt is open.
+    /// ⇧⌘K quick prompt is open.
     @Published var quickPrompt = false
 
-    /// Sessions ⌘K can message: the current one first, then this window's tabs, then other projects'.
+    /// Sessions ⇧⌘K can message: the current one first, then this window's tabs, then other projects'.
     var quickTargets: [TerminalSession] {
         let claude = store.terminals.filter { $0.isAgent && $0.running }
         let mine = tabs.filter { $0.isAgent && $0.running }

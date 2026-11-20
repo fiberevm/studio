@@ -244,7 +244,7 @@ private struct AgentSettings: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Row(title: "Default agent",
-                detail: "The CLI a new session opens: ⌘N, ⌘K and the new_session tool. ⌘P → New Claude / Codex / Antigravity Session opens another one.") {
+                detail: "The CLI a new session opens: ⌘N, ⇧⌘K and the new_session tool. ⌘P → New Claude / Codex / Antigravity Session opens another one.") {
                 Picker("", selection: $agent) {
                     ForEach(Agent.allCases) { a in
                         let missing = checker.status[a].map { !$0.checking && $0.path == nil } ?? false
@@ -707,7 +707,7 @@ private struct SnippetSettings: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Reusable prompts. Type # in ⌘K to insert one, or pick \"Snippet: …\" in ⌘P to send it to the current session.")
+            Text("Reusable prompts. Type # in ⇧⌘K to insert one, or pick \"Snippet: …\" in ⌘P to send it to the current session.")
                 .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             ForEach($list) { $s in
                 HStack(alignment: .top, spacing: 10) {

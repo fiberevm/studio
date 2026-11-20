@@ -54,7 +54,7 @@ enum Snippets {
     }
 }
 
-/// ⌘K: type a message and send it to a session without switching to it, to several at once, or to a new session.
+/// ⇧⌘K: type a message and send it to a session without switching to it, to several at once, or to a new session.
 ///   ↵ send to the highlighted session (or to every ticked one)   ⇥ tick/untick for broadcast
 ///   ⌘↵ start a new session with it   #name inserts a snippet   ⌘S saves the text as a snippet
 struct QuickPrompt: View {
