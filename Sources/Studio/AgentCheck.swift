@@ -19,15 +19,11 @@ final class AgentChecker: ObservableObject {
     /// Which CLIs are on PATH (for the + menu): one quick `command -v` at launch, updated by full checks.
     @Published private(set) var installed: [Agent: Bool] = [:]
 
-    private init() {
-        Task.detached(priority: .utility) {
-            let script = Agent.allCases.map { "command -v \($0.command) >/dev/null && echo \($0.rawValue)" }.joined(separator: "; ")
-            let out = Self.run(script + "; true", timeout: 8).out
-            let have = Set(out.split(whereSeparator: \.isNewline).map(String.init))
-            await MainActor.run {
-                for a in Agent.allCases where self.installed[a] == nil { self.installed[a] = have.contains(a.rawValue) }
-            }
-        }
+    private init() { LaunchEnv.refreshIfStale() }
+
+    /// The background environment capture found (or didn't find) each CLI.
+    func launchEnvUpdated() {
+        for a in Agent.allCases { if let h = LaunchEnv.has(a.command), installed[a] != h { installed[a] = h } }
     }
 
     /// Installed, or not checked yet (so the menu doesn't hide an agent while the check runs). Claude Code always shows.

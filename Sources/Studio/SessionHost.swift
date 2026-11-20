@@ -72,6 +72,24 @@ enum SessionHost {
         return (p.terminationStatus == 0, s)
     }
 
+    /// New sessions start with the server's global environment: make it the user's shell environment, so
+    /// agents launched directly (no login shell) see the same variables. Sent as a config file that's deleted
+    /// right away, so values never show up in a process list.
+    static func setGlobalEnvironment(_ env: [String: String]) {
+        guard tmux != nil else { return }
+        // tmux single quotes have no escapes: values with ' or newlines can't be written; skip those
+        let lines = env.sorted { $0.key < $1.key }.compactMap { k, v -> String? in
+            v.contains("'") || v.contains("\n") || v.contains("\r") ? nil : "set-environment -g \(k) '\(v)'"
+        }
+        let dir = URL(fileURLWithPath: StudioControl.supportDirPath)
+        let f = dir.appendingPathComponent("env-\(UUID().uuidString).tmux")
+        guard FileManager.default.createFile(atPath: f.path, contents: Data(lines.joined(separator: "\n").utf8),
+                                             attributes: [.posixPermissions: 0o600]) else { return }
+        defer { try? FileManager.default.removeItem(at: f) }
+        // only if the server is up (start-server alone would exit again with no sessions)
+        if run(["list-sessions"]).ok { run(["source-file", f.path]) }
+    }
+
     static func exists(_ name: String) -> Bool { tmux != nil && run(["has-session", "-t", "=" + name]).ok }
 
     /// End the session for good (closing a tab, ending a session).

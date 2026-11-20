@@ -46,7 +46,7 @@ struct StudioApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var store = SessionStore()
 
-    init() { Self.migrateSettingsFromAICode() }
+    init() { Self.migrateSettingsFromAICode(); LaunchEnv.refreshIfStale() }
 
     /// The app used to be called AICode (bundle id dev.local.aicode). Carry over saved tabs, theme, recents, etc. once.
     static func migrateSettingsFromAICode() {

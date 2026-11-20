@@ -208,43 +208,49 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     private func launchCLI(_ words: [String]) {
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let dir = FileManager.default.fileExists(atPath: cwd) ? cwd : NSHomeDirectory()
-        let cmd = (["exec"] + words).map(shellQuote).joined(separator: " ")
-        if SessionHost.enabled { startHosted(command: [shell, "-l", "-i", "-c", cmd], dir: dir); return }
-        view.startProcess(executable: shell, args: ["-l", "-i", "-c", cmd],
-                          environment: Self.childEnvironment(tab: id), execName: nil, currentDirectory: dir)
+        LaunchEnv.refreshIfStale()
+        // Fast path: the CLI's path and the shell's environment are already known, so exec it directly.
+        if let argv = LaunchEnv.direct(words), let env = LaunchEnv.environment(tab: id) {
+            if SessionHost.enabled {
+                // the session takes the server's environment: make sure it's the shell's (a server started
+                // by this client takes the client's, so pass it there too)
+                SessionHost.setGlobalEnvironment(env.filter { !$0.key.hasPrefix("STUDIO_") })
+                startHosted(command: argv, dir: dir, clientEnv: env.map { "\($0.key)=\($0.value)" })
+                return
+            }
+            view.startProcess(executable: argv[0], args: Array(argv.dropFirst()),
+                              environment: env.map { "\($0.key)=\($0.value)" }, execName: nil, currentDirectory: dir)
+        } else {
+            // Not captured yet (right after launch): through the login shell, so it resolves like in Terminal.
+            // `exec` keeps the pid, so ~/.claude/sessions/<pid>.json maps back to this terminal.
+            let cmd = (["exec"] + words).map(shellQuote).joined(separator: " ")
+            if SessionHost.enabled { startHosted(command: [shell, "-l", "-i", "-c", cmd], dir: dir); return }
+            view.startProcess(executable: shell, args: ["-l", "-i", "-c", cmd],
+                              environment: Self.childEnvironment(tab: id), execName: nil, currentDirectory: dir)
+        }
         pid = view.process.shellPid
         running = true
         exitCode = nil
     }
 
     private func launch(_ args: [String]) {
-        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
-        let dir = FileManager.default.fileExists(atPath: cwd) ? cwd : NSHomeDirectory()
         // Every session gets the Studio MCP so its AI can drive the editor. --mcp-config is variadic,
         // so it goes last (after any prompt or --resume).
         var args = args
         if let plugin = StudioControl.pluginDir { args += ["--plugin-dir", plugin] }   // Studio + Sandbox skills
         if let cfg = StudioControl.mcpConfigPath { args += ["--mcp-config", cfg] }
-        let cmd = (["exec", "claude"] + args).map(shellQuote).joined(separator: " ")
-        // Login + interactive shell so the user's PATH (and therefore `claude`) resolves like in Terminal.
-        // `exec` keeps the pid, so ~/.claude/sessions/<pid>.json maps back to this terminal.
-        if SessionHost.enabled { startHosted(command: [shell, "-l", "-i", "-c", cmd], dir: dir); return }
-        view.startProcess(executable: shell, args: ["-l", "-i", "-c", cmd],
-                          environment: Self.childEnvironment(tab: id), execName: nil, currentDirectory: dir)
-        pid = view.process.shellPid
-        running = true
-        exitCode = nil
+        launchCLI(["claude"] + args)
     }
 
     /// Attach to this tab's host session, creating it (running `command`) if it doesn't exist yet.
-    private func startHosted(command: [String], dir: String) {
+    private func startHosted(command: [String], dir: String, clientEnv: [String]? = nil) {
         guard let tmux = SessionHost.tmux else { return }
         let name = hostName ?? SessionHost.newName()
         hostName = name
         let env = ["STUDIO_TAB": id.uuidString, "STUDIO_CONTROL_FILE": StudioControl.controlFilePath,
                    "TERM_PROGRAM": "Studio", "COLORTERM": "truecolor"]
         view.startProcess(executable: tmux, args: SessionHost.clientArgs(name: name, cwd: dir, env: env, command: command),
-                          environment: Self.childEnvironment(tab: id), execName: nil, currentDirectory: dir)
+                          environment: clientEnv ?? Self.childEnvironment(tab: id), execName: nil, currentDirectory: dir)
         pid = view.process.shellPid
         running = true
         exitCode = nil
