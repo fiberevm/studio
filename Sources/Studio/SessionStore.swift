@@ -165,6 +165,7 @@ final class SessionStore: ObservableObject {
         for term in terminals { Theme.apply(to: term.view, fontSize: fontSize) }
         if persist { UserDefaults.standard.set(t.id, forKey: "theme") }
         objectWillChange.send()
+        ThemeChanges.shared.changed()
     }
 
     // MARK: Cross-window focus

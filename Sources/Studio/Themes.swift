@@ -102,6 +102,14 @@ extension AppTheme {
                    "#6272A4", "#FF6E6E", "#69FF94", "#FFFFA5", "#D6ACFF", "#FF92DF", "#A4FFFF", "#FFFFFF"]))
 }
 
+/// Published when the theme switches, for small views whose inputs never change otherwise (SwiftUI would
+/// keep their first color).
+@MainActor
+final class ThemeChanges: ObservableObject {
+    static let shared = ThemeChanges()
+    func changed() { objectWillChange.send() }
+}
+
 /// The active theme. Views read these statics; SessionStore publishes a change when the theme switches.
 @MainActor
 enum Theme {

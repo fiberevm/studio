@@ -620,6 +620,7 @@ struct PaneDivider: View {
     /// One physical pixel: a true hairline on Retina (0.5pt), 1pt elsewhere.
     static let thickness: CGFloat = 1 / max(NSScreen.main?.backingScaleFactor ?? 2, 1)
     var vertical = false
+    @ObservedObject private var theme = ThemeChanges.shared
     var body: some View {
         SwiftUI.Color(nsColor: Theme.paneDivider)
             .frame(width: vertical ? Self.thickness : nil, height: vertical ? nil : Self.thickness)
@@ -629,6 +630,7 @@ struct PaneDivider: View {
 /// 1px divider in the chrome border color.
 struct Hairline: View {
     var vertical = false
+    @ObservedObject private var theme = ThemeChanges.shared   // redraw on theme switches (nothing else would)
     var body: some View {
         SwiftUI.Color(nsColor: Theme.border)
             .frame(width: vertical ? 1 : nil, height: vertical ? nil : 1)
