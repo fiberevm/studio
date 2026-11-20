@@ -187,7 +187,7 @@ open build/Studio.app --args --resume <session-id>        # resume a specific se
 | <kbd>⌃`</kbd> | New terminal tab |
 | <kbd>⇧⌘B</kbd> | New web browser tab |
 | <kbd>⇧⌘N</kbd> | Open another project window |
-| <kbd>⌘[</kbd> / <kbd>⌘]</kbd> | Previous / next tab |
+| <kbd>⇧⌘[</kbd> / <kbd>⇧⌘]</kbd> | Previous / next tab, like a browser |
 | <kbd>⌘1</kbd>…<kbd>⌘9</kbd> | Jump to tab (picking a session anywhere puts the cursor in its input) |
 | <kbd>⌘W</kbd> | Close tab and end its session (resume it any time from <kbd>⌘P</kbd>); in an empty pane, close the pane |
 | <kbd>⇧⌘W</kbd> | Close window |

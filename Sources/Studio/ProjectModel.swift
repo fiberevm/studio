@@ -95,7 +95,7 @@ final class ProjectModel: ObservableObject {
     func group(containing id: UUID) -> GroupNode? { groups.first { $0.tabIds.contains(id) } }
     func isOpen(_ t: TerminalSession) -> Bool { group(containing: t.id) != nil }
 
-    /// Tabs of the active group (what ⌘[ / ⌘] / ⌘1-9 act on).
+    /// Tabs of the active group (what ⇧⌘[ / ⇧⌘] / ⌘1-9 act on).
     var tabs: [TerminalSession] { tabs(in: activeGroup) }
 
     /// The active group's selection. Setting a terminal that isn't open anywhere opens it in the active group;

@@ -171,9 +171,9 @@ struct AppCommands: Commands {
         }
         CommandMenu("Tab") {
             Button("Previous Tab") { project?.cycleTab(-1) }
-                .keyboardShortcut("[", modifiers: .command)
+                .keyboardShortcut("[", modifiers: [.command, .shift])
             Button("Next Tab") { project?.cycleTab(1) }
-                .keyboardShortcut("]", modifiers: .command)
+                .keyboardShortcut("]", modifiers: [.command, .shift])
             Divider()
             ForEach(Array((project?.tabs ?? []).prefix(9).enumerated()), id: \.offset) { i, t in
                 Button(project?.item(for: t)?.title ?? "New session") { project?.selectTab(i) }
