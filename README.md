@@ -68,6 +68,7 @@ Everything here is about one thing: spending your attention only where a session
 | 🧷 | **Nothing is ever lost** | Closing a tab ends the session, but the conversation is one <kbd>⌘P</kbd> away and resumes where it left off. Right-click → *Close Tab, Keep Session Running* to leave it working in the background. Emptied panes stay put with a quiet *New Session* action. |
 | 💾 | **Restarts don't interrupt anything** | Each tab lives in a hidden tmux session, so quitting Studio leaves Claude, its commands and your dev servers running; relaunching reattaches every tab, with the same layout and the same processes. |
 | 🌿 | **Context at a glance** | Each session's status bar shows its git branch, model and tokens in/out, and Studio finds the PR it opened, with CI and review state. |
+| 📡 | **Running shells and servers** | Dev servers, watchers and long commands an agent started in the background show up in its status bar, each with what it runs and the port it listens on. Click one to open `localhost:<port>` in a split or the browser, copy its command, or stop it. |
 | 🌐 | **Web panels** | Open a page in a tab or split, right next to your sessions: a dev server, a sandbox URL, a PR, docs. Back, forward, reload, an editable address bar, and Open in browser; web tabs come back after a restart. Agents open them with `open_url` and drive them like a person: read the page and its numbered elements, click, type and submit, wait, go back, screenshot, or run JavaScript (`web_*` tools). A sandbox's **Open Desktop** shows its desktop in a panel. From ⌘P → *Web: Open URL…*. |
 | 🖼 | **Drop to paste** | Drag files or screenshots onto a session to paste their paths into the prompt. |
 | ⛵ | **Sandboxes** ([more ↓](#sandboxes)) | Every session can run work in a remote Linux sandbox through `sandbox_*` MCP tools: create one (the project is pushed in), run commands and servers, get an HTTPS URL for a port, open a shell in a split. Claude uses sandboxes when they help (configurable), and deletes one only when you ask. The sandboxes a session uses show as chips in its status bar, with live state and Open Terminal / Desktop / Stop / Resume / Delete. |
@@ -77,7 +78,7 @@ Everything here is about one thing: spending your attention only where a session
 - **Split panes** with drag-to-snap: drop a tab on any edge of a pane to split it, or right-click for Split Right / Left / Up / Down.
 - **Command palette** (<kbd>⌘P</kbd> / <kbd>⇧⌘P</kbd>): fuzzy-search running and past sessions in every project, plus every command.
 - **Themes** with live preview: Clear Dark, Dark Modern, Dark+, Light+, Monokai, Solarized Dark, One Dark Pro, GitHub Dark, Dracula.
-- **Status bar per session:** git branch, model, and tokens in/out.
+- **Status bar per session:** git branch, model, tokens in/out, and the shells and servers the agent has running (with their ports).
 - **PR detection:** finds the PR each session opened (or its branch's PR) through the `gh` CLI, with state, CI checks and review status.
 
 ### Built for agents, too
@@ -266,6 +267,7 @@ Sources/Studio/          the app
   Agy.swift                the same for Antigravity: reads agy's conversation databases (status, approvals) and prompt history
   AgentCheck.swift         Settings → Agents: is each CLI installed and logged in
   Workers.swift            paired workers: pairing, tokens, status polling, their API
+  BackgroundTasks.swift    the shells and servers each agent has running (process table, listening ports) and their status-bar chips
   Updater.swift            in-app updates (Sparkle): background check, Check for Updates…, the Settings → About switch
 Sources/StudioMCP/       the stdio MCP server bundled next to the app
 Sources/StudioAttach/    studio-attach: a worker tab's terminal (WebSocket ⇄ pty, reconnects on its own)

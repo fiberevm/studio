@@ -1053,7 +1053,8 @@ struct GroupPane: View {
     }
 }
 
-/// Bottom strip under a session: branch, model, tokens sent/received. Icons only; hover for labels.
+/// Bottom strip under a session: branch, model, tokens sent/received, sandboxes, and the shells and servers
+/// its agent has running. Icons only; hover for labels.
 struct SessionStatusBar: View {
     @ObservedObject var terminal: TerminalSession
     @EnvironmentObject var model: ProjectModel
@@ -1078,6 +1079,7 @@ struct SessionStatusBar: View {
                 stat("arrow.down", formatTokens(o), help: "Tokens received: \(o.formatted())")
             }
             if terminal.isAgent { SandboxChips(registry: model.store.sandboxes, terminal: terminal) }
+            if let tasks = model.store.tasks[terminal.id] { BackgroundTaskChips(tasks: tasks, terminal: terminal) }
             Spacer()
         }
         .padding(.horizontal, 10)

@@ -51,6 +51,12 @@ final class SessionStore: ObservableObject {
     private let agyScanner = AgyScanner()
     private var screenCheckBusy = false
 
+    /// Shells and servers each tab's agent has running right now (tab id → tasks), for the status bar.
+    @Published private(set) var tasks: [UUID: [BackgroundTask]] = [:]
+    private let taskScanner = BackgroundTaskScanner()
+    private let taskQueue = DispatchQueue(label: "studio.tasks", qos: .utility)
+    private var taskScanBusy = false
+
     private let scanner = TranscriptScanner()
     private let historyScanner = TranscriptScanner()
     private let statsReader = StatsReader()
@@ -81,7 +87,7 @@ final class SessionStore: ObservableObject {
             Task { @MainActor in self?.refreshLive() }
         }
         scanTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.rescanTranscripts() }
+            Task { @MainActor in self?.rescanTranscripts(); self?.refreshTasks() }
         }
         if Self.canNotify {
             let center = UNUserNotificationCenter.current()
@@ -94,6 +100,30 @@ final class SessionStore: ObservableObject {
     }
 
     // MARK: Scanning
+
+    /// Look at the process table for the shells each local agent tab has running (every 3 s, and right after
+    /// one is stopped from its chip).
+    func refreshTasks(after delay: TimeInterval = 0) {
+        if delay > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.refreshTasks() }
+            return
+        }
+        guard !taskScanBusy else { return }
+        var roots: [UUID: Int32] = [:]
+        for t in terminals where t.isAgent {
+            if let n = t.native { if !n.exited, n.pid > 0 { roots[t.id] = n.pid } }
+            else if t.running, t.sessionPid > 0 { roots[t.id] = t.sessionPid }
+        }
+        if roots.isEmpty { if !tasks.isEmpty { tasks = [:] }; return }
+        taskScanBusy = true
+        taskQueue.async { [taskScanner] in
+            let found = taskScanner.scan(roots)
+            DispatchQueue.main.async {
+                self.taskScanBusy = false
+                if self.tasks != found { self.tasks = found }
+            }
+        }
+    }
 
     func rescanTranscripts() {
         let ids = Set(live.keys).union(terminals.filter(\.isClaude).compactMap(\.sessionId))
