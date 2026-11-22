@@ -808,7 +808,25 @@ private struct SnippetSettings: View {
 // MARK: - About
 
 private struct AboutSettings: View {
+    @ObservedObject private var updater = Updater.shared
     var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            about
+            if updater.enabled {
+                Row(title: "Update automatically",
+                    detail: "Studio checks for a new version about once a day, downloads it in the background and installs it when you quit. Off: check yourself with Studio → Check for Updates….") {
+                    HStack(spacing: 12) {
+                        Toggle("", isOn: $updater.automatic).labelsHidden().toggleStyle(.switch)
+                        Button("Check for Updates…") { updater.checkForUpdates() }.disabled(!updater.canCheck)
+                    }
+                }
+            } else {
+                Text("This build doesn't update itself (built from source). Releases from GitHub do.")
+                    .font(.system(size: 12)).foregroundStyle(.secondary).padding(.top, 8)
+            }
+        }
+    }
+    private var about: some View {
         HStack(alignment: .top, spacing: 16) {
             Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 64, height: 64)
             VStack(alignment: .leading, spacing: 6) {

@@ -157,6 +157,8 @@ The worker listens on port 7420 and Studio talks to it directly, so the Mac must
 
 **Download:** grab `Studio.dmg` from the [latest release](https://github.com/fiberevm/studio/releases/latest), open it and drag Studio into Applications (releases before 0.0.5 only have `Studio.zip`: unzip it and move Studio to Applications). Release builds are signed with a Developer ID and notarized by Apple.
 
+**Updates:** a downloaded Studio keeps itself up to date. About once a day it checks the latest release, downloads a new version in the background, verifies its signature and installs it when you quit. *Studio → Check for Updates…* checks right away, and Settings → About turns automatic updates off. Releases up to 0.0.6 have no updater: download the latest `Studio.dmg` once. A build from source never updates itself.
+
 **Build from source** — requirements: **macOS 14+**, **Xcode 16+ / Swift 6 toolchain**, and [Claude Code](https://docs.claude.com/en/docs/claude-code) (or [Codex](https://github.com/openai/codex), or Antigravity's `agy`) installed and logged in. Recommended: [tmux](https://github.com/tmux/tmux) (`brew install tmux`) so sessions survive Studio restarts. Optional: the [`gh` CLI](https://cli.github.com) for PR detection, and the [`boat` CLI](https://boat.dev) for sandboxes.
 
 ```bash
@@ -264,12 +266,14 @@ Sources/Studio/          the app
   Agy.swift                the same for Antigravity: reads agy's conversation databases (status, approvals) and prompt history
   AgentCheck.swift         Settings → Agents: is each CLI installed and logged in
   Workers.swift            paired workers: pairing, tokens, status polling, their API
+  Updater.swift            in-app updates (Sparkle): background check, Check for Updates…, the Settings → About switch
 Sources/StudioMCP/       the stdio MCP server bundled next to the app
 Sources/StudioAttach/    studio-attach: a worker tab's terminal (WebSocket ⇄ pty, reconnects on its own)
 worker/                  studio-worker (Go): the CLI that makes a machine a worker (tmux sessions + HTTP/WebSocket API)
 install-worker.sh        installs studio-worker from the latest release
 Resources/               app icon (SVG source + generated .icns)
 scripts/make-icon.sh     regenerates AppIcon.icns from AppIcon.svg
+scripts/make-appcast.sh  writes a release's update feed (appcast.xml), signed with the update key
 website/                 the one-page download site (static HTML; hero is a recording of the real app, assets/demo.mp4)
 ```
 
@@ -289,6 +293,13 @@ git tag v0.2.0 && git push origin v0.2.0
 ```
 
 It needs repository secrets: `MACOS_CERT_P12` (base64 of a *Developer ID Application* .p12) and `MACOS_CERT_PASSWORD` for signing, and for notarization either an App Store Connect API key (`NOTARY_KEY_P8`, base64 of the .p8, `NOTARY_KEY_ID`, `NOTARY_ISSUER_ID`) or an Apple ID (`NOTARY_APPLE_ID`, `NOTARY_PASSWORD`, an app-specific password, and `NOTARY_TEAM_ID`). Without them it publishes an ad hoc–signed build. Locally: `SIGN_IDENTITY="Developer ID Application: …" VERSION=0.2.0 APP=build/release/Studio.app ./build-app.sh`, then `scripts/notarize.sh build/release/Studio.app build/release/Studio.zip`; for the installer, `scripts/make-dmg.sh build/release/Studio.app build/release/Studio.dmg` (needs `pipx install dmgbuild`) and `scripts/notarize.sh build/release/Studio.dmg`.
+
+**Updates reach users on their own.** With the `SPARKLE_PRIVATE_KEY` secret set, the same workflow builds the release with the update feed turned on and publishes `appcast.xml` next to `Studio.zip`. Installed copies poll `releases/latest/download/appcast.xml` ([Sparkle](https://sparkle-project.org)) and install the new version, so pushing a tag is all it takes. Notes:
+
+- The update key is an EdDSA key pair. The private half lives in the maintainer's login keychain (made with Sparkle's `generate_keys`, in `.build/artifacts/sparkle/Sparkle/bin/` after `swift package resolve`) and in the secret: `generate_keys -x key.txt && gh secret set SPARKLE_PRIVATE_KEY < key.txt && rm key.txt`. The public half is `SPARKLE_PUBLIC_KEY` in the workflow. Installed copies only accept updates signed with that key, so keep a backup of it: with the key lost, users have to download the next version by hand.
+- Sparkle compares `CFBundleVersion`, which the workflow sets to its run number, so every release must come from this workflow (or use a higher `BUILD_NUMBER`).
+- Only the release marked *latest* is offered: drafts and pre-releases aren't.
+- Without the secret, the release is published as before and that build doesn't update itself.
 
 ## Contributing
 

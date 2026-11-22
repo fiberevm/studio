@@ -1,5 +1,5 @@
 # Builds Studio.app on every version tag (v1.2.3), signs and notarizes it when the Apple secrets are set,
-# and publishes Studio.dmg (drag-to-Applications installer) and Studio.zip to a GitHub release. Without the secrets it still publishes an ad hoc build.
+# and publishes Studio.dmg (drag-to-Applications installer), Studio.zip and appcast.xml (the in-app update feed) to a GitHub release. Without the secrets it still publishes an ad hoc build.
 #
 # Secrets (Settings → Secrets and variables → Actions):
 #   MACOS_CERT_P12          base64 of your "Developer ID Application" certificate + private key (.p12)
@@ -12,6 +12,10 @@
 #   NOTARY_APPLE_ID         the developer account's Apple ID
 #   NOTARY_PASSWORD         an app-specific password for it (account.apple.com)
 #   NOTARY_TEAM_ID          the team ID (10 characters)
+#   and for in-app updates (Sparkle):
+#   SPARKLE_PRIVATE_KEY     the EdDSA update key (Sparkle's generate_keys -x <file>; its public half is
+#                           SPARKLE_PUBLIC_KEY below). With it the build updates itself from appcast.xml on the
+#                           latest release; without it the release is published as before, with no updater feed.
 name: Release
 
 on:
@@ -32,6 +36,8 @@ jobs:
     timeout-minutes: 45
     env:
       TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      # Public half of the update key: installed copies only accept updates signed with the private half.
+      SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY != '' && 'sT/zgufKv0MQDCvoriLkZb0QiHlHQ8eOSULEaKCVZ3M=' || '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -132,6 +138,16 @@ jobs:
           scripts/notarize.sh build/release/Studio.dmg
           rm -f "$RUNNER_TEMP/notary.p8"
 
+      - name: Update feed
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          # appcast.xml: what installed copies poll (releases/latest/download/appcast.xml) to update themselves
+          if [ -z "$SPARKLE_PRIVATE_KEY" ]; then echo "No SPARKLE_PRIVATE_KEY: this release has no update feed"; exit 0; fi
+          scripts/make-appcast.sh build/release/Studio.zip "${TAG#v}" "${{ github.run_number }}" \
+            "https://github.com/${{ github.repository }}/releases/download/$TAG/Studio.zip" > build/release/appcast.xml
+          cat build/release/appcast.xml
+
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -154,11 +170,12 @@ jobs:
               echo
             fi
           } > notes.md
+          FEED=""; [ -f appcast.xml ] && FEED=appcast.xml
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" Studio.dmg Studio.zip Studio.sha256 studio-worker-* studio-worker.sha256 --clobber
+            gh release upload "$TAG" Studio.dmg Studio.zip Studio.sha256 studio-worker-* studio-worker.sha256 $FEED --clobber
             gh release edit "$TAG" --notes-file notes.md
           else
-            gh release create "$TAG" Studio.dmg Studio.zip Studio.sha256 studio-worker-* studio-worker.sha256 --title "Studio ${TAG#v}" --notes-file notes.md --generate-notes
+            gh release create "$TAG" Studio.dmg Studio.zip Studio.sha256 studio-worker-* studio-worker.sha256 $FEED --title "Studio ${TAG#v}" --notes-file notes.md --generate-notes
           fi
 
       - name: Clean up keychain

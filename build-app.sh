@@ -2,6 +2,8 @@
 # Builds Studio.app into ./build. Usage: ./build-app.sh [--open]
 #   APP=path/Studio.app      where to build the bundle (default build/Studio.app)
 #   VERSION=1.2.3            CFBundleShortVersionString (default 0.1); BUILD_NUMBER sets CFBundleVersion
+#   SPARKLE_PUBLIC_KEY=…     turn on in-app updates: writes the update feed (SPARKLE_FEED_URL, default the
+#                            appcast on the latest GitHub release) and this EdDSA public key into Info.plist
 #   SIGN_IDENTITY="Developer ID Application: …"   sign for distribution (hardened runtime + timestamp),
 #                            ready for scripts/notarize.sh; without it the app is signed ad hoc for local use.
 set -euo pipefail
@@ -34,6 +36,22 @@ rm -rf "$APP/Contents/Resources/.StudioPlugin.new" && cp -R Resources/StudioPlug
 # AWS Lambda MicroVMs sandbox image (agent + Dockerfile + one-time setup script)
 rm -rf "$APP/Contents/Resources/.MicroVMAgent.new" && cp -R Resources/MicroVMAgent "$APP/Contents/Resources/.MicroVMAgent.new" \
   && rm -rf "$APP/Contents/Resources/MicroVMAgent" && mv "$APP/Contents/Resources/.MicroVMAgent.new" "$APP/Contents/Resources/MicroVMAgent"
+# Sparkle (in-app updates): the universal framework from the package's binary artifact, symlinks intact
+SPARKLE=.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework
+[[ -d "$SPARKLE" ]] || { echo "build-app.sh: no Sparkle.framework at $SPARKLE (swift package resolve)" >&2; exit 1; }
+mkdir -p "$APP/Contents/Frameworks"
+rm -rf "$APP/Contents/Frameworks/.Sparkle.new" && ditto "$SPARKLE" "$APP/Contents/Frameworks/.Sparkle.new" \
+  && rm -rf "$APP/Contents/Frameworks/Sparkle.framework" && mv "$APP/Contents/Frameworks/.Sparkle.new" "$APP/Contents/Frameworks/Sparkle.framework"
+# Only builds given the update feed's public key update themselves (the release workflow sets it);
+# a local build has no feed, so it is never replaced by a release.
+UPDATE_KEYS=""
+if [[ -n "${SPARKLE_PUBLIC_KEY:-}" ]]; then
+  UPDATE_KEYS="
+  <key>SUFeedURL</key><string>${SPARKLE_FEED_URL:-https://github.com/fiberevm/studio/releases/latest/download/appcast.xml}</string>
+  <key>SUPublicEDKey</key><string>$SPARKLE_PUBLIC_KEY</string>
+  <key>SUEnableAutomaticChecks</key><true/>
+  <key>SUAutomaticallyUpdate</key><true/>"
+fi
 cp Resources/AppIcon.icns "$APP/Contents/Resources/.AppIcon.new" && mv -f "$APP/Contents/Resources/.AppIcon.new" "$APP/Contents/Resources/AppIcon.icns"
 cat > "$APP/Contents/.Info.plist.new" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -49,14 +67,18 @@ cat > "$APP/Contents/.Info.plist.new" <<PLIST
   <key>CFBundleVersion</key><string>$BUILD_NUMBER</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
-  <key>NSPrincipalClass</key><string>NSApplication</string>
+  <key>NSPrincipalClass</key><string>NSApplication</string>$UPDATE_KEYS
 </dict></plist>
 PLIST
 mv -f "$APP/Contents/.Info.plist.new" "$APP/Contents/Info.plist"
 if [[ -n "${SIGN_IDENTITY:-}" ]]; then
-  # Inside out: the bundled MCP server first, then the app. Hardened runtime and a secure timestamp are
-  # what notarization requires.
-  for bin in "$APP/Contents/MacOS/studio-mcp" "$APP/Contents/MacOS/studio-attach" "$APP"; do
+  # Inside out: Sparkle's helpers and framework, the bundled MCP server, then the app. Hardened runtime and a
+  # secure timestamp are what notarization requires.
+  SP="$APP/Contents/Frameworks/Sparkle.framework"
+  codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$SP/Versions/B/XPCServices/Installer.xpc"
+  codesign --force --options runtime --timestamp --preserve-metadata=entitlements --sign "$SIGN_IDENTITY" "$SP/Versions/B/XPCServices/Downloader.xpc"
+  for bin in "$SP/Versions/B/Autoupdate" "$SP/Versions/B/Updater.app" "$SP" \
+             "$APP/Contents/MacOS/studio-mcp" "$APP/Contents/MacOS/studio-attach" "$APP"; do
     codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$bin"
   done
   codesign --verify --strict --deep "$APP"
