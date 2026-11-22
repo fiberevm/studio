@@ -64,6 +64,18 @@
   /* the hero's painted ground when WebGL is not there, and the app window on it */
   /* the ground behind every window: one flat soft black */
   .hero--centred .hero__window, #sessions .frame, #themes .frame, .panel:has(> .mac) { background: #17181b !important; border: 0; }
+  /* the hero shows its window whole: the frame grows to hold it, so the hero is taller than one screen */
+  main > section.hero.hero--centred { height: auto; min-height: 100svh; }
+  .hero--centred .hero__window { flex: none; min-height: 0; padding: var(--s-7); -webkit-mask-image: none; mask-image: none; display: grid; justify-items: center; }
+  .hero--centred .hero__window > .ly-piece { position: static; transform: none; width: min(1040px, 100%); }
+  @media (max-width: 639px) {
+    .hero--centred .hero__window { padding: var(--s-4); -webkit-mask-image: none; mask-image: none; min-height: 0; }
+    .hero--centred .hero__window > .ly-piece { width: 100%; }
+    main #sessions .frame { padding: var(--s-4); }
+    main #sessions .frame > .mac { height: auto; width: 100%; aspect-ratio: auto; }
+    main #sessions .mac__film { flex: none; aspect-ratio: 1920 / 1196; }
+    .mac .mac__bar span { padding-left: 56px; }
+  }
   .t-label { font-family: var(--font-mono); }
   /* every capture sits in a Mac window: the bar with its three lights, then the capture at half its pixel width */
   .mac { border-radius: 10px; overflow: hidden; background: #1d2230; box-shadow: 0 0 0 1px rgb(255 255 255 / .1), 0 28px 60px -20px rgb(0 0 0 / .7); display: flex; flex-direction: column; }
@@ -76,6 +88,7 @@
   .panel > .mac { position: absolute; top: 50%; left: 50%; translate: -50% -50%; width: min(500px, calc(100% - 48px)); max-height: calc(100% - 32px); }
 
   /* the recording: one frame that takes what the screen leaves under the heading */
+  #sessions .section-head--grid { margin-bottom: var(--s-7); }
   #sessions .frame { padding: var(--s-6); align-items: center; }
   #sessions .frame > .mac { height: 100%; aspect-ratio: 1920 / 1270; max-width: 100%; }
   .mac__film { flex: 1; min-height: 0; overflow: hidden; }
