@@ -1059,12 +1059,19 @@ struct GroupPane: View {
 struct SessionStatusBar: View {
     @ObservedObject var terminal: TerminalSession
     @EnvironmentObject var model: ProjectModel
+    @AppStorage(FileExplorer.shownKey) private var explorerShown = true
 
     var body: some View {
         let sid = terminal.sessionId
         let st = sid.flatMap { model.store.stats[$0] }
         HStack(spacing: 14) {
             if terminal.isFile, let p = terminal.filePath {
+                Button { explorerShown.toggle() } label: {
+                    Image(systemName: "sidebar.left").font(.system(size: 11))
+                        .foregroundStyle(explorerShown ? .primary : .secondary).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(explorerShown ? "Hide the file tree" : "Show the file tree")
                 stat("doc.text", relativePath(p, to: model.folder), help: p)
                 if let d = terminal.fileDoc, d.content == .text { FileCaretStats(doc: d, caret: d.caret) }
             }
@@ -1261,11 +1268,16 @@ extension PRInfo.Checks {
 struct TerminalPane: View {
     @ObservedObject var terminal: TerminalSession
     @EnvironmentObject var model: ProjectModel
+    @AppStorage(FileExplorer.shownKey) private var explorerShown = true
 
     var body: some View {
         VStack(spacing: 0) {
         if terminal.isFile, let doc = terminal.fileDoc {
-            FilePane(doc: doc, fontSize: model.store.fontSize) { [weak terminal] tv in terminal?.fileTextView = tv }
+            HStack(spacing: 0) {
+                // the project's file tree, to the left of the file (like VS Code's Explorer)
+                if explorerShown { FileExplorer(tree: model.fileTree, active: terminal.filePath) }
+                FilePane(doc: doc, fontSize: model.store.fontSize) { [weak terminal] tv in terminal?.fileTextView = tv }
+            }
         } else if terminal.isWeb {
             WebPane(tab: terminal)
         } else if let chat = terminal.native {

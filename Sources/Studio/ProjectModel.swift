@@ -237,6 +237,9 @@ final class ProjectModel: ObservableObject {
         if recentFiles.count > 20 { recentFiles.removeLast() }
         select(store.newFile(path, cwd: folder))
     }
+    /// The tree of this project's files that file tabs show on their left (built the first time a file is opened).
+    lazy var fileTree = FileTree(root: folder)
+
     /// Files opened in this window, newest first (⌘K shows them before you type).
     @Published var recentFiles: [String] = []
 

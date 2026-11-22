@@ -55,13 +55,18 @@ enum Snippets {
 }
 
 /// ⇧⌘K: type a message and send it to a session without switching to it, to several at once, or to a new session.
-///   ↵ send to the highlighted session (or to every ticked one)   ⇥ tick/untick for broadcast
+/// The list starts with what a new tab can be (a session per installed agent, a terminal, a web browser), then
+/// the open sessions; the highlight starts on the first session, so ↵ still sends to the current one.
+///   ↵ send to the highlighted session (or to every ticked one), or open the highlighted new tab with the text
+///   (a session's first message, a terminal's command, a browser's address)   ⇥ tick/untick for broadcast
 ///   ⌘↵ start a new session with it   #name inserts a snippet   ⌘S saves the text as a snippet
 struct QuickPrompt: View {
     @EnvironmentObject var model: ProjectModel
     @State private var text = ""
     @State private var index = 0
     @State private var ticked: [UUID] = []
+    /// The "new tab" rows above the sessions; `index` runs over these, then the sessions.
+    @State private var kinds: [NewTabKind] = []
     @FocusState private var focused: Bool
     @StateObject private var keys = KeyMonitor()
 
@@ -78,7 +83,11 @@ struct QuickPrompt: View {
                 .overlay(Rectangle().stroke(SwiftUI.Color(nsColor: Theme.accent), lineWidth: 1))
                 .padding(6)
                 .focused($focused)
-                .onChange(of: text) { _, _ in if !snippetMatches.isEmpty { index = 0 } }
+                .onChange(of: text) { old, _ in
+                    // the snippet list and the main list share `index`: start each at its natural first row
+                    if !snippetMatches.isEmpty { index = 0 }
+                    else if old.hasPrefix("#"), !old.contains(" ") { index = model.quickTargets.isEmpty ? 0 : kinds.count }
+                }
 
             if !snippets.isEmpty {
                 header("SNIPPETS")
@@ -89,24 +98,33 @@ struct QuickPrompt: View {
                     }
                     .onTapGesture { insert(s) }
                 }
-            } else if targets.isEmpty {
-                Text("No Claude sessions open").font(.system(size: 12)).foregroundStyle(.secondary)
-                    .padding(.horizontal, 12).frame(height: 26)
             } else {
-                header(ticked.isEmpty ? "SEND TO" : "SEND TO \(ticked.count) SESSIONS")
-                ScrollView {
-                    VStack(spacing: 0) {
-                        ForEach(Array(targets.enumerated()), id: \.element.id) { i, t in
-                            targetRow(t, selected: i == index)
-                                .onTapGesture { index = i }
+                header("NEW")
+                ForEach(Array(kinds.enumerated()), id: \.element) { i, k in
+                    row(selected: i == index) {
+                        Image(systemName: k.icon).font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 14)
+                        Text(k.title).font(.system(size: 13))
+                        Spacer(minLength: 8)
+                        Text(i == 0 ? "⌘N" : k.keyLabel).font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                    .onTapGesture { index = i; open(k) }
+                }
+                if !targets.isEmpty {
+                    header(ticked.isEmpty ? "SEND TO" : "SEND TO \(ticked.count) SESSIONS")
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            ForEach(Array(targets.enumerated()), id: \.element.id) { i, t in
+                                targetRow(t, selected: i + kinds.count == index)
+                                    .onTapGesture { index = i + kinds.count }
+                            }
                         }
                     }
+                    .frame(maxHeight: 26 * 10)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
-                .frame(maxHeight: 26 * 10)
-                .fixedSize(horizontal: false, vertical: true)
             }
 
-            Text("↵ send   ⇥ add to broadcast   ⌘↵ new session   #  snippets   ⌘S save as snippet   esc close")
+            Text("↵ send or open   ⇥ add to broadcast   ⌘↵ new session   #  snippets   ⌘S save as snippet   esc close")
                 .font(.system(size: 11)).foregroundStyle(.tertiary)
                 .padding(.horizontal, 12).padding(.vertical, 6)
         }
@@ -116,9 +134,11 @@ struct QuickPrompt: View {
         .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
         .onAppear {
             focused = true
+            kinds = NewTabKind.available
+            index = model.quickTargets.isEmpty ? 0 : kinds.count    // the current session, as before
             keys.start { e in
                 let cmd = e.modifierFlags.contains(.command)
-                let list = snippetMatches.isEmpty ? model.quickTargets.count : snippetMatches.count
+                let list = snippetMatches.isEmpty ? kinds.count + model.quickTargets.count : snippetMatches.count
                 switch e.keyCode {
                 case 125: if list > 0 { index = (index + 1) % list }; return true          // ↓
                 case 126: if list > 0 { index = (index - 1 + list) % list }; return true   // ↑
@@ -144,7 +164,14 @@ struct QuickPrompt: View {
 
     private func placeholder(_ targets: [TerminalSession]) -> String {
         if !ticked.isEmpty { return "Message \(ticked.count) sessions…" }
-        guard let t = targets[safe: index] else { return "Message…" }
+        if let k = kinds[safe: index] {
+            switch k {
+            case .agent(let a): return "First message for a new \(a.name) session (optional)…"
+            case .terminal: return "Command to run in a new terminal (optional)…"
+            case .browser: return "Address for a new web browser tab (optional)…"
+            }
+        }
+        guard let t = targets[safe: index - kinds.count] else { return "Message…" }
         return "Message \(model.title(of: t))…"
     }
 
@@ -154,7 +181,9 @@ struct QuickPrompt: View {
     }
 
     private func row<C: View>(selected: Bool, @ViewBuilder _ content: () -> C) -> some View {
-        HStack(spacing: 8) { content(); Spacer(minLength: 0) }
+        // no trailing spacer: a row's own Spacer pushes its last label (shortcut, project) to the right edge
+        HStack(spacing: 8) { content() }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
             .frame(height: 26)
             .background(selected ? SwiftUI.Color(nsColor: Theme.selection) : .clear, ignoresSafeAreaEdges: [])
@@ -190,11 +219,29 @@ struct QuickPrompt: View {
 
     private func insert(_ s: Snippet) {
         text = s.text
-        index = 0
+        index = model.quickTargets.isEmpty ? 0 : kinds.count
+    }
+
+    /// Open a new tab of this kind, handing it the typed text: an agent's first message, a terminal's command,
+    /// a browser's address. With no text it's the same as the + menu.
+    private func open(_ kind: NewTabKind) {
+        let m = message
+        close()
+        switch kind {
+        case .agent(let a):
+            if m.isEmpty { model.newTab(a) } else { model.select(model.store.newSession(in: model.folder, prompt: m, agent: a)) }
+        case .terminal:
+            let t = model.store.newShell(in: model.folder)
+            model.select(t)
+            if !m.isEmpty { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { t.type(m + "\r") } }
+        case .browser:
+            let address = m.isEmpty || m.contains(" ") ? nil : URL(string: m.contains("://") ? m : (m.hasPrefix("localhost") ? "http://" : "https://") + m)
+            model.openWeb(address, zone: .center)
+        }
     }
 
     private func toggleTick() {
-        guard let t = model.quickTargets[safe: index] else { return }
+        guard let t = model.quickTargets[safe: index - kinds.count] else { return }
         toggle(t.id)
     }
 
@@ -205,9 +252,10 @@ struct QuickPrompt: View {
     private var message: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     private func send() {
+        if ticked.isEmpty, let k = kinds[safe: index] { open(k); return }
         guard !message.isEmpty else { return }
         let targets = model.quickTargets
-        let chosen = ticked.isEmpty ? targets[safe: index].map { [$0] } ?? [] : targets.filter { ticked.contains($0.id) }
+        let chosen = ticked.isEmpty ? targets[safe: index - kinds.count].map { [$0] } ?? [] : targets.filter { ticked.contains($0.id) }
         guard !chosen.isEmpty else { return }
         for t in chosen { t.submit(message) }
         close()

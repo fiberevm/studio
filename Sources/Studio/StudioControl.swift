@@ -705,7 +705,12 @@ final class StudioControl {
             if let w = (p["width"] as? NSNumber)?.doubleValue { model.sidebarWidth = CGFloat(min(max(w, 160), 520)) }
             return ["visible": model.sidebarVisible, "width": Int(model.sidebarWidth)]
 
-                case "open_palette":
+        case "open_quick_prompt":
+            model.palette = nil
+            model.quickPrompt = true
+            return "quick prompt open"
+
+        case "open_palette":
             model.paletteSwitcher = p["switcher"] as? Bool ?? false
             model.palette = p["text"] as? String ?? ""
             return "palette open"
