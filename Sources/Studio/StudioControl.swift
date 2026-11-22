@@ -508,6 +508,15 @@ final class StudioControl {
 
     private func dispatch(_ method: String, _ p: [String: Any], callerTab: UUID?) throws -> Any {
         guard let store else { throw ControlError(message: "Studio isn't ready") }
+        // needs no project window (works from the empty "Open a project" window too)
+        if method == "open_project" {
+            guard let f = p["folder"] as? String else { throw ControlError(message: "folder is required") }
+            let path = (f as NSString).expandingTildeInPath
+            guard FileManager.default.fileExists(atPath: path) else { throw ControlError(message: "no such folder") }
+            guard let open = openWindow else { throw ControlError(message: "can't open windows right now") }
+            open(path)
+            return "opened \(path)"
+        }
         let caller = callerTab.flatMap { id in models.first { $0.group(containing: id) != nil || $0.tabs.contains { $0.id == id } } }
         guard let model = caller ?? lastActive ?? models.first else { throw ControlError(message: "no Studio window is open") }
         let callerGroup = callerTab.flatMap { model.group(containing: $0) } ?? model.activeGroup
@@ -585,6 +594,13 @@ final class StudioControl {
             }
             let t = model.openWeb(url, beside: callerGroup, zone: try zone("split") ?? .right)
             return ["tab": t.id.uuidString]
+
+        case "open_file":
+            guard let raw = p["path"] as? String, !raw.isEmpty else { throw ControlError(message: "path is required") }
+            let path = raw.hasPrefix("/") ? raw : (raw.hasPrefix("~") ? (raw as NSString).expandingTildeInPath : model.folder + "/" + raw)
+            guard FileManager.default.fileExists(atPath: path) else { throw ControlError(message: "no such file: \(path)") }
+            model.openFile(path)
+            return ["tab": model.selectedTerminal?.id.uuidString ?? ""]
 
         case "send_to_session":
             let t = try tab(defaultToCaller: false)
@@ -689,13 +705,6 @@ final class StudioControl {
             model.palette = p["text"] as? String ?? ""
             return "palette open"
 
-        case "open_project":
-            guard let f = p["folder"] as? String else { throw ControlError(message: "folder is required") }
-            let path = (f as NSString).expandingTildeInPath
-            guard FileManager.default.fileExists(atPath: path) else { throw ControlError(message: "no such folder") }
-            guard let open = openWindow else { throw ControlError(message: "can't open windows right now") }
-            open(path)
-            return "opened \(path)"
 
         default:
             throw ControlError(message: "unknown method \(method)")

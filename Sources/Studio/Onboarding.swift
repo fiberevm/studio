@@ -73,7 +73,7 @@ struct OnboardingView: View {
                        text: "The sidebar shows each session's status live: working, finished, or waiting for your answer. A red hand means it needs you, and you get a notification when it does.")
         case 2:
             PageLayout(art: AnyView(KeysArt()), eyebrow: "Keyboard first", title: "Move between agents without the mouse",
-                       text: "⌘K jumps to any session in the project. ⇧⌘K sends a message to one, or to several at once, without leaving where you are. ⌘J takes you to whichever has waited longest.")
+                       text: "⌘K jumps to any session or file in the project. ⇧⌘K sends a message to one, or to several at once, without leaving where you are. ⌘J takes you to whichever has waited longest.")
         case 3:
             PageLayout(art: AnyView(LayoutArt()), eyebrow: "Your workspace", title: "Splits, terminals and a browser",
                        text: "Put sessions side by side, open plain terminals (⌃`) and web tabs next to them. Sessions keep running when you quit Studio and come back exactly where they were.")

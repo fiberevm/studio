@@ -167,7 +167,7 @@ final class ProjectModel: ObservableObject {
         guard let t = selectedTerminal else { return }
         func attempt(_ left: Int) {
             guard selectedTerminal === t else { return }   // the selection moved on
-            let v: NSView? = t.isNative ? t.native?.inputView : t.isWeb ? t.webView : t.view
+            let v: NSView? = t.isNative ? t.native?.inputView : t.isWeb ? t.webView : t.isFile ? t.fileTextView : t.view
             if let v, let w = v.window { w.makeFirstResponder(v) }
             else if left > 0 { DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { attempt(left - 1) } }
         }
@@ -225,6 +225,26 @@ final class ProjectModel: ObservableObject {
     }
 
     func newShellTab() { select(store.newShell(in: folder)) }
+
+    /// Open a file in the editor (⌘K): its existing tab in this window if there is one, else a new tab here.
+    func openFile(_ path: String) {
+        if let t = groups.flatMap(tabs(in:)).first(where: { $0.isFile && $0.filePath == path }) {
+            if let g = group(containing: t.id) { select(t, in: g) } else { select(t) }
+            return
+        }
+        recentFiles.removeAll { $0 == path }
+        recentFiles.insert(path, at: 0)
+        if recentFiles.count > 20 { recentFiles.removeLast() }
+        select(store.newFile(path, cwd: folder))
+    }
+    /// Files opened in this window, newest first (⌘K shows them before you type).
+    @Published var recentFiles: [String] = []
+
+    /// ⌘S: save the file in the selected tab.
+    func saveSelectedFile() {
+        guard let t = selectedTerminal, t.isFile else { NSSound.beep(); return }
+        t.fileDoc?.save()
+    }
 
     /// Start a session on a worker and open it in a tab (beside `g` when given, else as a tab here).
     func newWorkerSession(_ w: Worker, agent: Agent? = nil, folder: String? = nil, prompt: String? = nil,
@@ -285,6 +305,17 @@ final class ProjectModel: ObservableObject {
     /// Close a tab. Without the sidebar there's nowhere for a hidden session to show up, so closing ends it
     /// (⌘P can still resume the conversation). With the sidebar visible, the session keeps running there.
     func close(_ t: TerminalSession) {
+        if t.isFile, let doc = t.fileDoc, doc.dirty {
+            let a = NSAlert()
+            a.messageText = "Save changes to \(doc.name)?"
+            a.informativeText = "Your changes will be lost if you don't save them."
+            a.addButton(withTitle: "Save"); a.addButton(withTitle: "Don't Save"); a.addButton(withTitle: "Cancel")
+            switch a.runModal() {
+            case .alertFirstButtonReturn: guard doc.save() else { return }
+            case .alertSecondButtonReturn: break
+            default: return
+            }
+        }
         if !Pref.bool(Pref.closeTabEndsSession, default: true) && t.isAgent { closeKeepingRunning(t) } else { endSession(t) }
     }
 
@@ -557,6 +588,7 @@ final class ProjectModel: ObservableObject {
                 func token(_ t: TerminalSession?) -> String? {
                     guard let t else { return nil }
                     if t.isWeb { return "web:" + (t.url?.absoluteString ?? "about:blank") }
+                    if t.isFile, let p = t.filePath { return "file:" + p }
                     if t.isWorker, let r = t.remote { return "worker:\(r.worker)|\(r.session)|\(t.cwd)" }
                     if t.isAgent, !t.isClaude, let sid = t.sessionId { return sid }   // restored like a Claude tab, by session id
                     if t.isAgy { return "agy:" + t.cwd }   // not prompted yet: a fresh agy there
@@ -608,6 +640,9 @@ final class ProjectModel: ObservableObject {
                     let t: TerminalSession?
                     if sid.hasPrefix("web:") {
                         t = store.newWeb(URL(string: String(sid.dropFirst(4))), cwd: folder)
+                    } else if sid.hasPrefix("file:") {
+                        let p = String(sid.dropFirst(5))
+                        t = FileManager.default.fileExists(atPath: p) ? store.newFile(p, cwd: folder) : nil
                     } else if sid.hasPrefix("shellh:") {
                         let parts = sid.dropFirst(7).split(separator: "|", maxSplits: 2).map(String.init)
                         if parts.count == 3, let tab = UUID(uuidString: parts[0]) {

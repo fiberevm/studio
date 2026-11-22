@@ -136,6 +136,9 @@ struct AppCommands: Commands {
         }
         // ⌘W closes the tab (the session keeps running); with no tab open it closes the window, like VS Code.
         CommandGroup(replacing: .saveItem) {
+            Button("Save File") { project?.saveSelectedFile() }
+                .keyboardShortcut("s")
+                .disabled(project?.selectedTerminal?.isFile != true)
             Button("Close Tab") {
                 if let p = project, p.selectedTerminal != nil { p.closeSelectedTab() }
                 else if let p = project, p.groups.count > 1 { p.closePane(p.activeGroup) }

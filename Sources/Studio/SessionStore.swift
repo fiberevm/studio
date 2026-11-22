@@ -574,6 +574,14 @@ final class SessionStore: ObservableObject {
         return t
     }
 
+    /// A file open in the editor (⌘K). One tab per file per store: opening it again selects that tab.
+    func newFile(_ path: String, cwd: String) -> TerminalSession {
+        let t = TerminalSession(cwd: cwd, claudeArgs: [], sessionId: nil, fontSize: fontSize, kind: .file)
+        t.filePath = path
+        add(t)
+        return t
+    }
+
     /// Reattach to a terminal tab still running in its host session (or start a fresh shell there).
     func reattachShell(tab: UUID, host: String, cwd: String) -> TerminalSession {
         if let t = terminals.first(where: { $0.id == tab }) { return t }

@@ -20,6 +20,7 @@ struct CommandPalette: View {
     @State private var keepIndexOnce = false
     @FocusState private var focused: Bool
     @StateObject private var keys = KeyMonitor()
+    @State private var indexVersion = 0
 
     enum Mode { case main, themes, switcher }
 
@@ -107,12 +108,16 @@ struct CommandPalette: View {
             }
         }
         .onDisappear { keys.stop() }
+        .onAppear { if mode == .switcher { _ = FileIndex.shared.files(in: model.folder) } }   // start indexing right away
+        .onReceive(NotificationCenter.default.publisher(for: FileIndex.changed)) { n in
+            if (n.object as? String) == model.folder { indexVersion += 1 }
+        }
     }
 
     private var placeholder: String {
         switch mode {
         case .themes: return "Select Color Theme  ·  ↑↓ preview  ·  ⏎ keep  ·  esc back"
-        case .switcher: return "Switch to a session in \(model.name)"
+        case .switcher: return "Switch to a session or open a file in \(model.name)"
         case .main: return "Search sessions by name or project, or type > for commands"
         }
     }
@@ -154,7 +159,19 @@ struct CommandPalette: View {
         case .themes:
             return filter(themeItems, by: query)
         case .switcher:
-            return filter(switchItems, by: query)
+            // sessions first, then files: recently opened ones before you type, the project's matches after
+            let sessions = filter(switchItems, by: query)
+            let files = query.trimmingCharacters(in: .whitespaces).isEmpty
+                ? model.recentFiles.map(fileItem)
+                : FileIndex.search(FileIndex.shared.files(in: model.folder), query).map { fileItem(model.folder + "/" + $0) }
+            var list = sessions
+            for (i, f) in files.enumerated() {
+                var f = f
+                if i == 0 { f.section = query.isEmpty ? "recent files" : "files" }
+                list.append(f)
+            }
+            _ = indexVersion   // re-run when the file index finishes building
+            return list
         case .main:
             if query.hasPrefix(">") {
                 return filter(commandItems, by: String(query.dropFirst()).trimmingCharacters(in: .whitespaces))
@@ -211,6 +228,13 @@ struct CommandPalette: View {
                         detail: item.status.label, leading: .status(item.status),
                         run: { open(sid: sid, cwd: item.cwd) })
         }
+    }
+
+    private func fileItem(_ path: String) -> Item {
+        let rel = relativePath(path, to: model.folder)
+        let dir = (rel as NSString).deletingLastPathComponent
+        return Item(id: "file:\(path)", title: (path as NSString).lastPathComponent, subtitle: dir,
+                    leading: .icon("doc.text"), run: { model.openFile(path) })
     }
 
     private var commandItems: [Item] {

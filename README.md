@@ -31,7 +31,7 @@ happened. Studio is built around one idea: **you should only look at a session w
 - **One window per project.** Open `~/code/api` and `~/code/web` side by side; each window holds that repo's sessions and worktrees.
 - **Know who's waiting.** Tabs show a working indicator, a pulsing red dot when Claude is blocked on you, and an unread dot when it finished while you were elsewhere.
 - **Jump, don't scan.** <kbd>⌘J</kbd> takes you to the session that has waited longest; press it again for the next one. It's inbox zero for agents.
-- **Jump between sessions.** <kbd>⌘K</kbd> searches this project's open sessions; pick one and it's focused, ready to type.
+- **Jump between sessions, open files.** <kbd>⌘K</kbd> searches this project's open sessions and its files; pick a session and it's focused, ready to type, or a file and it opens in a native editor tab (syntax colors, <kbd>⌘S</kbd> to save, <kbd>⌘F</kbd> to find) that reloads live when an agent changes it.
 - **Talk without switching.** <kbd>⇧⌘K</kbd> sends a message to any session, or to several at once, without leaving the pane you're in.
 
 ## Features
@@ -180,7 +180,8 @@ open build/Studio.app --args --resume <session-id>        # resume a specific se
 | <kbd>⌘P</kbd> | Go to session: search running and past sessions in every project (type `>` for commands) |
 | <kbd>⇧⌘P</kbd> | Command palette, including Color Theme |
 | <kbd>⌘J</kbd> | Next up: the session that has waited longest for you |
-| <kbd>⌘K</kbd> | Switch to an open session in this project |
+| <kbd>⌘K</kbd> | Switch to an open session or open a file in this project |
+| <kbd>⌘S</kbd> | Save the open file |
 | <kbd>⇧⌘K</kbd> | Quick prompt: message any session (or several) without switching |
 | <kbd>⌘E</kbd> | Fork the current session into a new pane to the right |
 | <kbd>⌘/</kbd> | Toggle native view (Studio renders the session) / terminal view |
@@ -207,7 +208,7 @@ watcher"*, or *"lay these out as a 2×2 grid"*.
 |---|---|
 | Inspect | `get_state`, `list_themes` |
 | Workers | `list_workers`, `worker_start_session` (worker, prompt, folder, agent, open, split), `worker_session` (status, last reply, screen), `worker_send`, `worker_stop_session`, `worker_list_dirs` |
-| Sessions, terminals & web | `new_session` (prompt, split, folder, agent: claude / codex / agy), `open_url`, `web_read` / `web_click` / `web_type` / `web_wait` / `web_nav` / `web_screenshot` / `web_eval` (drive a web panel), `fork_session`, `set_view` (native / terminal), `new_terminal` (command, split), `run_in_terminal`, `send_to_session` |
+| Sessions, terminals & web | `new_session` (prompt, split, folder, agent: claude / codex / agy), `open_url`, `web_read` / `web_click` / `web_type` / `web_wait` / `web_nav` / `web_screenshot` / `web_eval` (drive a web panel), `fork_session`, `set_view` (native / terminal), `new_terminal` (command, split), `run_in_terminal`, `send_to_session`, `open_file` (show the user a file in the editor) |
 | Tabs | `split_tab`, `move_tab`, `focus_tab`, `close_tab`, `reorder_tab` |
 | Layout | `set_layout` (single / columns / rows / grid), `resize_pane`, `set_split_sizes`, `equalize_layout`, `merge_pane`, `focus_pane`, `set_sidebar` |
 | Sandboxes | `sandbox_list`, `sandbox_create`, `sandbox_exec`, `sandbox_push`, `sandbox_url`, `sandbox_terminal`, `sandbox_attach` / `sandbox_detach`, `sandbox_stop` / `sandbox_resume` / `sandbox_delete` |
@@ -253,6 +254,7 @@ Sources/Studio/          the app
   CommandPalette.swift     ⌘P / ⇧⌘P
   QuickPrompt.swift        ⇧⌘K and snippets
   Onboarding.swift         the welcome window (first launch, Help → Welcome to Studio)
+  FileViewer.swift         ⌘K file search and the editor tab
   StudioControl.swift      control server behind the MCP tools
   TranscriptScanner.swift  reads titles, prompts and replies from transcripts
   Codex.swift              the same for Codex: reads ~/.codex rollouts (status, titles, tokens), spots approval prompts

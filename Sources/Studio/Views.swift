@@ -882,7 +882,8 @@ struct TabButton: View {
     private var tabStatus: SessionStatus { item?.status ?? (terminal.running ? .starting : .exited) }
 
     private var tabTitle: String {
-        let t = terminal.isWeb ? (terminal.webTitle.isEmpty ? (terminal.url?.host ?? "New tab") : terminal.webTitle)
+        let t = terminal.isFile ? ((terminal.filePath ?? "File") as NSString).lastPathComponent
+            : terminal.isWeb ? (terminal.webTitle.isEmpty ? (terminal.url?.host ?? "New tab") : terminal.webTitle)
             : terminal.isShell ? shellTitle : (terminal.isAgent && !terminal.isClaude) ? agentTitle : (item?.title ?? "New session")
         return t.count > 28 ? String(t.prefix(27)) + "…" : t
     }
@@ -900,7 +901,9 @@ struct TabButton: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            if terminal.isWeb {
+            if terminal.isFile {
+                FileTabIcon(terminal: terminal)
+            } else if terminal.isWeb {
                 Image(systemName: "globe").font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 12)
             } else if terminal.isCodex || terminal.isAgy {
                 Image(systemName: "chevron.left.forwardslash.chevron.right").font(.system(size: 10)).foregroundStyle(.secondary).frame(width: 12)
@@ -1059,7 +1062,11 @@ struct SessionStatusBar: View {
         let sid = terminal.sessionId
         let st = sid.flatMap { model.store.stats[$0] }
         HStack(spacing: 14) {
-            if terminal.isWeb { stat("globe", terminal.url?.host ?? "", help: terminal.url?.absoluteString ?? "") }
+            if terminal.isFile, let p = terminal.filePath {
+                stat("doc.text", relativePath(p, to: model.folder), help: p)
+                if let d = terminal.fileDoc, d.content == .text { stat("text.alignleft", "\(d.lineCount) lines", help: "Lines") }
+            }
+            else if terminal.isWeb { stat("globe", terminal.url?.host ?? "", help: terminal.url?.absoluteString ?? "") }
             else if terminal.isShell { stat("folder", abbreviatePath(terminal.cwd), help: "Started in") }
             if let b = st?.gitBranch { stat("arrow.triangle.branch", b, help: "Git branch") }
             if let m = st?.model { stat("cpu", prettyModel(m), help: "Model: \(m)") }
@@ -1236,7 +1243,9 @@ struct TerminalPane: View {
 
     var body: some View {
         VStack(spacing: 0) {
-        if terminal.isWeb {
+        if terminal.isFile, let doc = terminal.fileDoc {
+            FilePane(doc: doc, fontSize: model.store.fontSize) { [weak terminal] tv in terminal?.fileTextView = tv }
+        } else if terminal.isWeb {
             WebPane(tab: terminal)
         } else if let chat = terminal.native {
             NativeChatView(chat: chat).id(ObjectIdentifier(chat))
@@ -1649,4 +1658,28 @@ struct PointingHandCursor: ViewModifier {
             }
         }
     }
+}
+
+/// A file tab's icon: a dot while it has unsaved changes (like VS Code), else a document.
+struct FileTabIcon: View {
+    @ObservedObject var terminal: TerminalSession
+    var body: some View {
+        if let d = terminal.fileDoc { Inner(doc: d) } else { Image(systemName: "doc.text").font(.system(size: 10)) }
+    }
+    private struct Inner: View {
+        @ObservedObject var doc: FileDoc
+        var body: some View {
+            Group {
+                if doc.dirty { Circle().fill(SwiftUI.Color.primary.opacity(0.7)).frame(width: 7, height: 7).help("Unsaved changes (⌘S)") }
+                else { Image(systemName: "doc.text").font(.system(size: 10)).foregroundStyle(.secondary) }
+            }
+            .frame(width: 12)
+        }
+    }
+}
+
+/// `path` relative to `root` when inside it, else abbreviated with ~.
+func relativePath(_ path: String, to root: String) -> String {
+    let r = root.hasSuffix("/") ? root : root + "/"
+    return path.hasPrefix(r) ? String(path.dropFirst(r.count)) : abbreviatePath(path)
 }

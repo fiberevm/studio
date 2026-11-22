@@ -25,7 +25,7 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     private let claudeArgs: [String]
     /// .claude runs a Claude Code session; .codex runs OpenAI's Codex CLI; .shell is a plain terminal (⌃`),
     /// like VS Code's integrated terminal.
-    enum Kind { case claude, codex, agy, worker, shell, web }
+    enum Kind { case claude, codex, agy, worker, shell, web, file }
     let kind: Kind
     var isShell: Bool { kind == .shell }
     var isClaude: Bool { kind == .claude }
@@ -42,6 +42,12 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     }
 
     var isWeb: Bool { kind == .web }
+    /// A file open in the editor (from ⌘K); no process.
+    var isFile: Bool { kind == .file }
+    var filePath: String?
+    @MainActor lazy var fileDoc: FileDoc? = filePath.map { FileDoc(path: $0) }
+    /// The editor's text view once it's on screen (for focus).
+    weak var fileTextView: NSTextView?
 
     // MARK: Web panel (kind .web): a browser tab, like a terminal tab
     @Published var url: URL?
@@ -138,7 +144,7 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
         case .codex: launchCodex(claudeArgs)
         case .agy: launchCLI(["agy"] + claudeArgs)
         case .worker: launchWorker()
-        case .web: running = true    // no process; the page lives in webView
+        case .web, .file: running = true    // no process; the page lives in webView, the file in fileDoc
         }
     }
 
@@ -281,6 +287,7 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     /// End this tab's process for good: its host session too, if it has one.
     func terminate() {
         if isWeb { webView.stopLoading(); running = false; return }
+        if isFile { running = false; return }
         native?.stop()
         if let h = hostName { SessionHost.kill(h) }
         else if running, pid > 0 { kill(pid, SIGHUP) }
