@@ -209,7 +209,7 @@ watcher"*, or *"lay these out as a 2×2 grid"*.
 |---|---|
 | Inspect | `get_state`, `list_themes` |
 | Workers | `list_workers`, `worker_start_session` (worker, prompt, folder, agent, open, split), `worker_session` (status, last reply, screen), `worker_send`, `worker_stop_session`, `worker_list_dirs` |
-| Sessions, terminals & web | `new_session` (prompt, split, folder, agent: claude / codex / agy), `open_url`, `web_read` / `web_click` / `web_type` / `web_wait` / `web_nav` / `web_screenshot` / `web_eval` (drive a web panel), `fork_session`, `set_view` (native / terminal), `new_terminal` (command, split), `run_in_terminal`, `send_to_session`, `open_file` (show the user a file in the editor) |
+| Sessions, terminals & web | `new_session` (prompt, split, folder, agent: claude / codex / agy), `open_url`, `web_read` / `web_click` / `web_type` / `web_wait` / `web_nav` / `web_screenshot` / `web_eval` (drive a web panel), `fork_session`, `set_view` (native / terminal), `new_terminal` (command, split), `run_in_terminal`, `send_to_session`, `open_file` (show the user a file in the editor, optionally at a line) |
 | Tabs | `split_tab`, `move_tab`, `focus_tab`, `close_tab`, `reorder_tab` |
 | Layout | `set_layout` (single / columns / rows / grid), `resize_pane`, `set_split_sizes`, `equalize_layout`, `merge_pane`, `focus_pane`, `set_sidebar` |
 | Sandboxes | `sandbox_list`, `sandbox_create`, `sandbox_exec`, `sandbox_push`, `sandbox_url`, `sandbox_terminal`, `sandbox_attach` / `sandbox_detach`, `sandbox_stop` / `sandbox_resume` / `sandbox_delete` |

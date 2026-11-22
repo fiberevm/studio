@@ -413,6 +413,30 @@ final class CodeTextView: NSTextView {
 
     override func insertBacktab(_ sender: Any?) { shiftLines(by: -1) }
 
+    /// Put the caret at the start of 1-based `line` and scroll it into the middle of the view.
+    func goTo(line: Int) {
+        let s = string as NSString
+        var loc = 0, l = 1
+        while l < line, loc < s.length {
+            let r = s.range(of: "\n", options: .literal, range: NSRange(location: loc, length: s.length - loc))
+            if r.location == NSNotFound { break }
+            loc = r.location + 1; l += 1
+        }
+        setSelectedRange(NSRange(location: loc, length: 0))
+        if let lm = layoutManager, let tc = textContainer {
+            lm.ensureLayout(forCharacterRange: NSRange(location: 0, length: min(s.length, loc + 1)))
+            var rect = lm.boundingRect(forGlyphRange: lm.glyphRange(forCharacterRange: NSRange(location: loc, length: 0), actualCharacterRange: nil), in: tc)
+            rect.origin.y += textContainerOrigin.y
+            if let sv = enclosingScrollView {
+                let clip = sv.contentView
+                let maxY = max(0, frame.height - clip.bounds.height)
+                clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: min(maxY, max(0, rect.midY - clip.bounds.height / 2))))
+                sv.reflectScrolledClipView(clip)
+            }
+        }
+        window?.makeFirstResponder(self)
+    }
+
     /// Indent or outdent every line the selection touches.
     func shiftLines(by d: Int) {
         let s = string as NSString
@@ -444,6 +468,7 @@ final class LineNumberRuler: NSRulerView {
         super.init(scrollView: textView.enclosingScrollView, orientation: .verticalRuler)
         clientView = textView
         ruleThickness = 40
+        clipsToBounds = true     // macOS 14+ views don't clip by default: numbers would spill over the tab bar
         NotificationCenter.default.addObserver(self, selector: #selector(textDidChange), name: NSText.didChangeNotification, object: textView)
     }
     required init(coder: NSCoder) { fatalError() }
@@ -451,11 +476,12 @@ final class LineNumberRuler: NSRulerView {
     override var isFlipped: Bool { true }
 
     @objc private func textDidChange() { textChanged() }
-    func textChanged() { stale = true; needsDisplay = true }
+    func textChanged() { stale = true; rebuild(); needsDisplay = true }
 
     func restyle(font: NSFont) {
         numberFont = NSFont.monospacedDigitSystemFont(ofSize: max(9, font.pointSize - 1), weight: .regular)
         stale = true
+        rebuild()
         needsDisplay = true
     }
 
@@ -473,7 +499,11 @@ final class LineNumberRuler: NSRulerView {
         lineStarts = starts
         let digits = max(3, String(starts.count).count)
         let w = ("8" as NSString).size(withAttributes: [.font: numberFont]).width * CGFloat(digits) + 26
-        if abs(ruleThickness - w) > 0.5 { ruleThickness = w }
+        if abs(ruleThickness - w) > 0.5 {
+            ruleThickness = w
+            scrollView?.tile()     // make room for the wider gutter (else it covers the start of each line)
+            needsDisplay = true
+        }
     }
 
     /// 0-based line containing character `i`.
@@ -489,6 +519,9 @@ final class LineNumberRuler: NSRulerView {
     override func drawHashMarksAndLabels(in rect: NSRect) {
         guard let tv = textView, let lm = tv.layoutManager, let tc = tv.textContainer else { return }
         rebuild()
+        NSGraphicsContext.saveGraphicsState()
+        defer { NSGraphicsContext.restoreGraphicsState() }
+        NSBezierPath(rect: bounds).setClip()
         Theme.background.setFill()
         bounds.fill()
         let s = tv.string as NSString

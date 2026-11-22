@@ -600,7 +600,12 @@ final class StudioControl {
             let path = raw.hasPrefix("/") ? raw : (raw.hasPrefix("~") ? (raw as NSString).expandingTildeInPath : model.folder + "/" + raw)
             guard FileManager.default.fileExists(atPath: path) else { throw ControlError(message: "no such file: \(path)") }
             model.openFile(path)
-            return ["tab": model.selectedTerminal?.id.uuidString ?? ""]
+            let t = model.selectedTerminal
+            if let line = (p["line"] as? NSNumber)?.intValue, line > 0, let t {
+                // the editor view appears on the next layout pass
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { (t.fileTextView as? CodeTextView)?.goTo(line: line) }
+            }
+            return ["tab": t?.id.uuidString ?? ""]
 
         case "send_to_session":
             let t = try tab(defaultToCaller: false)
