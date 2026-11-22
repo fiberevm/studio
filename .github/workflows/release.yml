@@ -1,5 +1,5 @@
 # Builds Studio.app on every version tag (v1.2.3), signs and notarizes it when the Apple secrets are set,
-# and publishes Studio.zip to a GitHub release. Without the secrets it still publishes an ad hoc build.
+# and publishes Studio.dmg (drag-to-Applications installer) and Studio.zip to a GitHub release. Without the secrets it still publishes an ad hoc build.
 #
 # Secrets (Settings → Secrets and variables → Actions):
 #   MACOS_CERT_P12          base64 of your "Developer ID Application" certificate + private key (.p12)
@@ -96,16 +96,35 @@ jobs:
         if: steps.cert.outputs.identity == ''
         run: ditto -c -k --keepParent build/release/Studio.app build/release/Studio.zip
 
+      - name: Disk image
+        env:
+          SIGN_IDENTITY: ${{ steps.cert.outputs.identity }}
+        run: |
+          # the drag-to-Applications installer (window layout written by dmgbuild, no Finder needed)
+          pipx install dmgbuild
+          scripts/make-dmg.sh build/release/Studio.app build/release/Studio.dmg
+
+      - name: Notarize disk image
+        if: steps.cert.outputs.identity != ''
+        env:
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          echo "$NOTARY_KEY_P8" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+          NOTARY_KEY_PATH="$RUNNER_TEMP/notary.p8" scripts/notarize.sh build/release/Studio.dmg
+          rm "$RUNNER_TEMP/notary.p8"
+
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
           SIGNED: ${{ steps.cert.outputs.identity != '' }}
         run: |
           cd build/release
-          shasum -a 256 Studio.zip | tee Studio.zip.sha256
+          shasum -a 256 Studio.dmg Studio.zip | tee Studio.sha256
           shasum -a 256 studio-worker-* | tee studio-worker.sha256
           {
-            echo "**Install:** download \`Studio.zip\`, unzip it and move Studio to Applications. Universal (Apple silicon and Intel), macOS 14+. Needs [Claude Code](https://docs.claude.com/en/docs/claude-code) (or Codex, or Antigravity); \`brew install tmux\` recommended."
+            echo "**Install:** download \`Studio.dmg\`, open it and drag Studio to Applications (or use \`Studio.zip\`). Universal (Apple silicon and Intel), macOS 14+. Needs [Claude Code](https://docs.claude.com/en/docs/claude-code) (or Codex, or Antigravity); \`brew install tmux\` recommended."
             echo
             echo "**Workers:** on a Linux or macOS machine you want to run sessions on, \`curl -fsSL https://raw.githubusercontent.com/fiberevm/studio/main/install-worker.sh | sh\`, then pair it in Settings → Workers."
             echo
@@ -119,10 +138,10 @@ jobs:
             fi
           } > notes.md
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" Studio.zip Studio.zip.sha256 studio-worker-* studio-worker.sha256 --clobber
+            gh release upload "$TAG" Studio.dmg Studio.zip Studio.sha256 studio-worker-* studio-worker.sha256 --clobber
             gh release edit "$TAG" --notes-file notes.md
           else
-            gh release create "$TAG" Studio.zip Studio.zip.sha256 studio-worker-* studio-worker.sha256 --title "Studio ${TAG#v}" --notes-file notes.md --generate-notes
+            gh release create "$TAG" Studio.dmg Studio.zip Studio.sha256 studio-worker-* studio-worker.sha256 --title "Studio ${TAG#v}" --notes-file notes.md --generate-notes
           fi
 
       - name: Clean up keychain

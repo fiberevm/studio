@@ -154,7 +154,7 @@ The worker listens on port 7420 and Studio talks to it directly, so the Mac must
 
 ## Install
 
-**Download:** grab `Studio.zip` from the [latest release](https://github.com/fiberevm/studio/releases/latest), unzip it and move Studio to Applications. Release builds are signed with a Developer ID and notarized by Apple.
+**Download:** grab `Studio.dmg` from the [latest release](https://github.com/fiberevm/studio/releases/latest), open it and drag Studio into Applications (releases before 0.0.5 only have `Studio.zip`: unzip it and move Studio to Applications). Release builds are signed with a Developer ID and notarized by Apple.
 
 **Build from source** — requirements: **macOS 14+**, **Xcode 16+ / Swift 6 toolchain**, and [Claude Code](https://docs.claude.com/en/docs/claude-code) (or [Codex](https://github.com/openai/codex), or Antigravity's `agy`) installed and logged in. Recommended: [tmux](https://github.com/tmux/tmux) (`brew install tmux`) so sessions survive Studio restarts. Optional: the [`gh` CLI](https://cli.github.com) for PR detection, and the [`boat` CLI](https://boat.dev) for sandboxes.
 
@@ -276,13 +276,13 @@ website/                 the one-page download site (static HTML; hero is a reco
 
 ## Releasing
 
-Push a version tag and GitHub Actions ([`.github/workflows/release.yml`](.github/workflows/release.yml)) builds Studio.app, signs it with your Developer ID (hardened runtime), notarizes and staples it, and publishes `Studio.zip` to a GitHub release, along with `studio-worker` for Linux and macOS (amd64 and arm64):
+Push a version tag and GitHub Actions ([`.github/workflows/release.yml`](.github/workflows/release.yml)) builds Studio.app, signs it with your Developer ID (hardened runtime), notarizes and staples it, and publishes `Studio.dmg` (the drag-to-Applications installer, laid out by `scripts/make-dmg.sh`) and `Studio.zip` to a GitHub release, along with `studio-worker` for Linux and macOS (amd64 and arm64):
 
 ```bash
 git tag v0.2.0 && git push origin v0.2.0
 ```
 
-It needs five repository secrets: `MACOS_CERT_P12` (base64 of a *Developer ID Application* .p12), `MACOS_CERT_PASSWORD`, and an App Store Connect API key for notarization: `NOTARY_KEY_P8` (base64 of the .p8), `NOTARY_KEY_ID`, `NOTARY_ISSUER_ID`. Without them it publishes an ad hoc–signed build. Locally: `SIGN_IDENTITY="Developer ID Application: …" VERSION=0.2.0 APP=build/release/Studio.app ./build-app.sh`, then `scripts/notarize.sh build/release/Studio.app build/release/Studio.zip`.
+It needs five repository secrets: `MACOS_CERT_P12` (base64 of a *Developer ID Application* .p12), `MACOS_CERT_PASSWORD`, and an App Store Connect API key for notarization: `NOTARY_KEY_P8` (base64 of the .p8), `NOTARY_KEY_ID`, `NOTARY_ISSUER_ID`. Without them it publishes an ad hoc–signed build. Locally: `SIGN_IDENTITY="Developer ID Application: …" VERSION=0.2.0 APP=build/release/Studio.app ./build-app.sh`, then `scripts/notarize.sh build/release/Studio.app build/release/Studio.zip`; for the installer, `scripts/make-dmg.sh build/release/Studio.app build/release/Studio.dmg` (needs `pipx install dmgbuild`) and `scripts/notarize.sh build/release/Studio.dmg`.
 
 ## Contributing
 
