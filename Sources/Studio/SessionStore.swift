@@ -507,7 +507,9 @@ final class SessionStore: ObservableObject {
     }
 
     /// A new agent session: the default CLI from Settings (Claude Code or Codex) unless `agent` says which.
-    func newSession(in cwd: String, prompt: String? = nil, agent: Agent? = nil) -> TerminalSession {
+    /// In a git repo it starts in its own worktree unless Settings → Sessions says otherwise (see Worktrees).
+    func newSession(in folder: String, prompt: String? = nil, agent: Agent? = nil) -> TerminalSession {
+        let cwd = Worktrees.folder(for: folder, name: Worktrees.newName())
         switch agent ?? Agent.preferred {
         case .codex: return newCodex(in: cwd, prompt: prompt)
         case .agy: return newAgy(in: cwd, prompt: prompt)

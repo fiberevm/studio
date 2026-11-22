@@ -481,9 +481,15 @@ private struct SessionSettings: View {
     @AppStorage(Pref.closeTabEndsSession) private var closeEnds = true
     @AppStorage(Pref.keepSessionsAlive) private var keepAlive = true
     @AppStorage(Pref.nativePermissionMode) private var nativeMode = ""
+    @AppStorage(Worktrees.pref) private var worktrees = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            Row(title: "Give each new session its own worktree",
+                detail: "In a git repo, a new session starts in a fresh worktree (.claude/worktrees/<name>, branch studio/<name>) so agents working in parallel don't edit the same files. If a session ends without changes, its worktree and branch are removed; otherwise they stay for you to review.") {
+                Toggle("", isOn: $worktrees).labelsHidden().toggleStyle(.switch)
+            }
+            if worktrees { StartBranchSettings() }
             Row(title: "Closing a tab ends its session",
                 detail: "Off: the session keeps running in the background (reopen it from ⌘P). Right-click a tab for the other behavior either way.") {
                 Toggle("", isOn: $closeEnds).labelsHidden().toggleStyle(.switch)
@@ -505,6 +511,60 @@ private struct SessionSettings: View {
                 }
                 .labelsHidden().frame(width: 200)
             }
+        }
+    }
+}
+
+/// Per project: the branch new session worktrees start from.
+private struct StartBranchSettings: View {
+    struct Repo: Identifiable { let path: String; let branches: [String]; let fallback: String; var id: String { path } }
+    @State private var repos: [Repo]?
+    @State private var choice: [String: String] = [:]
+
+    var body: some View {
+        Row(title: "Start branch",
+            detail: "The branch each project's new worktrees start from. Default is the repo's default branch (origin's HEAD, else main or master); Current branch follows whatever the project folder has checked out.") {
+            if let repos {
+                if repos.isEmpty {
+                    Text("No git projects yet. Open one and it shows up here.").font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(repos) { r in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text((r.path as NSString).lastPathComponent).font(.system(size: 12, weight: .medium))
+                                Text((r.path as NSString).abbreviatingWithTildeInPath).font(.system(size: 11)).foregroundStyle(.secondary)
+                                    .lineLimit(1).truncationMode(.middle)
+                            }
+                            Spacer()
+                            Picker("", selection: Binding(get: { choice[r.path] ?? "" }, set: {
+                                choice[r.path] = $0; Worktrees.setStartBranch($0, for: r.path)
+                            })) {
+                                Text("Default (\(r.fallback))").tag("")
+                                Text("Current branch").tag(Worktrees.currentBranch)
+                                Divider()
+                                ForEach(r.branches, id: \.self) { Text($0).tag($0) }
+                                let saved = choice[r.path] ?? ""
+                                if !saved.isEmpty, saved != Worktrees.currentBranch, !r.branches.contains(saved) { Text(saved).tag(saved) }
+                            }
+                            .labelsHidden().frame(width: 200)
+                        }
+                    }
+                }
+            } else {
+                ProgressView().controlSize(.small)
+            }
+        }
+        .task {
+            let found = await Task.detached { () -> [Repo] in
+                var seen = Set<String>()
+                return RecentProjects.list().compactMap { f in
+                    guard let top = Worktrees.repoRoot(f), seen.insert(top).inserted else { return nil }
+                    return Repo(path: top, branches: Worktrees.branches(top), fallback: Worktrees.defaultBranch(top) ?? "current branch")
+                }
+            }.value
+            choice = Dictionary(uniqueKeysWithValues: found.map { ($0.path, Worktrees.startBranch($0.path)) })
+            repos = found
         }
     }
 }

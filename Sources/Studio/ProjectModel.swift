@@ -330,7 +330,7 @@ final class ProjectModel: ObservableObject {
     /// Stop the claude process for good (it can still be resumed later with `claude --resume`).
     func endSession(_ t: TerminalSession) {
         closeKeepingRunning(t)
-        if t.isAgent { store.close(t) }   // a shell or web panel was already ended
+        if t.isAgent { store.close(t); Worktrees.cleanUp(t.cwd) }   // a shell or web panel was already ended
     }
 
     func closeSelectedTab() { if let t = selectedTerminal { close(t) } }
