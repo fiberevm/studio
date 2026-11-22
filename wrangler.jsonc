@@ -1,0 +1,13 @@
+// The website (website/, static files, no build step) on Cloudflare: a Worker that only serves static assets.
+// Deploy with: npx wrangler deploy
+{
+  "name": "getstudio",
+  "compatibility_date": "2026-11-19",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "directory": "website"
+  }
+}
