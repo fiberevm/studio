@@ -9,5 +9,10 @@
   },
   "assets": {
     "directory": "website"
-  }
+  },
+  // Routes on the zone's existing (proxied) DNS records for getstudio.dev and www.
+  "routes": [
+    { "pattern": "getstudio.dev/*", "zone_name": "getstudio.dev" },
+    { "pattern": "www.getstudio.dev/*", "zone_name": "getstudio.dev" }
+  ]
 }

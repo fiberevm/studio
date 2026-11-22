@@ -279,6 +279,7 @@ Resources/               app icon (SVG source + generated .icns)
 scripts/make-icon.sh     regenerates AppIcon.icns from AppIcon.svg
 scripts/make-appcast.sh  writes a release's update feed (appcast.xml), signed with the update key
 website/                 the one-page download site (static HTML on the taste-skill kit in assets/; captures in assets/shots, the recording in assets/demo.mp4)
+wrangler.jsonc           serves website/ at getstudio.dev (a Cloudflare static-assets Worker): npx wrangler deploy
 ```
 
 ## Roadmap
