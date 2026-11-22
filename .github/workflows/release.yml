@@ -4,9 +4,14 @@
 # Secrets (Settings → Secrets and variables → Actions):
 #   MACOS_CERT_P12          base64 of your "Developer ID Application" certificate + private key (.p12)
 #   MACOS_CERT_PASSWORD     the .p12 password
-#   NOTARY_KEY_P8           base64 of an App Store Connect API key (.p8), role Developer
+#   and for notarization, either an App Store Connect API key:
+#   NOTARY_KEY_P8           base64 of the key (.p8), role Developer
 #   NOTARY_KEY_ID           that key's ID
 #   NOTARY_ISSUER_ID        the issuer ID shown above the keys list
+#   or an Apple ID:
+#   NOTARY_APPLE_ID         the developer account's Apple ID
+#   NOTARY_PASSWORD         an app-specific password for it (account.apple.com)
+#   NOTARY_TEAM_ID          the team ID (10 characters)
 name: Release
 
 on:
@@ -87,10 +92,16 @@ jobs:
           NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
         run: |
-          echo "$NOTARY_KEY_P8" | base64 --decode > "$RUNNER_TEMP/notary.p8"
-          NOTARY_KEY_PATH="$RUNNER_TEMP/notary.p8" scripts/notarize.sh build/release/Studio.app build/release/Studio.zip
-          rm "$RUNNER_TEMP/notary.p8"
+          if [ -n "$NOTARY_KEY_P8" ]; then
+            echo "$NOTARY_KEY_P8" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+            export NOTARY_KEY_PATH="$RUNNER_TEMP/notary.p8"
+          fi
+          scripts/notarize.sh build/release/Studio.app build/release/Studio.zip
+          rm -f "$RUNNER_TEMP/notary.p8"
 
       - name: Zip (ad hoc build)
         if: steps.cert.outputs.identity == ''
@@ -110,10 +121,16 @@ jobs:
           NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
         run: |
-          echo "$NOTARY_KEY_P8" | base64 --decode > "$RUNNER_TEMP/notary.p8"
-          NOTARY_KEY_PATH="$RUNNER_TEMP/notary.p8" scripts/notarize.sh build/release/Studio.dmg
-          rm "$RUNNER_TEMP/notary.p8"
+          if [ -n "$NOTARY_KEY_P8" ]; then
+            echo "$NOTARY_KEY_P8" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+            export NOTARY_KEY_PATH="$RUNNER_TEMP/notary.p8"
+          fi
+          scripts/notarize.sh build/release/Studio.dmg
+          rm -f "$RUNNER_TEMP/notary.p8"
 
       - name: Publish release
         env:

@@ -282,7 +282,7 @@ Push a version tag and GitHub Actions ([`.github/workflows/release.yml`](.github
 git tag v0.2.0 && git push origin v0.2.0
 ```
 
-It needs five repository secrets: `MACOS_CERT_P12` (base64 of a *Developer ID Application* .p12), `MACOS_CERT_PASSWORD`, and an App Store Connect API key for notarization: `NOTARY_KEY_P8` (base64 of the .p8), `NOTARY_KEY_ID`, `NOTARY_ISSUER_ID`. Without them it publishes an ad hoc–signed build. Locally: `SIGN_IDENTITY="Developer ID Application: …" VERSION=0.2.0 APP=build/release/Studio.app ./build-app.sh`, then `scripts/notarize.sh build/release/Studio.app build/release/Studio.zip`; for the installer, `scripts/make-dmg.sh build/release/Studio.app build/release/Studio.dmg` (needs `pipx install dmgbuild`) and `scripts/notarize.sh build/release/Studio.dmg`.
+It needs repository secrets: `MACOS_CERT_P12` (base64 of a *Developer ID Application* .p12) and `MACOS_CERT_PASSWORD` for signing, and for notarization either an App Store Connect API key (`NOTARY_KEY_P8`, base64 of the .p8, `NOTARY_KEY_ID`, `NOTARY_ISSUER_ID`) or an Apple ID (`NOTARY_APPLE_ID`, `NOTARY_PASSWORD`, an app-specific password, and `NOTARY_TEAM_ID`). Without them it publishes an ad hoc–signed build. Locally: `SIGN_IDENTITY="Developer ID Application: …" VERSION=0.2.0 APP=build/release/Studio.app ./build-app.sh`, then `scripts/notarize.sh build/release/Studio.app build/release/Studio.zip`; for the installer, `scripts/make-dmg.sh build/release/Studio.app build/release/Studio.dmg` (needs `pipx install dmgbuild`) and `scripts/notarize.sh build/release/Studio.dmg`.
 
 ## Contributing
 
