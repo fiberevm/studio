@@ -13,7 +13,9 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     private(set) var hostedPid: Int32?
     /// The pid Claude Code records in ~/.claude/sessions/<pid>.json for this tab.
     var sessionPid: Int32 { hostedPid ?? pid }
-    let cwd: String
+    private(set) var cwd: String
+    /// Set while the tab waits for its worktree (the worktree's name); the process starts once it's ready.
+    @Published private(set) var preparing: String?
     let createdAt = Date()
     @Published var sessionId: String?
     @Published private(set) var running = false
@@ -69,7 +71,8 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     }
 
     init(cwd: String, claudeArgs: [String], sessionId: String?, fontSize: CGFloat = 12, kind: Kind = .claude,
-         native: Bool = false, id: UUID = UUID(), host: String? = nil, remote: (worker: String, session: String)? = nil) {
+         native: Bool = false, id: UUID = UUID(), host: String? = nil, remote: (worker: String, session: String)? = nil,
+         preparing: String? = nil) {
         self.id = id
         self.remote = remote
         self.hostName = host
@@ -81,7 +84,17 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
         super.init()
         Theme.apply(to: view, fontSize: fontSize)
         view.processDelegate = self
-        if native, agent != nil, let sid = sessionId { startNative(sid) } else { start() }
+        if let preparing { self.preparing = preparing; running = true }   // shows as starting, not exited
+        else if native, agent != nil, let sid = sessionId { startNative(sid) } else { start() }
+    }
+
+    /// The worktree is ready (or wasn't made: `cwd` is then the original folder): start the process there.
+    func finishPreparing(in cwd: String) {
+        guard preparing != nil else { return }
+        self.cwd = cwd
+        preparing = nil
+        running = false
+        start()
     }
 
     // MARK: Native (non-TUI) mode

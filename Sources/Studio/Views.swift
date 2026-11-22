@@ -1271,7 +1271,10 @@ struct TerminalPane: View {
         ZStack {
             TerminalHost(view: terminal.view)
                 .padding(.leading, 8).padding(.trailing, 8).padding(.vertical, 4)
-            if !terminal.running {
+                .opacity(terminal.preparing == nil ? 1 : 0)
+            if let name = terminal.preparing {
+                WorktreeLoading(name: name)
+            } else if !terminal.running {
                 VStack(spacing: 10) {
                     Text("\(terminal.isShell ? "Shell" : terminal.agent?.name ?? "Session") exited\(terminal.exitCode.map { " (code \($0))" } ?? "")")
                         .font(.headline)
@@ -1289,6 +1292,27 @@ struct TerminalPane: View {
             Hairline()
             SessionStatusBar(terminal: terminal)
         }
+    }
+}
+
+/// Shown over a new session's tab while its git worktree is being created.
+struct WorktreeLoading: View {
+    let name: String
+    @State private var shown = false
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ProgressView().controlSize(.regular)
+            Text("Creating worktree").font(.headline)
+            Label("studio/\(name)", systemImage: "arrow.triangle.branch")
+                .font(.system(.callout, design: .monospaced)).foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 28).padding(.vertical, 22)
+        .background(SwiftUI.Color(nsColor: Theme.chrome))
+        .overlay(Rectangle().stroke(SwiftUI.Color(nsColor: Theme.border)))
+        // a worktree usually takes well under a second: fade in only if it takes a moment, so it doesn't flash
+        .opacity(shown ? 1 : 0)
+        .onAppear { withAnimation(.easeIn(duration: 0.2).delay(0.12)) { shown = true } }
     }
 }
 

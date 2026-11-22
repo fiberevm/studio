@@ -509,25 +509,40 @@ final class SessionStore: ObservableObject {
     /// A new agent session: the default CLI from Settings (Claude Code or Codex) unless `agent` says which.
     /// In a git repo it starts in its own worktree unless Settings → Sessions says otherwise (see Worktrees).
     func newSession(in folder: String, prompt: String? = nil, agent: Agent? = nil) -> TerminalSession {
-        let cwd = Worktrees.folder(for: folder, name: Worktrees.newName())
-        switch agent ?? Agent.preferred {
-        case .codex: return newCodex(in: cwd, prompt: prompt)
-        case .agy: return newAgy(in: cwd, prompt: prompt)
-        case .claude: break
+        let agent = agent ?? Agent.preferred
+        // The tab opens at once, showing "Creating worktree"; the agent starts when the worktree is ready.
+        let wants = Worktrees.enabled && !folder.contains("/.claude/worktrees/")
+        let name = Worktrees.newName()
+        let t: TerminalSession
+        switch agent {
+        case .codex: t = newCodex(in: folder, prompt: prompt, preparing: wants ? name : nil)
+        case .agy: t = newAgy(in: folder, prompt: prompt, preparing: wants ? name : nil)
+        case .claude:
+            t = TerminalSession(cwd: folder, claudeArgs: prompt.map { [$0] } ?? [], sessionId: nil, fontSize: fontSize,
+                                preparing: wants ? name : nil)
+            add(t)
         }
-        let t = TerminalSession(cwd: cwd, claudeArgs: prompt.map { [$0] } ?? [], sessionId: nil, fontSize: fontSize)
-        add(t)
+        guard wants else { return t }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let cwd = Worktrees.folder(for: folder, name: name)
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.terminals.contains(where: { $0 === t }) else { Worktrees.cleanUp(cwd); return }
+                t.finishPreparing(in: cwd)
+                self.persistTerminals()
+            }
+        }
         return t
     }
 
     /// A Codex CLI session: new, continuing conversation `resume` (or the folder's latest with `resumeLast`),
     /// or a copy of conversation `fork`. `host` reattaches to a tab still running in tmux.
     func newCodex(in cwd: String, prompt: String? = nil, resume: String? = nil, resumeLast: Bool = false,
-                  fork: String? = nil, id: UUID = UUID(), host: String? = nil, native: Bool = false) -> TerminalSession {
+                  fork: String? = nil, id: UUID = UUID(), host: String? = nil, native: Bool = false,
+                  preparing: String? = nil) -> TerminalSession {
         let args = resume.map { ["resume", $0] } ?? fork.map { ["fork", $0] }
             ?? (resumeLast ? ["resume", "--last"] : prompt.map { ["--", $0] } ?? [])
         let t = TerminalSession(cwd: cwd, claudeArgs: args, sessionId: resume, fontSize: fontSize, kind: .codex,
-                                native: native, id: id, host: host)
+                                native: native, id: id, host: host, preparing: preparing)
         add(t)
         return t
     }
@@ -543,10 +558,10 @@ final class SessionStore: ObservableObject {
 
     /// An Antigravity (`agy`) session: new (with a first prompt), or continuing conversation `resume`.
     func newAgy(in cwd: String, prompt: String? = nil, resume: String? = nil, id: UUID = UUID(), host: String? = nil,
-                native: Bool = false) -> TerminalSession {
+                native: Bool = false, preparing: String? = nil) -> TerminalSession {
         let args = resume.map { ["--conversation", $0] } ?? prompt.map { ["-i", $0] } ?? []
         let t = TerminalSession(cwd: cwd, claudeArgs: args, sessionId: resume, fontSize: fontSize, kind: .agy,
-                                native: native, id: id, host: host)
+                                native: native, id: id, host: host, preparing: preparing)
         add(t)
         return t
     }
