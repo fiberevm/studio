@@ -278,7 +278,7 @@ install-worker.sh        installs studio-worker from the latest release
 Resources/               app icon (SVG source + generated .icns)
 scripts/make-icon.sh     regenerates AppIcon.icns from AppIcon.svg
 scripts/make-appcast.sh  writes a release's update feed (appcast.xml), signed with the update key
-website/                 the one-page download site (static HTML; hero is a recording of the real app, assets/demo.mp4)
+website/                 the one-page download site (static HTML on the taste-skill kit in assets/; captures in assets/shots, the recording in assets/demo.mp4)
 ```
 
 ## Roadmap
