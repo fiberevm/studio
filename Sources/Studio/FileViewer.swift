@@ -15,6 +15,7 @@ final class FileDoc: ObservableObject {
     /// Changed on disk while you had unsaved edits: the pane offers Reload / Keep Mine.
     @Published var changedOnDisk = false
     @Published private(set) var lineCount = 0
+    let caret = Caret()
     /// Bumped whenever the text is replaced from disk, so the editor view picks it up.
     @Published private(set) var revision = 0
 
@@ -170,7 +171,7 @@ struct CodeEditor: NSViewRepresentable {
         var themeId = ""
         var fontSize: CGFloat = 0
         var highlightWork: DispatchWorkItem?
-        weak var textView: NSTextView?
+        weak var textView: CodeTextView?
         init(doc: FileDoc) { self.doc = doc }
 
         func textDidChange(_ n: Notification) {
@@ -179,27 +180,43 @@ struct CodeEditor: NSViewRepresentable {
             scheduleHighlight()
         }
 
+        func textViewDidChangeSelection(_ n: Notification) {
+            guard let tv = n.object as? NSTextView else { return }
+            MainActor.assumeIsolated { doc.caret.update(from: tv) }
+        }
+
         func scheduleHighlight() {
             highlightWork?.cancel()
+            // big files: color once per load, not on every keystroke
+            guard (textView?.textStorage?.length ?? 0) < 400_000 else { return }
             let w = DispatchWorkItem { [weak self] in
                 MainActor.assumeIsolated {
-                    guard let tv = self?.textView, let ext = self?.doc.ext else { return }
-                    Highlighter.apply(to: tv, ext: ext)
+                    guard let self, let tv = self.textView else { return }
+                    Highlighter.apply(to: tv, ext: self.doc.ext, name: self.doc.name)
                 }
             }
             highlightWork = w
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: w)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: w)
         }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(doc: doc) }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scroll = NSTextView.scrollableTextView()
-        scroll.drawsBackground = true
-        scroll.hasHorizontalScroller = true
-        scroll.autohidesScrollers = true
-        let tv = scroll.documentView as! NSTextView
+        // TextKit 1 throughout: the gutter and current-line highlight read line fragments from the layout manager.
+        let storage = NSTextStorage()
+        let layout = NSLayoutManager()
+        layout.allowsNonContiguousLayout = true
+        storage.addLayoutManager(layout)
+        let container = NSTextContainer(size: NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
+        container.widthTracksTextView = false
+        layout.addTextContainer(container)
+        let tv = CodeTextView(frame: .zero, textContainer: container)
+        tv.minSize = .zero
+        tv.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        tv.isVerticallyResizable = true
+        tv.isHorizontallyResizable = true     // no wrapping, like a code editor
+        tv.autoresizingMask = [.width, .height]
         tv.delegate = context.coordinator
         tv.isRichText = false
         tv.importsGraphics = false
@@ -210,15 +227,25 @@ struct CodeEditor: NSViewRepresentable {
         tv.isAutomaticDashSubstitutionEnabled = false
         tv.isAutomaticTextReplacementEnabled = false
         tv.isAutomaticSpellingCorrectionEnabled = false
+        tv.isAutomaticLinkDetectionEnabled = false
         tv.isContinuousSpellCheckingEnabled = false
         tv.isGrammarCheckingEnabled = false
         tv.smartInsertDeleteEnabled = false
-        tv.textContainerInset = NSSize(width: 14, height: 12)
-        // no wrapping, like a code editor
-        tv.isHorizontallyResizable = true
-        tv.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        tv.textContainer?.widthTracksTextView = false
-        tv.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        tv.textContainerInset = NSSize(width: 6, height: 10)
+
+        let scroll = NSScrollView()
+        scroll.drawsBackground = true
+        scroll.hasVerticalScroller = true
+        scroll.hasHorizontalScroller = true
+        scroll.autohidesScrollers = true
+        scroll.borderType = .noBorder
+        scroll.documentView = tv
+        let ruler = LineNumberRuler(textView: tv)
+        scroll.verticalRulerView = ruler
+        scroll.hasVerticalRuler = true
+        scroll.rulersVisible = true
+        tv.ruler = ruler
+
         context.coordinator.textView = tv
         register(tv)
         style(tv, scroll)
@@ -226,79 +253,287 @@ struct CodeEditor: NSViewRepresentable {
     }
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
-        let tv = scroll.documentView as! NSTextView
+        let tv = scroll.documentView as! CodeTextView
         let c = context.coordinator
         c.doc = doc
         // restyle only when the theme or size changes (it resets the text color, so color again after)
         if c.themeId != Theme.current.id || c.fontSize != fontSize {
             c.themeId = Theme.current.id; c.fontSize = fontSize
             style(tv, scroll)
-            Highlighter.apply(to: tv, ext: doc.ext)
+            Highlighter.apply(to: tv, ext: doc.ext, name: doc.name)
         }
         if c.revision != doc.revision {
             c.revision = doc.revision
-            let sel = tv.selectedRanges
+            let sel = tv.selectedRange()
             tv.string = doc.text
+            tv.indentUnit = CodeTextView.detectIndent(doc.text)
             let len = (tv.string as NSString).length
-            tv.selectedRanges = sel.filter { $0.rangeValue.location <= len }.isEmpty ? [NSValue(range: NSRange(location: 0, length: 0))] : sel.map {
-                let r = $0.rangeValue
-                return NSValue(range: NSRange(location: min(r.location, len), length: 0))
-            }
-            Highlighter.apply(to: tv, ext: doc.ext)
+            tv.setSelectedRange(NSRange(location: min(sel.location, len), length: 0))
+            Highlighter.apply(to: tv, ext: doc.ext, name: doc.name)
+            tv.ruler?.textChanged()
+            doc.caret.update(from: tv)
         }
     }
 
-    private func style(_ tv: NSTextView, _ scroll: NSScrollView) {
+    private func style(_ tv: CodeTextView, _ scroll: NSScrollView) {
         let font = Theme.font(fontSize)
-        if tv.font != font { tv.font = font; tv.typingAttributes[.font] = font }
+        tv.font = font
+        let para = NSMutableParagraphStyle()
+        let space = (" " as NSString).size(withAttributes: [.font: font]).width
+        para.defaultTabInterval = space * 4
+        para.tabStops = []
+        // a fixed line height (blank lines included), text centered in it
+        let natural = NSLayoutManager().defaultLineHeight(for: font)
+        let lineHeight = (natural * 1.3).rounded()
+        para.minimumLineHeight = lineHeight
+        para.maximumLineHeight = lineHeight
+        tv.defaultParagraphStyle = para
+        tv.baselineShift = ((lineHeight - natural) / 2).rounded()
+        tv.lineHeight = lineHeight
+        tv.typingAttributes = [.font: font, .foregroundColor: Theme.foreground, .paragraphStyle: para, .baselineOffset: tv.baselineShift]
+        if let st = tv.textStorage, st.length > 0 { st.addAttribute(.paragraphStyle, value: para, range: NSRange(location: 0, length: st.length)) }
         tv.backgroundColor = Theme.background
         scroll.backgroundColor = Theme.background
-        tv.textColor = Theme.foreground
         tv.insertionPointColor = Theme.current.cursor
         tv.selectedTextAttributes = [.backgroundColor: Theme.current.selection]
-        tv.typingAttributes[.foregroundColor] = Theme.foreground
+        tv.lineHighlight = Theme.foreground.withAlphaComponent(Theme.current.isLight ? 0.05 : 0.045)
+        tv.ruler?.restyle(font: font)
+        tv.needsDisplay = true
     }
 }
 
-/// Light, regex-based coloring: comments, strings, numbers and common keywords, in the theme's ANSI colors.
+/// Where the caret is, for the status bar (Ln 12, Col 4 · 3 selected).
 @MainActor
-enum Highlighter {
-    private static let keywords = ["func", "let", "var", "if", "else", "for", "while", "return", "import", "struct", "class",
-        "enum", "case", "switch", "guard", "in", "true", "false", "nil", "null", "undefined", "const", "function", "def",
-        "async", "await", "export", "from", "type", "interface", "public", "private", "static", "self", "this", "new",
-        "try", "catch", "throw", "throws", "package", "go", "fn", "impl", "pub", "use", "mod", "match", "with", "as",
-        "extension", "protocol", "default", "break", "continue", "do", "elif", "lambda", "yield", "None", "True", "False"]
-    private static let kw = try! NSRegularExpression(pattern: "\\b(" + keywords.joined(separator: "|") + ")\\b")
-    private static let num = try! NSRegularExpression(pattern: "\\b(0x[0-9a-fA-F_]+|\\d[\\d_]*(\\.\\d+)?)\\b")
-    private static let str = try! NSRegularExpression(pattern: "\"(\\\\.|[^\"\\\\\\n])*\"|'(\\\\.|[^'\\\\\\n])*'|`[^`]*`")
-    private static let slash = try! NSRegularExpression(pattern: "//[^\\n]*|/\\*[\\s\\S]*?\\*/")
-    private static let hash = try! NSRegularExpression(pattern: "(?m)(^|\\s)#[^\\n]*")
-    private static let mdHeading = try! NSRegularExpression(pattern: "(?m)^#{1,6} .*$")
+final class Caret: ObservableObject {
+    @Published private(set) var line = 1
+    @Published private(set) var column = 1
+    @Published private(set) var selected = 0
 
-    static func apply(to tv: NSTextView, ext: String) {
-        guard let storage = tv.textStorage else { return }
-        let len = storage.length
-        guard len > 0, len < 1_500_000 else { return }
-        let s = storage.string
-        let all = NSRange(location: 0, length: len)
-        let ansi = Theme.current.ansi
-        storage.beginEditing()
-        storage.removeAttribute(.foregroundColor, range: all)
-        storage.addAttribute(.foregroundColor, value: Theme.foreground, range: all)
-        func paint(_ re: NSRegularExpression, _ color: NSColor) {
-            re.enumerateMatches(in: s, range: all) { m, _, _ in if let r = m?.range { storage.addAttribute(.foregroundColor, value: color, range: r) } }
+    func update(from tv: NSTextView) {
+        let s = tv.string as NSString
+        let r = tv.selectedRange()
+        let loc = min(r.location, s.length)
+        var l = 1, i = 0
+        // count newlines up to the caret (fast enough for editable sizes; files over 8 MB aren't editable)
+        while i < loc {
+            let found = s.range(of: "\n", options: .literal, range: NSRange(location: i, length: loc - i))
+            if found.location == NSNotFound { break }
+            l += 1; i = found.location + 1
         }
-        if ext == "md" || ext == "markdown" {
-            paint(mdHeading, ansi[4])
-            paint(str, ansi[2])
-        } else if !["txt", "log", "csv"].contains(ext) {
-            paint(kw, ansi[5])
-            paint(num, ansi[3])
-            paint(str, ansi[2])
-            let hashComments = ["py", "sh", "bash", "zsh", "rb", "yml", "yaml", "toml", "conf", "env", "dockerfile", "mk", "r", "pl"]
-            paint(hashComments.contains(ext) || ext.isEmpty ? hash : slash, ansi[8])
+        let lineStart = s.lineRange(for: NSRange(location: loc, length: 0)).location
+        if line != l { line = l }
+        if column != loc - lineStart + 1 { column = loc - lineStart + 1 }
+        if selected != r.length { selected = r.length }
+    }
+}
+
+/// The editor's text view: current-line highlight, auto-indent on Return, Tab inserts the file's indent.
+final class CodeTextView: NSTextView {
+    weak var ruler: LineNumberRuler?
+    var lineHighlight: NSColor = .clear
+    var indentUnit = "    "
+    var lineHeight: CGFloat = 16
+    var baselineShift: CGFloat = 0
+
+    /// Tabs if most indented lines start with one, else the most common small space step (2 or 4).
+    static func detectIndent(_ text: String) -> String {
+        var tabs = 0, two = 0, four = 0
+        for line in text.split(separator: "\n", omittingEmptySubsequences: true).prefix(2000) {
+            if line.hasPrefix("\t") { tabs += 1; continue }
+            let n = line.prefix { $0 == " " }.count
+            guard n > 0, n < line.count else { continue }
+            if n % 4 == 0 { four += 1 } else if n % 2 == 0 { two += 1 }
         }
-        storage.endEditing()
+        if tabs > two + four { return "\t" }
+        return two > four / 2 && two > 0 ? "  " : "    "
+    }
+
+    override func drawBackground(in rect: NSRect) {
+        super.drawBackground(in: rect)
+        guard selectedRange().length == 0, let r = currentLineRect() else { return }
+        lineHighlight.setFill()
+        NSRect(x: 0, y: r.minY, width: max(bounds.width, visibleRect.maxX), height: r.height).fill()
+    }
+
+    func currentLineRect() -> NSRect? {
+        guard let lm = layoutManager, let tc = textContainer else { return nil }
+        let loc = selectedRange().location
+        let len = (string as NSString).length
+        var rect: NSRect
+        if loc >= len, len == 0 || (string as NSString).character(at: len - 1) == 10 {
+            rect = lm.extraLineFragmentRect
+            if rect.isEmpty, len == 0 { rect = NSRect(x: 0, y: 0, width: 1, height: (font.map { lm.defaultLineHeight(for: $0) } ?? 16)) }
+        } else {
+            let g = lm.glyphIndexForCharacter(at: min(loc, max(len - 1, 0)))
+            rect = lm.lineFragmentRect(forGlyphAt: g, effectiveRange: nil)
+        }
+        _ = tc
+        return rect.offsetBy(dx: textContainerOrigin.x, dy: textContainerOrigin.y)
+    }
+
+    override func setSelectedRanges(_ ranges: [NSValue], affinity: NSSelectionAffinity, stillSelecting: Bool) {
+        let old = currentLineRect()
+        super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelecting)
+        if let old { setNeedsDisplay(NSRect(x: 0, y: old.minY, width: bounds.width, height: old.height)) }
+        if let new = currentLineRect() { setNeedsDisplay(NSRect(x: 0, y: new.minY, width: bounds.width, height: new.height)) }
+        if selectedRange().length > 0 { needsDisplay = true }
+        ruler?.needsDisplay = true
+    }
+
+    override func insertNewline(_ sender: Any?) {
+        let s = string as NSString
+        let loc = selectedRange().location
+        let line = s.substring(with: s.lineRange(for: NSRange(location: loc, length: 0)))
+        var indent = String(line.prefix { $0 == " " || $0 == "\t" })
+        let lineStart = s.lineRange(for: NSRange(location: loc, length: 0)).location
+        let beforeCaret = s.substring(with: NSRange(location: lineStart, length: loc - lineStart))
+            .trimmingCharacters(in: .whitespaces)
+        if let last = beforeCaret.last, "{[(:".contains(last) { indent += indentUnit }
+        // between a pair like {|}: put the closer on its own line
+        let next = loc < s.length ? s.character(at: loc) : 0
+        if let last = beforeCaret.last, "{[(".contains(last), [125, 93, 41].contains(next) {
+            let outer = String(indent.dropLast(indentUnit.count))
+            insertText("\n" + indent + "\n" + outer, replacementRange: selectedRange())
+            setSelectedRange(NSRange(location: loc + 1 + (indent as NSString).length, length: 0))
+            return
+        }
+        insertText("\n" + indent, replacementRange: selectedRange())
+    }
+
+    override func insertTab(_ sender: Any?) {
+        if selectedRange().length > 0 { shiftLines(by: 1); return }
+        if indentUnit == "\t" { super.insertTab(sender); return }
+        // pad to the next indent stop
+        let s = string as NSString
+        let loc = selectedRange().location
+        let col = loc - s.lineRange(for: NSRange(location: loc, length: 0)).location
+        let n = indentUnit.count - col % indentUnit.count
+        insertText(String(repeating: " ", count: n), replacementRange: selectedRange())
+    }
+
+    override func insertBacktab(_ sender: Any?) { shiftLines(by: -1) }
+
+    /// Indent or outdent every line the selection touches.
+    func shiftLines(by d: Int) {
+        let s = string as NSString
+        let range = s.lineRange(for: selectedRange())
+        var out: [String] = []
+        s.substring(with: range).enumerateLines { line, _ in
+            if d > 0 { out.append(line.isEmpty ? line : self.indentUnit + line) }
+            else if line.hasPrefix("\t") { out.append(String(line.dropFirst())) }
+            else { out.append(String(line.dropFirst(min(self.indentUnit == "\t" ? 4 : self.indentUnit.count, line.prefix { $0 == " " }.count)))) }
+        }
+        var text = out.joined(separator: "\n")
+        if s.substring(with: range).hasSuffix("\n") { text += "\n" }
+        guard shouldChangeText(in: range, replacementString: text) else { return }
+        replaceCharacters(in: range, with: text)
+        didChangeText()
+        setSelectedRange(NSRange(location: range.location, length: (text as NSString).length - (text.hasSuffix("\n") ? 1 : 0)))
+    }
+}
+
+/// The gutter: line numbers, the caret's line brighter.
+final class LineNumberRuler: NSRulerView {
+    private weak var textView: CodeTextView?
+    private var lineStarts: [Int] = [0]
+    private var stale = true
+    private var numberFont = Theme.font(11)
+
+    init(textView: CodeTextView) {
+        self.textView = textView
+        super.init(scrollView: textView.enclosingScrollView, orientation: .verticalRuler)
+        clientView = textView
+        ruleThickness = 40
+        NotificationCenter.default.addObserver(self, selector: #selector(textDidChange), name: NSText.didChangeNotification, object: textView)
+    }
+    required init(coder: NSCoder) { fatalError() }
+
+    override var isFlipped: Bool { true }
+
+    @objc private func textDidChange() { textChanged() }
+    func textChanged() { stale = true; needsDisplay = true }
+
+    func restyle(font: NSFont) {
+        numberFont = NSFont.monospacedDigitSystemFont(ofSize: max(9, font.pointSize - 1), weight: .regular)
+        stale = true
+        needsDisplay = true
+    }
+
+    private func rebuild() {
+        guard stale, let s = textView?.string as NSString? else { return }
+        stale = false
+        var starts = [0]
+        var i = 0
+        let n = s.length
+        while i < n {
+            let r = s.range(of: "\n", options: .literal, range: NSRange(location: i, length: n - i))
+            if r.location == NSNotFound { break }
+            starts.append(r.location + 1); i = r.location + 1
+        }
+        lineStarts = starts
+        let digits = max(3, String(starts.count).count)
+        let w = ("8" as NSString).size(withAttributes: [.font: numberFont]).width * CGFloat(digits) + 26
+        if abs(ruleThickness - w) > 0.5 { ruleThickness = w }
+    }
+
+    /// 0-based line containing character `i`.
+    private func line(of i: Int) -> Int {
+        var lo = 0, hi = lineStarts.count - 1
+        while lo < hi {
+            let mid = (lo + hi + 1) / 2
+            if lineStarts[mid] <= i { lo = mid } else { hi = mid - 1 }
+        }
+        return lo
+    }
+
+    override func drawHashMarksAndLabels(in rect: NSRect) {
+        guard let tv = textView, let lm = tv.layoutManager, let tc = tv.textContainer else { return }
+        rebuild()
+        Theme.background.setFill()
+        bounds.fill()
+        let s = tv.string as NSString
+        let caretLine = line(of: min(tv.selectedRange().location, s.length))
+        let dim = Theme.foreground.withAlphaComponent(Theme.current.isLight ? 0.4 : 0.35)
+        let bright = Theme.foreground.withAlphaComponent(0.9)
+        let visible = tv.visibleRect
+        let glyphs = lm.glyphRange(forBoundingRect: visible, in: tc)
+        let chars = lm.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+        let origin = tv.textContainerOrigin
+        let right = bounds.width - 12
+
+        func draw(_ n: Int, fragment: NSRect, baseline: CGFloat) {
+            let attrs: [NSAttributedString.Key: Any] = [.font: numberFont, .foregroundColor: n == caretLine ? bright : dim]
+            let label = String(n + 1) as NSString
+            let size = label.size(withAttributes: attrs)
+            // same baseline as the text: the fixed line's bottom, less the font's descent, raised by the shift
+            let textBaseline = fragment.minY + tv.lineHeight + (tv.font?.descender ?? -3) - tv.baselineShift
+            let yInTV = textBaseline + origin.y - numberFont.ascender
+            let y = convert(NSPoint(x: 0, y: yInTV), from: tv).y
+            label.draw(at: NSPoint(x: right - size.width, y: y), withAttributes: attrs)
+        }
+
+        var lastBase = (tv.font?.ascender ?? 10) * 1.1
+        var ln = line(of: chars.location)
+        var idx = lineStarts[ln]
+        // walk the visible lines (one fragment each: no wrapping)
+        while idx <= NSMaxRange(chars), ln < lineStarts.count {
+            if idx >= s.length { break }
+            let g = lm.glyphIndexForCharacter(at: idx)
+            var eff = NSRange()
+            let frag = lm.lineFragmentRect(forGlyphAt: g, effectiveRange: &eff)
+            let base = lm.location(forGlyphAt: g).y
+            if frag.minY + origin.y > visible.maxY { break }
+            draw(ln, fragment: frag, baseline: base)
+            lastBase = base
+            ln += 1
+            idx = ln < lineStarts.count ? lineStarts[ln] : Int.max
+        }
+        // the empty last line after a trailing newline (or an empty file)
+        if ln == lineStarts.count - 1, lineStarts[ln] == s.length {
+            let extra = lm.extraLineFragmentRect
+            let h = tv.font.map { lm.defaultLineHeight(for: $0) } ?? 16
+            draw(ln, fragment: extra.isEmpty ? NSRect(x: 0, y: 0, width: 1, height: h) : extra, baseline: lastBase)
+        }
     }
 }
 

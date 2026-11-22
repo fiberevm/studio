@@ -31,7 +31,7 @@ happened. Studio is built around one idea: **you should only look at a session w
 - **One window per project.** Open `~/code/api` and `~/code/web` side by side; each window holds that repo's sessions and worktrees.
 - **Know who's waiting.** Tabs show a working indicator, a pulsing red dot when Claude is blocked on you, and an unread dot when it finished while you were elsewhere.
 - **Jump, don't scan.** <kbd>⌘J</kbd> takes you to the session that has waited longest; press it again for the next one. It's inbox zero for agents.
-- **Jump between sessions, open files.** <kbd>⌘K</kbd> searches this project's open sessions and its files; pick a session and it's focused, ready to type, or a file and it opens in a native editor tab (syntax colors, <kbd>⌘S</kbd> to save, <kbd>⌘F</kbd> to find) that reloads live when an agent changes it.
+- **Jump between sessions, open files.** <kbd>⌘K</kbd> searches this project's open sessions and its files; pick a session and it's focused, ready to type, or a file and it opens in a native editor tab (line numbers, current-line highlight, syntax colors from your theme for Swift, TypeScript/JavaScript, Python, Go, Rust, C/C++, Java/Kotlin, Ruby, PHP, shell, SQL, HTML/XML, CSS, Markdown, JSON, YAML, TOML and diffs; auto-indent, Tab / ⇧Tab to indent selected lines, Ln/Col in the status bar, <kbd>⌘S</kbd> to save, <kbd>⌘F</kbd> to find) that reloads live when an agent changes it.
 - **Talk without switching.** <kbd>⇧⌘K</kbd> sends a message to any session, or to several at once, without leaving the pane you're in.
 
 ## Features
@@ -255,7 +255,8 @@ Sources/Studio/          the app
   CommandPalette.swift     ⌘P / ⇧⌘P
   QuickPrompt.swift        ⇧⌘K and snippets
   Onboarding.swift         the welcome window (first launch, Help → Welcome to Studio)
-  FileViewer.swift         ⌘K file search and the editor tab
+  FileViewer.swift         ⌘K file search and the editor tab (gutter, current line, indent)
+  Syntax.swift             per-language tokenizer and per-theme syntax colors
   Worktrees.swift          a git worktree per new session, per-project start branch
   StudioControl.swift      control server behind the MCP tools
   TranscriptScanner.swift  reads titles, prompts and replies from transcripts

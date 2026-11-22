@@ -1064,7 +1064,7 @@ struct SessionStatusBar: View {
         HStack(spacing: 14) {
             if terminal.isFile, let p = terminal.filePath {
                 stat("doc.text", relativePath(p, to: model.folder), help: p)
-                if let d = terminal.fileDoc, d.content == .text { stat("text.alignleft", "\(d.lineCount) lines", help: "Lines") }
+                if let d = terminal.fileDoc, d.content == .text { FileCaretStats(doc: d, caret: d.caret) }
             }
             else if terminal.isWeb { stat("globe", terminal.url?.host ?? "", help: terminal.url?.absoluteString ?? "") }
             else if terminal.isShell { stat("folder", abbreviatePath(terminal.cwd), help: "Started in") }
@@ -1092,6 +1092,24 @@ struct SessionStatusBar: View {
         }
         .foregroundStyle(.secondary)
         .help(help)
+    }
+}
+
+/// Ln / Col (and the selection length) of a file tab's caret, plus its line count.
+struct FileCaretStats: View {
+    @ObservedObject var doc: FileDoc
+    @ObservedObject var caret: Caret
+    var body: some View {
+        HStack(spacing: 14) {
+            Text("Ln \(caret.line), Col \(caret.column)" + (caret.selected > 0 ? " (\(caret.selected) selected)" : ""))
+                .help("Line and column")
+            HStack(spacing: 4) {
+                Image(systemName: "text.alignleft").font(.system(size: 10))
+                Text("\(doc.lineCount) lines")
+            }
+            .help("Lines")
+        }
+        .font(.system(size: 11)).monospacedDigit().lineLimit(1).foregroundStyle(.secondary)
     }
 }
 
