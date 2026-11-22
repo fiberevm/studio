@@ -581,6 +581,7 @@ private struct SandboxSettings: View {
     @AppStorage("sandbox.defaultProvider") private var defaultProvider = "boat"
     @State private var status: [String: Any]?
     @State private var loading = false
+    @State private var checked = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -663,8 +664,12 @@ private struct SandboxSettings: View {
                 .padding(.top, 4)
             }
             Spacer()
-            Toggle("", isOn: $enabled).labelsHidden().toggleStyle(.switch).disabled(!installed)
-                .help(enabled ? "Sessions can use Boat sandboxes" : "Sandbox tools are turned off")
+            // Off while Boat isn't connected (the stored choice comes back once it is).
+            let connected = installed && (signedIn || !checked)
+            Toggle("", isOn: Binding(get: { enabled && connected }, set: { enabled = $0 }))
+                .labelsHidden().toggleStyle(.switch).disabled(!connected)
+                .help(!connected ? "Sign in to Boat to use its sandboxes"
+                      : enabled ? "Sessions can use Boat sandboxes" : "Sandbox tools are turned off")
         }
         .padding(14)
         .background(SwiftUI.Color(nsColor: Theme.chrome))
@@ -677,6 +682,7 @@ private struct SandboxSettings: View {
         loading = true
         status = await registry.boat.status()
         loading = false
+        checked = true
     }
 
     private func runInTerminal(_ cmd: String) {
@@ -694,6 +700,7 @@ private struct AWSProviderCard: View {
     @AppStorage("sandbox.aws.imageArn") private var imageArn = ""
     @State private var account: String?
     @State private var checking = false
+    @State private var checked = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
@@ -728,7 +735,12 @@ private struct AWSProviderCard: View {
                 .padding(.top, 2)
             }
             Spacer()
-            Toggle("", isOn: $enabled).labelsHidden().toggleStyle(.switch).disabled(!provider.installed)
+            // Off while AWS isn't connected (the stored choice comes back once it is).
+            let connected = provider.installed && (account != nil || !checked)
+            Toggle("", isOn: Binding(get: { enabled && connected }, set: { enabled = $0 }))
+                .labelsHidden().toggleStyle(.switch).disabled(!connected)
+                .help(!connected ? "Sign in to AWS and set up the image to use MicroVMs"
+                      : enabled ? "Sessions can use AWS MicroVMs" : "AWS MicroVMs are turned off")
         }
         .padding(14)
         .background(SwiftUI.Color(nsColor: Theme.chrome))
@@ -741,6 +753,7 @@ private struct AWSProviderCard: View {
         checking = true
         account = (await provider.status())?["account"] as? String
         checking = false
+        checked = true
     }
 
     /// Runs Resources/MicroVMAgent/setup.sh in Terminal so you see what it creates.
