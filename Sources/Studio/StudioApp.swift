@@ -97,6 +97,7 @@ struct AppCommands: Commands {
         CommandGroup(after: .appInfo) {
             Button("Check for Updates…") { updater.checkForUpdates() }
                 .disabled(!updater.canCheck)
+            if let r = updater.ready { Button("Restart to Update to \(r.version)") { updater.restartToUpdate() } }
         }
         CommandGroup(replacing: .newItem) {
             Button("New Session") { project?.newTab() }

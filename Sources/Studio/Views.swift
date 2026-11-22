@@ -91,6 +91,7 @@ struct ProjectView: View {
     var body: some View {
         VStack(spacing: 0) {
             TitleBar(title: model.name, subtitle: abbreviatePath(model.folder))
+                .overlay(alignment: .trailing) { UpdateNudge().padding(.trailing, 10) }
             Hairline()
             HStack(spacing: 0) {
                 if model.sidebarVisible {

@@ -19,7 +19,8 @@ else
 fi
 # attrs is: sparkle:edSignature="…" length="…"
 [[ "$attrs" == *'sparkle:edSignature="'* && "$attrs" == *'length="'* ]] || { echo "make-appcast.sh: unexpected sign_update output: $attrs" >&2; exit 1; }
-TAG_URL="${URL%/*}"; TAG_URL="${TAG_URL/\/download\//\/tag\/}"
+# …/releases/download/v0.2.0/Studio.zip → …/releases/tag/v0.2.0 (the release's page, for "What's New")
+TAG_DIR="${URL%/*}"; TAG_URL="${TAG_DIR%/download/*}/tag/${TAG_DIR##*/}"
 cat <<XML
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
