@@ -9,6 +9,7 @@ private let sidebarWidth: CGFloat = 250
 
 /// Each window is bound to one project folder (the scene value). With no folder yet, show a picker.
 struct ProjectWindow: View {
+    @MainActor static var welcomed = false
     @Binding var folder: String?
     @EnvironmentObject var store: SessionStore
     @Environment(\.openWindow) private var openWindow
@@ -30,7 +31,13 @@ struct ProjectWindow: View {
         .onAppear {
             StudioControl.shared.openWindow = { folder in openWindow(value: folder) }
             // a beat later: setting the scene value during the window's first appearance can be dropped
-            DispatchQueue.main.async { handleLaunchArguments() }
+            DispatchQueue.main.async {
+                handleLaunchArguments()
+                if Onboarding.shouldShow, !Self.welcomed {
+                    Self.welcomed = true
+                    openWindow(id: Onboarding.windowId)
+                }
+            }
         }
     }
 
@@ -201,6 +208,10 @@ struct ProjectPicker: View {
         .frame(maxWidth: 560, maxHeight: .infinity, alignment: .topLeading)
         .frame(maxWidth: .infinity)
         .background(WindowDragArea())
+        // the welcome window's last button
+        .onReceive(NotificationCenter.default.publisher(for: Onboarding.pickProject)) { _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { if let f = pickFolder(prompt: "Open") { folder = f } }
+        }
     }
 
     private func section<C: View>(_ title: String, @ViewBuilder _ content: () -> C) -> some View {

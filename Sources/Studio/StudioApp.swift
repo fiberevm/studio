@@ -71,6 +71,14 @@ struct StudioApp: App {
         .defaultSize(width: 1400, height: 900)
         .commands { AppCommands(store: store) }
 
+        // First launch (and Help → Welcome to Studio): what Studio is, a few features, what's installed.
+        Window("Welcome to Studio", id: Onboarding.windowId) {
+            OnboardingView().environmentObject(store)
+        }
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
+
         // ⌘, (Studio → Settings…)
         Settings {
             SettingsView().environmentObject(store)
@@ -171,6 +179,10 @@ struct AppCommands: Commands {
                 .keyboardShortcut("p", modifiers: [.command, .shift])
                 .disabled(project == nil)
             Divider()
+        }
+        CommandGroup(replacing: .help) {
+            Button("Welcome to Studio") { openWindow(id: Onboarding.windowId) }
+            Button("Studio on GitHub") { NSWorkspace.shared.open(URL(string: "https://github.com/fiberevm/studio")!) }
         }
         CommandMenu("Tab") {
             Button("Previous Tab") { project?.cycleTab(-1) }

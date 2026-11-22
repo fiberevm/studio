@@ -252,6 +252,7 @@ Sources/Studio/          the app
   Views.swift              window, tab strip, panes, peek card, status bar
   CommandPalette.swift     ⌘P / ⇧⌘P
   QuickPrompt.swift        ⇧⌘K and snippets
+  Onboarding.swift         the welcome window (first launch, Help → Welcome to Studio)
   StudioControl.swift      control server behind the MCP tools
   TranscriptScanner.swift  reads titles, prompts and replies from transcripts
   Codex.swift              the same for Codex: reads ~/.codex rollouts (status, titles, tokens), spots approval prompts

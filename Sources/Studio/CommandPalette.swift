@@ -257,6 +257,7 @@ struct CommandPalette: View {
             }
         }
         list.append(cmd("Snippets: Edit…", "", "square.and.pencil") { NSWorkspace.shared.open(Snippets.file) })
+        list.append(cmd("Help: Welcome to Studio", "", "sparkles") { openWindow(id: Onboarding.windowId) })
         // workers: start a session on one, or open one already running there that has no tab
         let reg = WorkerRegistry.shared
         for w in reg.workers where reg.isOnline(w.id) {
