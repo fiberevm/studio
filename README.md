@@ -62,7 +62,6 @@ Everything here is about one thing: spending your attention only where a session
 | 🖋 | **Native view** <kbd>⌘/</kbd> | Swap any session from Claude Code's terminal UI to Studio's own rendering (`claude -p` streaming JSON), laid out and colored like the TUI it replaces, in the theme's terminal palette: left aligned and monospaced, your messages on a band after a `>`, Claude's answers after a ● with real markdown (headings, lists, tables, code in the code color), and tool calls as `● Read(file)` rows (green when they worked, red when they failed) folded into a work log that collapses to *Worked for 14s · 6 steps* once the answer is in. Images (pasted into prompts, or returned by tools like screenshots) show as thumbnails; click one to see it full size. Approvals sit inline with **Decline / Approve**. The input is a `>` line with the permission mode (Supervised, Auto-accept edits, Plan, Full access) and Send on the right; Send turns into Stop while Claude works. Same conversation, one process, same permission mode as the terminal; remembered per session. |
 | 🍴 | **Fork** <kbd>⌘E</kbd> | Copy the current conversation into a new session in a split beside it, then take it a different direction. The original keeps going untouched. Also in the tab right-click menu (right or below). |
 | ✨ | **Start from a prompt** | <kbd>⌘↵</kbd> in <kbd>⇧⌘K</kbd> starts a new session with your message already sent. The top of the <kbd>⇧⌘K</kbd> list also has a row for everything a new tab can be: a session for each agent (your text becomes its first message), a terminal (your text is run as a command) and a web browser (your text is the address). |
-| 🧩 | **Snippets** | Reusable prompts: type `#` in <kbd>⇧⌘K</kbd> (`#tests`, `#review`, `#pr`, `#rebase`, `#summary`, `#continue`), pick one in <kbd>⌘P</kbd> to send it to the current session, or press <kbd>⌘S</kbd> to save what you typed. Stored as plain JSON you can edit. |
 | 🔔 | **Notifications that matter** | Only while you're in another app, only when a session is blocked on you or finished 30+ seconds of work, never for the one you're watching. Each shows Claude's last words; clicking it opens the session. |
 | 🔍 | **Go to anything** <kbd>⌘P</kbd> | Fuzzy-search every running and past session in every project, plus all commands. Picking a session in another project opens that project's window. |
 | 🧷 | **Nothing is ever lost** | Closing a tab ends the session, but the conversation is one <kbd>⌘P</kbd> away and resumes where it left off. Right-click → *Close Tab, Keep Session Running* to leave it working in the background. Emptied panes stay put with a quiet *New Session* action. |
@@ -214,7 +213,7 @@ open build/Studio.app --args --resume <session-id>        # resume a specific se
 | <kbd>⌘1</kbd>…<kbd>⌘9</kbd> | Jump to tab (picking a session anywhere puts the cursor in its input) |
 | <kbd>⌘W</kbd> | Close tab and end its session (resume it any time from <kbd>⌘P</kbd>); in an empty pane, close the pane |
 | <kbd>⇧⌘W</kbd> | Close window |
-| <kbd>⌘,</kbd> | Settings: appearance (themes, text size, sidebar), agents (default CLI; each one's version and login, with *Log In…*), sessions, sandbox providers, snippets |
+| <kbd>⌘,</kbd> | Settings: appearance (themes, text size, sidebar), agents (default CLI; each one's version and login, with *Log In…*), sessions, worktrees, sandbox providers, secrets |
 | <kbd>⌘B</kbd> | Toggle the session sidebar |
 | <kbd>⌘+</kbd> / <kbd>⌘−</kbd> / <kbd>⌘0</kbd> | Text size |
 
@@ -262,7 +261,7 @@ Each session gets `STUDIO_TAB`, so the agent knows which tab is its own.
 
 - **No API keys, no proxy.** Studio runs the `claude` binary you already use, in a real PTY, through your login shell.
 - **Read-only on Claude's data.** Session status and transcripts are read from `~/.claude`; Studio never writes there.
-- **State** (open tabs, layouts, theme) lives in the app's `UserDefaults`; snippets live in `~/Library/Application Support/Studio/snippets.json`.
+- **State** (open tabs, layouts, theme) lives in the app's `UserDefaults`.
 
 ### Project layout
 
@@ -273,7 +272,7 @@ Sources/Studio/          the app
   SessionStore.swift       shared session state, live status, notifications, next up
   Views.swift              window, tab strip, panes, peek card, status bar
   CommandPalette.swift     ⌘P / ⇧⌘P
-  QuickPrompt.swift        ⇧⌘K and snippets
+  QuickPrompt.swift        ⇧⌘K: message a session, several at once, or start something new
   Onboarding.swift         the welcome window (first launch, Help → Welcome to Studio)
   FileViewer.swift         ⌘K file search and the editor tab (gutter, current line, indent)
   FileTree.swift           the file tree on the left of a file tab (lazy folders, file-type marks, reveal the open file)

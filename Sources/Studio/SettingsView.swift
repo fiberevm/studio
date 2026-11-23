@@ -56,7 +56,7 @@ struct SettingsView: View {
     }()
 
     enum Section: String, CaseIterable, Identifiable {
-        case appearance = "Appearance", agents = "Agents", workers = "Workers", sessions = "Sessions", worktrees = "Worktrees", sandboxes = "Sandboxes", secrets = "Secrets", snippets = "Snippets", about = "About"
+        case appearance = "Appearance", agents = "Agents", workers = "Workers", sessions = "Sessions", worktrees = "Worktrees", sandboxes = "Sandboxes", secrets = "Secrets", about = "About"
         var id: String { rawValue }
         var icon: String {
             switch self {
@@ -67,7 +67,6 @@ struct SettingsView: View {
             case .sandboxes: return "sailboat"
             case .worktrees: return "arrow.triangle.branch"
             case .secrets: return "key"
-            case .snippets: return "text.quote"
             case .about: return "info.circle"
             }
         }
@@ -99,7 +98,6 @@ struct SettingsView: View {
                         case .sandboxes: SandboxSettings(registry: store.sandboxes)
                         case .worktrees: WorktreeSettings()
                         case .secrets: SecretSettings()
-                        case .snippets: SnippetSettings()
                         case .about: AboutSettings()
                         }
                     }
@@ -166,6 +164,61 @@ private struct Row<Control: View>: View {
     }
 }
 
+/// Studio's own switch, in the theme's accent: a track with a knob that slides across. Click to flip it.
+struct StudioToggle: View {
+    @Binding var isOn: Bool
+    @Environment(\.isEnabled) private var enabled
+    @ObservedObject private var theme = ThemeChanges.shared
+
+    var body: some View {
+        Button { withAnimation(.easeOut(duration: 0.14)) { isOn.toggle() } } label: {
+            ZStack(alignment: isOn ? .trailing : .leading) {
+                Capsule().fill(isOn ? SwiftUI.Color(nsColor: Theme.accent) : SwiftUI.Color.primary.opacity(0.2))
+                Circle().fill(SwiftUI.Color.white).frame(width: 14, height: 14).padding(3)
+                    .shadow(color: .black.opacity(0.3), radius: 1, y: 0.5)
+            }
+            .frame(width: 36, height: 20)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .opacity(enabled ? 1 : 0.4)
+        .accessibilityAddTraits(.isToggle)
+        .accessibilityValue(isOn ? "On" : "Off")
+    }
+}
+
+/// A setting that is on or off: title and description on the left, the switch on the right. `extra` goes under
+/// the description (a related button).
+private struct ToggleRow<Extra: View>: View {
+    let title: String
+    var detail: String? = nil
+    @Binding var isOn: Bool
+    var disabled = false
+    @ViewBuilder var extra: () -> Extra
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 24) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title).font(.system(size: 13, weight: .semibold))
+                if let detail {
+                    Text(detail).font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+                extra().padding(.top, 2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            StudioToggle(isOn: $isOn).disabled(disabled)
+        }
+        .padding(.vertical, 12)
+        .overlay(alignment: .bottom) { Hairline() }
+    }
+}
+
+extension ToggleRow where Extra == EmptyView {
+    init(title: String, detail: String? = nil, isOn: Binding<Bool>, disabled: Bool = false) {
+        self.init(title: title, detail: detail, isOn: isOn, disabled: disabled) { EmptyView() }
+    }
+}
+
 private struct Group_: View {
     let title: String
     var body: some View {
@@ -196,10 +249,8 @@ private struct AppearanceSettings: View {
                 Stepper("\(Int(store.fontSize)) pt", value: $store.fontSize, in: 9...24, step: 1).frame(width: 120)
             }
             Group_(title: "Layout")
-            Row(title: "Show session sidebar",
-                detail: "A list of the project's sessions on the left: who's waiting for you, and what's busy. Applies to every window; ⌘B toggles it in one window.") {
-                Toggle("", isOn: $sidebar).labelsHidden().toggleStyle(.switch)
-            }
+            ToggleRow(title: "Show session sidebar",
+                detail: "A list of the project's sessions on the left: who's waiting for you, and what's busy. Applies to every window; ⌘B toggles it in one window.", isOn: $sidebar)
         }
     }
 }
@@ -491,25 +542,17 @@ private struct SessionSettings: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Row(title: "Give each new session its own worktree",
-                detail: "In a git repo, a new session starts in a fresh worktree (.claude/worktrees/<name>, branch studio/<name>) so agents working in parallel don't edit the same files. If a session ends without changes, its worktree and branch are removed; otherwise they stay for you to review.") {
-                Toggle("", isOn: $worktrees).labelsHidden().toggleStyle(.switch)
-            }
+            ToggleRow(title: "Give each new session its own worktree",
+                detail: "In a git repo, a new session starts in a fresh worktree (.claude/worktrees/<name>, branch studio/<name>) so agents working in parallel don't edit the same files. If a session ends without changes, its worktree and branch are removed; otherwise they stay for you to review.", isOn: $worktrees)
             if worktrees { StartBranchSettings() }
-            Row(title: "Closing a tab ends its session",
-                detail: "Off: the session keeps running in the background (reopen it from ⌘P). Right-click a tab for the other behavior either way.") {
-                Toggle("", isOn: $closeEnds).labelsHidden().toggleStyle(.switch)
-            }
-            Row(title: "Close a pane when its last tab closes",
-                detail: "The split closes and its neighbours take the room. Off: the empty pane stays, with shortcuts for a new session, terminal or browser.") {
-                Toggle("", isOn: $autoClosePanes).labelsHidden().toggleStyle(.switch)
-            }
-            Row(title: "Keep sessions running when Studio quits",
+            ToggleRow(title: "Closing a tab ends its session",
+                detail: "Off: the session keeps running in the background (reopen it from ⌘P). Right-click a tab for the other behavior either way.", isOn: $closeEnds)
+            ToggleRow(title: "Close a pane when its last tab closes",
+                detail: "The split closes and its neighbours take the room. Off: the empty pane stays, with shortcuts for a new session, terminal or browser.", isOn: $autoClosePanes)
+            ToggleRow(title: "Keep sessions running when Studio quits",
                 detail: SessionHost.tmux == nil
                     ? "Needs tmux (brew install tmux). Without it, quitting ends sessions and Studio resumes their conversations."
-                    : "Each tab runs in a hidden tmux session, so restarting Studio reattaches instead of interrupting Claude, its commands and dev servers. Applies to new tabs.") {
-                Toggle("", isOn: $keepAlive).labelsHidden().toggleStyle(.switch).disabled(SessionHost.tmux == nil)
-            }
+                    : "Each tab runs in a hidden tmux session, so restarting Studio reattaches instead of interrupting Claude, its commands and dev servers. Applies to new tabs.", isOn: $keepAlive, disabled: SessionHost.tmux == nil)
             Row(title: "Native view permission mode",
                 detail: "What Claude may do without asking when a session is in the native view (⌘/).") {
                 Picker("", selection: $nativeMode) {
@@ -676,8 +719,8 @@ private struct SandboxSettings: View {
             Spacer()
             // Off while Boat isn't connected (the stored choice comes back once it is).
             let connected = installed && (signedIn || !checked)
-            Toggle("", isOn: Binding(get: { enabled && connected }, set: { enabled = $0 }))
-                .labelsHidden().toggleStyle(.switch).disabled(!connected)
+            StudioToggle(isOn: Binding(get: { enabled && connected }, set: { enabled = $0 }))
+                .disabled(!connected)
                 .help(!connected ? "Sign in to Boat to use its sandboxes"
                       : enabled ? "Sessions can use Boat sandboxes" : "Sandbox tools are turned off")
         }
@@ -747,8 +790,8 @@ private struct AWSProviderCard: View {
             Spacer()
             // Off while AWS isn't connected (the stored choice comes back once it is).
             let connected = provider.installed && (account != nil || !checked)
-            Toggle("", isOn: Binding(get: { enabled && connected }, set: { enabled = $0 }))
-                .labelsHidden().toggleStyle(.switch).disabled(!connected)
+            StudioToggle(isOn: Binding(get: { enabled && connected }, set: { enabled = $0 }))
+                .disabled(!connected)
                 .help(!connected ? "Sign in to AWS and set up the image to use MicroVMs"
                       : enabled ? "Sessions can use AWS MicroVMs" : "AWS MicroVMs are turned off")
         }
@@ -782,39 +825,6 @@ private struct AWSProviderCard: View {
     }
 }
 
-// MARK: - Snippets
-
-private struct SnippetSettings: View {
-    @State private var list = Snippets.all
-    @State private var selection: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Reusable prompts. Type # in ⇧⌘K to insert one, or pick \"Snippet: …\" in ⌘P to send it to the current session.")
-                .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            ForEach($list) { $s in
-                HStack(alignment: .top, spacing: 10) {
-                    TextField("name", text: $s.name).textFieldStyle(.roundedBorder).frame(width: 120)
-                    TextField("prompt", text: $s.text, axis: .vertical).textFieldStyle(.roundedBorder).lineLimit(1...4)
-                    Button { list.removeAll { $0.id == s.id }; save() } label: { Image(systemName: "minus.circle") }
-                        .buttonStyle(.borderless).help("Delete")
-                }
-                .onChange(of: s) { _, _ in save() }
-            }
-            HStack {
-                Button("Add Snippet") { list.append(Snippet(name: "new-\(list.count + 1)", text: "")); save() }
-                Button("Open File") { NSWorkspace.shared.open(Snippets.file) }
-                Button("Reset to Defaults") { list = Snippets.defaults; save() }
-            }
-            .padding(.top, 6)
-        }
-    }
-
-    private func save() {
-        Snippets.all = list.filter { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }
-    }
-}
-
 // MARK: - About
 
 private struct AboutSettings: View {
@@ -823,12 +833,10 @@ private struct AboutSettings: View {
         VStack(alignment: .leading, spacing: 8) {
             about
             if updater.enabled {
-                Row(title: "Update automatically",
-                    detail: "Studio checks for a new version about once a day, downloads it in the background and installs it when you quit. Off: check yourself with Studio → Check for Updates….") {
-                    HStack(spacing: 12) {
-                        Toggle("", isOn: $updater.automatic).labelsHidden().toggleStyle(.switch)
-                        Button("Check for Updates…") { updater.checkForUpdates() }.disabled(!updater.canCheck)
-                    }
+                ToggleRow(title: "Update automatically",
+                          detail: "Studio checks for a new version about once a day, downloads it in the background and installs it when you quit. Off: check yourself with Studio → Check for Updates….",
+                          isOn: $updater.automatic) {
+                    Button("Check for Updates…") { updater.checkForUpdates() }.disabled(!updater.canCheck)
                 }
             } else {
                 Text("This build doesn't update itself (built from source). Releases from GitHub do.")

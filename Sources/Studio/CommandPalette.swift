@@ -274,14 +274,6 @@ struct CommandPalette: View {
         if let t = m.selectedTerminal {
             list.insert(cmd("Session: End Session", "", "stop.circle") { m.endSession(t) }, at: 3)
         }
-        // Snippets go to the current session in one step; ⇧⌘K offers them for any session or a broadcast.
-        if let t = m.selectedTerminal, t.isAgent {
-            for sn in Snippets.all {
-                list.append(Item(id: "snip:\(sn.name)", title: "Snippet: #\(sn.name)", subtitle: sn.text,
-                                 leading: .icon("text.quote"), run: { t.submit(sn.text) }))
-            }
-        }
-        list.append(cmd("Snippets: Edit…", "", "square.and.pencil") { NSWorkspace.shared.open(Snippets.file) })
         list.append(cmd("Help: Welcome to Studio", "", "sparkles") { openWindow(id: Onboarding.windowId) })
         // workers: start a session on one, or open one already running there that has no tab
         let reg = WorkerRegistry.shared
