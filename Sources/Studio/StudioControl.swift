@@ -29,7 +29,7 @@ final class StudioControl {
     /// Claude plugins (Codex's developer_instructions).
     static let skillText: String? = {
         guard let dir = pluginDir else { return nil }
-        let parts = ["studio", "sandbox"].compactMap { name -> String? in
+        let parts = ["studio", "sandbox", "secrets"].compactMap { name -> String? in
             guard let s = try? String(contentsOfFile: dir + "/skills/\(name)/SKILL.md", encoding: .utf8) else { return nil }
             // drop the YAML front matter
             if s.hasPrefix("---"), let end = s.range(of: "\n---", range: s.index(s.startIndex, offsetBy: 3)..<s.endIndex) {
@@ -165,6 +165,9 @@ final class StudioControl {
             if method.hasPrefix("sandbox_") {
                 return ["ok": true, "result": try await sandbox(method, params, callerTab: tab)]
             }
+            if method.hasPrefix("secret_") {
+                return ["ok": true, "result": try await secret(method, params, callerTab: tab)]
+            }
             if method.hasPrefix("web_") {
                 return ["ok": true, "result": try await web(method, params, callerTab: tab)]
             }
@@ -174,12 +177,109 @@ final class StudioControl {
             return ["ok": true, "result": try dispatch(method, params, callerTab: tab)]
         } catch let e as ControlError {
             return ["ok": false, "error": e.message]
+        } catch let e as SecretError {
+            return ["ok": false, "error": e.message]
         } catch {
             return ["ok": false, "error": "\(error)"]
         }
     }
 
     struct ControlError: Error { let message: String }
+
+    // MARK: Secrets
+
+    /// secret_*: agents ask for, capture and use secrets by name. No value ever enters or leaves through here:
+    /// the user types it into a Studio dialog (or a command prints it straight into the store), and command
+    /// output is scrubbed of every stored value before it is returned.
+    private func secret(_ method: String, _ p: [String: Any], callerTab: UUID?) async throws -> Any {
+        let secrets = SecretStore.shared
+        let me = callerTab.flatMap { id in store?.terminals.first { $0.id == id } }
+        let model = callerTab.flatMap { id in models.first { $0.terminal(id) != nil } } ?? lastActive ?? models.first
+        let session = me.flatMap { t in model?.title(of: t) } ?? "A session"
+        func name() throws -> String {
+            guard let n = p["name"] as? String, SecretStore.validName(n) else {
+                throw ControlError(message: "name is required and must look like an environment variable (letters, digits, _), e.g. GITHUB_TOKEN")
+            }
+            return n
+        }
+        func command() throws -> String {
+            guard let c = p["command"] as? String, !c.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw ControlError(message: "command is required")
+            }
+            return c
+        }
+        func run(_ cmd: String, with names: [String]) async throws -> SecretRunner.Result {
+            let extra = try secrets.take(names)
+            let env = LaunchEnv.environment(tab: callerTab) ?? ProcessInfo.processInfo.environment
+            let cwd = (p["cwd"] as? String).map { ($0 as NSString).expandingTildeInPath } ?? me?.cwd ?? model?.folder ?? NSHomeDirectory()
+            let timeout = min(max((p["timeout"] as? NSNumber)?.doubleValue ?? 120, 1), 3600)
+            return await SecretRunner.run(cmd, cwd: cwd, env: env, extra: extra, timeout: timeout)
+        }
+        func expiry(_ life: TimeInterval?) -> Date? { life.map { Date().addingTimeInterval($0) } }
+        let uses = p["secrets"] as? [String] ?? []
+
+        switch method {
+        case "secret_list":
+            return ["secrets": secrets.secrets.map { s -> [String: Any] in
+                var d: [String: Any] = ["name": s.name, "expires": SecretStore.describe(expiry: s.expires)]
+                if !s.note.isEmpty { d["for"] = s.note }
+                if let u = s.lastUsed { d["last_used"] = relativeTime(u) }
+                return d
+            }, "use": "secret_run(command, secrets: [names]) exposes each as $NAME; values are never shown."]
+
+        case "secret_request":
+            let n = try name()
+            let life = try SecretStore.parseLifetime(p["expires_in"])
+            let exists = secrets.info(n) != nil
+            if exists, (p["replace"] as? Bool) != true {
+                return "\(n) already exists (expires \(SecretStore.describe(expiry: secrets.info(n)?.expires))). Use it with secret_run; pass replace=true to ask the user for a new value."
+            }
+            let reason = (p["reason"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let model else { throw ControlError(message: "No Studio window is open to ask the user in.") }
+            guard let got = await SecretPrompt.ask(name: n, reason: reason, session: session, suggested: life, replacing: exists,
+                                                   in: model) else {
+                return "The user declined to provide \(n)."
+            }
+            try secrets.set(n, value: got.value, note: reason, expires: expiry(got.lifetime), source: session)
+            return "Saved \(n) (expires \(SecretStore.describe(expiry: expiry(got.lifetime)))). Use it with secret_run: it is $\(n) in the command's environment."
+
+        case "secret_capture":
+            let n = try name()
+            let cmd = try command()
+            let life = try SecretStore.parseLifetime(p["expires_in"])
+            if secrets.info(n) != nil, (p["replace"] as? Bool) != true {
+                throw ControlError(message: "\(n) already exists; pass replace=true to overwrite it")
+            }
+            let r = try await run(cmd, with: uses)
+            let value = r.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+            // whatever the command printed is a secret now, saved or not: never echo it back
+            let scrub = SecretScrubber(secrets.allValues() + [(name: n, value: value)])
+            guard r.exit == 0, !r.timedOut, !value.isEmpty else {
+                let why = r.timedOut ? "timed out" : value.isEmpty ? "printed nothing on stdout" : "exited with code \(r.exit)"
+                throw ControlError(message: "Not saved: the command \(why).\n" + SecretRunner.clip(scrub.scrub(r.stderr), limit: 4000))
+            }
+            try secrets.set(n, value: value, note: (p["note"] as? String ?? "").trimmingCharacters(in: .whitespaces),
+                            expires: expiry(life), source: session)
+            model?.showToast("Saved secret \(n)")
+            var out: [String: Any] = ["saved": n, "length": value.count, "expires": SecretStore.describe(expiry: expiry(life))]
+            let err = scrub.scrub(r.stderr).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !err.isEmpty { out["stderr"] = SecretRunner.clip(err, limit: 4000) }
+            return out
+
+        case "secret_run":
+            let cmd = try command()
+            let r = try await run(cmd, with: uses)
+            let scrub = SecretScrubber(secrets.allValues())
+            if !uses.isEmpty { model?.showToast("Used secret\(uses.count == 1 ? "" : "s") " + uses.joined(separator: ", ")) }
+            var out: [String: Any] = ["exit_code": Int(r.exit), "stdout": SecretRunner.clip(scrub.scrub(r.stdout)),
+                                      "stderr": SecretRunner.clip(scrub.scrub(r.stderr), limit: 8000)]
+            if r.timedOut { out["timed_out"] = true }
+            return out
+
+        default:
+            throw ControlError(message: "unknown method \(method)")
+        }
+    }
 
     // MARK: Workers
 

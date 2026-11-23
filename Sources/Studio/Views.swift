@@ -123,6 +123,14 @@ struct ProjectView: View {
                 }
             }
         }
+        .overlay(alignment: .top) {
+            if let ask = model.secretAsks.first {
+                ZStack(alignment: .top) {
+                    SwiftUI.Color.black.opacity(0.18)     // dim the window: this wants an answer
+                    SecretAskPanel(ask: ask).id(ask.id).padding(.top, 90)
+                }
+            }
+        }
         .overlay(alignment: .bottom) {
             if let toast = model.toast {
                 Text(toast).font(.system(size: 12))

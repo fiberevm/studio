@@ -201,6 +201,9 @@ final class ProjectModel: ObservableObject {
 
     func title(of t: TerminalSession) -> String { item(for: t)?.title ?? "New session" }
 
+    /// Secrets sessions are asking the user for (secret_request), oldest first; the window shows the first.
+    @Published var secretAsks: [SecretAsk] = []
+
     /// Short message shown at the bottom of the window ("All caught up").
     @Published var toast: String?
     /// Tab whose peek card is showing (hover).

@@ -70,6 +70,7 @@ Everything here is about one thing: spending your attention only where a session
 | 🌿 | **Context at a glance** | Each session's status bar shows its git branch, model and tokens in/out, and Studio finds the PR it opened, with CI and review state. |
 | 📡 | **Running shells and servers** | Dev servers, watchers and long commands an agent started in the background show up in its status bar, each with what it runs and the port it listens on. Click one to open `localhost:<port>` in a split or the browser, copy its command, or stop it. |
 | 🗂 | **File tree** | A file tab shows the project's files on its left, like VS Code's Explorer: folders expand in place, the open file is highlighted, and new files appear on their own. Click a file to open it; drag the edge to resize; the sidebar button in the status bar hides it. The header above the tree names the checkout it shows (its branch) and switches between the project folder and its worktrees, so you can browse what a session changed in its own worktree. Markdown files get a **Preview** button (rendered like on GitHub, images and tables included, following the file as it changes), and images open in a viewer with zoom, fit and a checkerboard behind transparency. **Files** in the + menu (<kbd>⇧⌘E</kbd>, also in <kbd>⌘P</kbd> and <kbd>⇧⌘K</kbd>) opens a tab with just the tree; the file you pick opens in that tab. |
+| 🔑 | **Secrets** ([more ↓](#secrets)) | Agents use API keys, tokens and passwords without ever seeing them. A session asks for one by name and you type it into a Studio panel; commands get it as an environment variable and Studio scrubs it from their output, so it never lands in a conversation or transcript. Each secret can expire. |
 | 🌐 | **Web panels** | Open a page in a tab or split, right next to your sessions: a dev server, a sandbox URL, a PR, docs. Back, forward, reload, an editable address bar, and Open in browser; web tabs come back after a restart. Agents open them with `open_url` and drive them like a person: read the page and its numbered elements, click, type and submit, wait, go back, screenshot, or run JavaScript (`web_*` tools). A sandbox's **Open Desktop** shows its desktop in a panel. From ⌘P → *Web: Open URL…*. |
 | 🖼 | **Drop to paste** | Drag files or screenshots onto a session to paste their paths into the prompt. |
 | ⛵ | **Sandboxes** ([more ↓](#sandboxes)) | Every session can run work in a remote Linux sandbox through `sandbox_*` MCP tools: create one (the project is pushed in), run commands and servers, get an HTTPS URL for a port, open a shell in a split. Claude uses sandboxes when they help (configurable), and deletes one only when you ask. The sandboxes a session uses show as chips in its status bar, with live state and Open Terminal / Desktop / Stop / Resume / Delete. |
@@ -114,6 +115,19 @@ Studio gives every Claude session a remote machine of its own whenever the work 
 | <a href="https://docs.aws.amazon.com/lambda/latest/dg/microvms.html"><img src="docs/providers/aws-lambda.svg" alt="AWS Lambda" height="28"></a> | [AWS Lambda MicroVMs](https://docs.aws.amazon.com/lambda/latest/dg/microvms.html) | ✅ Supported | The AWS CLI with credentials, and a one-time **Settings → Sandboxes → AWS → Set Up**: it creates an S3 bucket, two IAM roles and a `studio-sandbox` image (Amazon Linux 2023 dev box + Studio's agent) in your account. Firecracker VMs up to 8 h, suspend/resume that keeps memory and processes, an interactive shell (`websocat`). Ports are reached through the MicroVM's endpoint with an auth header, so they open in `curl`, not a browser. |
 
 More are on the way. Providers plug in through the `SandboxProvider` protocol in [`Sources/Studio/Sandbox.swift`](Sources/Studio/Sandbox.swift) (Boat) and [`SandboxAWS.swift`](Sources/Studio/SandboxAWS.swift) (AWS, with its in-VM agent in [`Resources/MicroVMAgent`](Resources/MicroVMAgent)), so the MCP tools, skill, status bar and Settings work unchanged for any provider that can create a machine, run a command, copy files in and expose a port. PRs welcome.
+
+## Secrets
+
+Coding agents need credentials, and pasting one into a chat puts it in the transcript (and in everything the transcript is sent to) for good. Studio's secrets keep the value out of the conversation entirely:
+
+- **Asking.** The agent calls `secret_request` with a name (`STRIPE_API_KEY`) and a reason. Studio shows you a panel in the session's window; you type the value and pick an expiry (never, 1 hour, 1 day, 7, 30 or 90 days). The agent is told "saved" or "declined", nothing else. You can also add secrets yourself in **Settings → Secrets**.
+- **Using.** The agent calls `secret_run` with a command and the names it needs. Studio runs the command with those secrets in its environment (`$STRIPE_API_KEY`) and returns the output with every stored secret scrubbed (`[secret STRIPE_API_KEY]`): the value itself and its base64, hex, URL-encoded and JSON-escaped forms, and each long line of a multi-line value.
+- **Capturing.** `secret_capture` runs a command and stores what it prints as a new secret, returning only its length, for tokens a command generates or fetches (`gh auth token`, `openssl rand -hex 32`).
+- **Expiry.** An expired secret is deleted, value included. Settings → Secrets lists each secret's name, purpose, expiry, last use and who added it, and deletes or re-times it. Values are never displayed.
+
+Values are kept in your login keychain (a build from source, which isn't signed by a team, keeps them in a `0600` file in Studio's Application Support folder instead). They never pass through the MCP connection, tool arguments, process arguments or Studio's own logs.
+
+**What this does not do:** it is not a sandbox. A command the agent writes runs with the secret and could send it elsewhere, write it to a file, or print it in a form the scrubber doesn't recognise (reversed, split, encrypted). Secrets protect against values ending up in transcripts by accident, which is how they usually leak; give an agent only the secrets you'd let its commands use.
 
 ## Workers
 
@@ -218,11 +232,12 @@ watcher"*, or *"lay these out as a 2×2 grid"*.
 | Tabs | `split_tab`, `move_tab`, `focus_tab`, `close_tab`, `reorder_tab` |
 | Layout | `set_layout` (single / columns / rows / grid), `resize_pane`, `set_split_sizes`, `equalize_layout`, `merge_pane`, `focus_pane`, `set_sidebar` |
 | Sandboxes | `sandbox_list`, `sandbox_create`, `sandbox_exec`, `sandbox_push`, `sandbox_url`, `sandbox_terminal`, `sandbox_attach` / `sandbox_detach`, `sandbox_stop` / `sandbox_resume` / `sandbox_delete` |
+| Secrets | `secret_list`, `secret_request` (name, reason, expires_in: the user types the value), `secret_run` (command, secrets: runs with them in the environment, output scrubbed), `secret_capture` (name, command: stores what a command prints) |
 | Appearance & navigation | `set_theme`, `set_font_size`, `open_palette`, `open_project` |
 
 **Always current:** sessions outlive Studio restarts, so when Studio is updated each session's `studio-mcp` swaps in the new build in place and tells Claude its tool list changed. New tools show up in sessions that are already running.
 
-**Skills:** every session Studio starts also loads Studio's own plugin (`--plugin-dir`), with two short skills: `studio:studio` (driving the editor) and `studio:sandbox` (when and how to use sandboxes). They're in `Resources/StudioPlugin/`.
+**Skills:** every session Studio starts also loads Studio's own plugin (`--plugin-dir`), with three short skills: `studio:studio` (driving the editor), `studio:sandbox` (when and how to use sandboxes) and `studio:secrets` (credentials by name, never by value). They're in `Resources/StudioPlugin/`.
 
 **Security:** the control server listens on `127.0.0.1` only and requires a random token stored in a `0600` file
 (`~/Library/Application Support/Studio/control-<bundle-id>.json`). `run_in_terminal` only works on plain terminal tabs.
@@ -272,6 +287,7 @@ Sources/Studio/          the app
   AgentCheck.swift         Settings → Agents: is each CLI installed and logged in
   Workers.swift            paired workers: pairing, tokens, status polling, their API
   BackgroundTasks.swift    the shells and servers each agent has running (process table, listening ports) and their status-bar chips
+  Secrets.swift            secrets: the store (keychain), scrubbing command output, the request panel, Settings → Secrets
   Updater.swift            in-app updates (Sparkle): background check, the title bar nudge, Check for Updates…, the Settings → About switch
 Sources/StudioMCP/       the stdio MCP server bundled next to the app
 Sources/StudioAttach/    studio-attach: a worker tab's terminal (WebSocket ⇄ pty, reconnects on its own)

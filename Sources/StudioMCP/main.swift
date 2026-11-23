@@ -101,6 +101,33 @@ let tools: [Tool] = [
          description: "Send a message to another Claude session's prompt (as if the user typed it and pressed Return). Use get_state for tab ids. Use sparingly: it starts real work in that session.",
          properties: ["tab": ["type": "string"], "text": ["type": "string"]],
          required: ["tab", "text"]),
+    // Secrets: used by name, never by value.
+    Tool(name: "secret_list",
+         description: "List the secrets Studio holds for the user (names, what they're for, expiry). Values are never shown. Check here before asking for a credential.",
+         properties: [:], required: []),
+    Tool(name: "secret_request",
+         description: "Ask the user for a secret (API key, token, password). Studio shows them a dialog to type it in; you get 'saved' or 'declined', never the value. Use this instead of asking the user to paste a credential into the chat. Then use it with secret_run.",
+         properties: ["name": ["type": "string", "description": "environment variable name, e.g. GITHUB_TOKEN"],
+                      "reason": ["type": "string", "description": "shown to the user: what it is and why you need it"],
+                      "expires_in": ["type": "string", "description": "suggested lifetime: 30m, 12h, 7d, 2w (default: never; the user decides)"],
+                      "replace": ["type": "boolean", "description": "ask for a new value when the secret already exists"]],
+         required: ["name", "reason"]),
+    Tool(name: "secret_run",
+         description: "Run a shell command with secrets in its environment (each as $NAME) and return its output with every secret scrubbed. This is how you use a secret: e.g. command 'curl -H \"Authorization: Bearer $API_KEY\" …', secrets ['API_KEY']. Never echo or write a secret where you would read it back.",
+         properties: ["command": ["type": "string"],
+                      "secrets": ["type": "array", "items": ["type": "string"], "description": "names of the secrets to expose"],
+                      "cwd": ["type": "string", "description": "default: this session's folder"],
+                      "timeout": ["type": "integer", "description": "seconds, default 120"]],
+         required: ["command"]),
+    Tool(name: "secret_capture",
+         description: "Run a command and store what it prints (stdout) as a secret, without showing it to you. For credentials a command generates or fetches (gh auth token, aws sts get-session-token, openssl rand). Returns only its length.",
+         properties: ["name": ["type": "string", "description": "environment variable name for the new secret"],
+                      "command": ["type": "string"],
+                      "note": ["type": "string", "description": "what it's for"],
+                      "expires_in": ["type": "string", "description": "lifetime: 30m, 12h, 7d, 2w (default: never)"],
+                      "secrets": ["type": "array", "items": ["type": "string"], "description": "existing secrets the command needs"],
+                      "replace": ["type": "boolean"], "cwd": ["type": "string"], "timeout": ["type": "integer"]],
+         required: ["name", "command"]),
     // Sandboxes (boat.dev). Default policy: use them when helpful; delete only when the user asks.
     Tool(name: "sandbox_list",
          description: "List this session's sandboxes (and every account sandbox with scope=all). Check this before creating one.",
@@ -209,7 +236,7 @@ func callStudio(_ method: String, _ params: [String: Any]) -> (ok: Bool, text: S
     guard fd >= 0 else { return (false, "socket failed") }
     defer { close(fd) }
     // sandbox calls run real remote work (create, exec, push), so they get far longer than UI calls
-    var tv = timeval(tv_sec: method.hasPrefix("sandbox_") ? 3700 : method.hasPrefix("web_") ? 120 : 10, tv_usec: 0)
+    var tv = timeval(tv_sec: method.hasPrefix("sandbox_") || method.hasPrefix("secret_") ? 3700 : method.hasPrefix("web_") ? 120 : 10, tv_usec: 0)
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
     var addr = sockaddr_in()
     addr.sin_family = sa_family_t(AF_INET)
@@ -298,7 +325,7 @@ while let line = readLine(strippingNewline: true) {
             "protocolVersion": params["protocolVersion"] as? String ?? "2025-06-18",
             "capabilities": ["tools": ["listChanged": true]],
             "serverInfo": ["name": "studio", "version": "0.1"],
-            "instructions": "You are running inside Studio, a Claude Code session manager. These tools control its UI (tabs, splits, terminals, themes, palette), its web panels, and remote sandboxes (sandbox_*). For any browsing, use the web panel by default (open_url, then web_*), so the user sees it beside you. See the studio:studio and studio:sandbox skills.",
+            "instructions": "You are running inside Studio, a Claude Code session manager. These tools control its UI (tabs, splits, terminals, themes, palette), its web panels, and remote sandboxes (sandbox_*). For any browsing, use the web panel by default (open_url, then web_*), so the user sees it beside you. For credentials (API keys, tokens, passwords) use the secret_* tools: never ask the user to paste one into the chat, and never print one. See the studio:studio, studio:sandbox and studio:secrets skills.",
         ])
     case "ping":
         reply(id, result: [:])

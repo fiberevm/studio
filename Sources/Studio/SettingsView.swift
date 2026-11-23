@@ -55,7 +55,7 @@ struct SettingsView: View {
     }()
 
     enum Section: String, CaseIterable, Identifiable {
-        case appearance = "Appearance", agents = "Agents", workers = "Workers", sessions = "Sessions", sandboxes = "Sandboxes", snippets = "Snippets", about = "About"
+        case appearance = "Appearance", agents = "Agents", workers = "Workers", sessions = "Sessions", sandboxes = "Sandboxes", secrets = "Secrets", snippets = "Snippets", about = "About"
         var id: String { rawValue }
         var icon: String {
             switch self {
@@ -64,6 +64,7 @@ struct SettingsView: View {
             case .workers: return "server.rack"
             case .sessions: return "rectangle.stack"
             case .sandboxes: return "sailboat"
+            case .secrets: return "key"
             case .snippets: return "text.quote"
             case .about: return "info.circle"
             }
@@ -94,6 +95,7 @@ struct SettingsView: View {
                         case .workers: WorkerSettings()
                         case .sessions: SessionSettings()
                         case .sandboxes: SandboxSettings(registry: store.sandboxes)
+                        case .secrets: SecretSettings()
                         case .snippets: SnippetSettings()
                         case .about: AboutSettings()
                         }
