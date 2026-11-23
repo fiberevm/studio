@@ -11,7 +11,9 @@
 <meta property="og:image" content="share.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
-<meta name="theme-color" content="#ffffff">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#10131a" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
 <!-- <link rel="canonical" href="https://[the site's domain]/"> -->
 <meta name="site-kind" content="software">
 <meta name="page-type" content="software">
@@ -36,6 +38,16 @@
   --display-weight: 500;
   --display-tracking: -0.035em;
   --display-tracking-xl: -0.045em;
+}
+/* dark mode follows the system setting: the app's own navy as the page, a step darker for the band and the footer */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --p-bg: #10131a; --p-surface: #1b202c; --p-ink: #eef0f4; --p-muted: #a1a8b8;
+    --p-accent: #f6a877; --p-accent-ink: #141824; --p-action: #ee8a5c; --p-action-ink: #141824;
+    --p-inv-bg: #0a0c11; --p-inv-surface: #151925; --p-inv-ink: #eef0f4; --p-inv-muted: #a1a8b8;
+    --p-inv-accent: #f6a877; --p-inv-accent-ink: #141824; --p-inv-action: #ee8a5c; --p-inv-action-ink: #141824;
+  }
 }
 </style>
 <link rel="stylesheet" href="assets/ui/base.css">
@@ -77,6 +89,12 @@
     .mac .mac__bar span { padding-left: 56px; }
   }
   .t-label { font-family: var(--font-mono); }
+  @media (prefers-color-scheme: dark) {
+    /* the screenshot grounds lift a step off the page, and black marks (GitHub, OpenAI) turn white outside their tiles */
+    .hero--centred .hero__window, #sessions .frame, #themes .frame { background: #1a1d25; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .06); }
+    .panel:has(> .mac) { background: #1a1d25 !important; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .06); }
+    .nav .ic-ink { filter: invert(1); }
+  }
   /* every capture sits in a Mac window: the bar with its three lights, then the capture at half its pixel width */
   .mac { border-radius: 10px; overflow: hidden; background: #1d2230; box-shadow: 0 0 0 1px rgb(255 255 255 / .1), 0 28px 60px -20px rgb(0 0 0 / .7); display: flex; flex-direction: column; }
   .mac__bar { flex: none; position: relative; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: #151925; color: #aab1c0; font: 500 13px/1 var(--font-text); }
