@@ -76,13 +76,22 @@
   /* the hero's painted ground when WebGL is not there, and the app window on it */
   /* the ground behind every window: one flat soft black */
   .hero--centred .hero__window, #sessions .frame, #themes .frame, .panel:has(> .mac) { background: #17181b !important; border: 0; }
-  /* the hero shows its window whole: the frame grows to hold it, so the hero is taller than one screen */
-  main > section.hero.hero--centred { height: auto; min-height: 100svh; }
-  .hero--centred .hero__window { flex: none; min-height: 0; padding: var(--s-7); -webkit-mask-image: none; mask-image: none; display: grid; justify-items: center; }
-  .hero--centred .hero__window > .ly-piece { position: static; transform: none; width: min(1040px, 100%); }
+  /* the hero is one screen and shows its window whole: the window takes the room the screen leaves under the
+     text and is sized by that height, never cut by the fold */
+  .hero--centred .hero__window { flex: 1 1 0; min-height: 0; padding: var(--s-5); -webkit-mask-image: none; mask-image: none; display: grid; place-items: center; overflow: hidden; }
+  .hero--centred .hero__window > .ly-piece { position: static; transform: none; height: 100%; width: auto; max-width: 100%; aspect-ratio: 2800 / 1846; }
+  .hero--centred .hero__window > .mac > img { flex: 1 1 0; min-height: 0; height: 0; object-fit: cover; object-position: left top; }
+  /* on a wide screen the headline is one line and the lead two, which leaves the window more of the screen */
+  @media (min-width: 1200px) {
+    .hero--centred .hero__c { max-width: none; gap: var(--s-3); }
+    .hero--centred h1 { max-width: none; }
+    .hero--centred .hero__lead { max-width: 76ch; }
+    .hero--centred .hero__window { padding: var(--s-4); }
+  }
   @media (max-width: 639px) {
     .hero--centred .hero__window { padding: var(--s-4); -webkit-mask-image: none; mask-image: none; min-height: 0; }
-    .hero--centred .hero__window > .ly-piece { width: 100%; }
+    .hero--centred .hero__window > .ly-piece { width: 100%; height: auto; aspect-ratio: auto; }
+    .hero--centred .hero__window > .mac > img { flex: none; height: auto; }
     main #sessions .frame, main #themes .frame { padding: var(--s-4); }
     main #sessions .frame > .mac, main #themes .frame > .mac { height: auto; width: 100%; aspect-ratio: auto; }
     main #themes .mac [role=tabpanel] { flex: none; aspect-ratio: 1600 / 996; }
@@ -115,7 +124,11 @@
 
   .menu-card .panel { --p-h: 200px; }
   #features .panel { --p-h: 396px; }
-  section#agents .panel { --p-h: 470px; }
+  section#agents .panel { --p-h: 510px; }
+  section#agents .panel > .mac { width: calc(100% - 32px); height: calc(100% - 32px); max-height: none; }
+  section#agents .panel > .mac > img { flex: 1 1 0; min-height: 0; height: 0; object-fit: cover; object-position: left top; }
+  section#agents .agents { gap: var(--s-4); }
+  section#agents .agents .ic-tile { margin-bottom: 0; }
   #agents .panel, #shortcuts .panel, #palette .panel { --p-h: 420px; border-radius: var(--r-lg); }
   .hero--centred .hero__lead { color: var(--ink); }
   #workers .panel { --p-h: 260px; background: var(--surface); }
@@ -133,7 +146,9 @@
   .matrix .no::before { content: "\2014"; color: var(--muted); }
 
   /* the comparison: three columns of short text, Studio's the marked one */
-  .matrix--text [role=row] { grid-template-columns: minmax(0, 3fr) repeat(3, minmax(0, 4fr)); align-items: start; padding-block: var(--s-4); }
+  .matrix--text [role=row] { grid-template-columns: minmax(0, 3fr) repeat(3, minmax(0, 4fr)); align-items: stretch; padding-block: var(--s-4); }
+  #compare .frame { padding: var(--s-6); align-items: center; justify-items: center; background: #17181b; border: 0; }
+  #compare .frame > img { display: block; height: 100%; width: auto; max-width: 100%; object-fit: contain; border-radius: 10px; }
   .matrix--text :is([role=cell], [role=columnheader]):not(:first-child) { text-align: left; }
   .matrix--text [role=rowheader] { font-weight: 500; }
   .matrix--text [role=row] > :last-child { font-weight: 500; }
@@ -141,7 +156,8 @@
   @media (max-width: 639px) {
     .matrix--text [role=row] { grid-template-columns: minmax(0, 1fr); row-gap: var(--s-1); }
     .matrix--text [role=row]:first-child { display: none; }
-    .matrix--text [role=cell]::before { content: attr(data-col) ": "; color: var(--muted); font-weight: 400; }
+    .matrix--text [role=cell]::before { content: attr(data-col); display: block; color: var(--muted); font-weight: 400; font-size: var(--t-small); }
+    #compare .frame { padding: var(--s-4); }
   }
 
   /* sandboxes: the diagram's panel and the provider rows */
@@ -191,6 +207,15 @@
     .matrix:not(.matrix--text) [role=row] { grid-template-columns: minmax(0, 1fr) repeat(3, 44px); }
     .matrix [role=columnheader] { font-size: var(--t-label); }
     #agents .panel, #shortcuts .panel { --p-h: 220px; }
+    section#agents .panel { --p-h: 250px; }
+    /* a phone holds a section in two screens at most: the six parts keep their titles and pictures, the
+       comparison its three main rows and a tall crop of the window */
+    #features .card > p { display: none; }
+    #features .panel { --p-h: 118px; }
+    #compare .section-head > p, #compare .matrix--text [role=row]:nth-child(n+5) { display: none; }
+    #compare .frame.fill { flex: 0 0 auto; }
+    #compare .frame > img { height: 440px; width: 100%; object-fit: cover; object-position: left top; }
+    #workers .panel { --p-h: 125px; }
     #palette .panel { --p-h: 330px; }
     .pal__row em, .pal__row small { display: none; }
     #sandboxes .panel { --p-h: 260px; }
@@ -287,11 +312,11 @@
   </section>
 
   <!-- FEATURES: 2x2, two screens, each panel a capture of the real app -->
-  <section class="section g2" id="features" aria-labelledby="features-h">
+  <section class="section g2" id="features" aria-labelledby="features-h" style="--hm: 2">
     <div class="wrap">
       <div class="group">
         <div class="section-head">
-          <h2 id="features-h">Six parts of one window. <span class="muted">Each a key away.</span></h2>
+          <h2 id="features-h">Six parts of one Studio window. <span class="muted">Each a key away.</span></h2>
         </div>
         <div class="grid">
           <article class="card card--row card--open span-4">
@@ -323,7 +348,7 @@
           <div class="panel"><div class="mac"><div class="mac__bar" aria-hidden="true"><i></i><i></i><i></i><span>aicode — ~/code/aicode</span></div><img src="assets/shots/terminal.webp" width="1000" height="600" alt="A terminal tab showing a git log" loading="lazy"></div></div>
         </article>
         <article class="card card--row card--open span-4">
-          <h3>Keeps keys out of the transcript</h3>
+          <h3>Keeps keys out of the session transcript</h3>
           <p>An agent asks for a key by name and you type it into this panel. Commands get it as an environment variable, and Studio scrubs it from their output. Each key can expire.</p>
           <div class="panel"><div class="mac"><div class="mac__bar" aria-hidden="true"><i></i><i></i><i></i><span>aicode — ~/code/aicode</span></div><img src="assets/shots/secret.webp" width="1000" height="600" alt="A panel over a session asking for STRIPE_API_KEY, with a field for the value and expiry choices from one hour to ninety days" loading="lazy"></div></div>
         </article>
@@ -332,40 +357,30 @@
   </section>
 
   <!-- AGENTS: the three CLIs by their real icons, then what each gets -->
-  <section class="section g2" id="agents" aria-labelledby="agents-h">
+  <section class="section" id="agents" aria-labelledby="agents-h">
     <div class="wrap">
-      <div class="group">
-        <div class="section-head">
-          <h2 id="agents-h">Runs the agent CLI you already use</h2>
-          <p>Studio starts each agent's own CLI in a real terminal, signed in with your account. Mix all three in one window.</p>
-        </div>
-        <div class="grid grid--top">
-          <ul class="agents span-5">
+      <div class="section-head">
+        <h2 id="agents-h">Runs the agent CLI you already use</h2>
+        <p>Studio starts each agent's own CLI in a real terminal, signed in with your account. Mix all three in one window.</p>
+      </div>
+      <div class="grid grid--top">
+        <div class="span-5 stack-4">
+          <ul class="agents">
             <li><span class="ic-tile ic-tile--48"><img class="ic ic-32" src="assets/icons/claude.svg" alt="" width="32" height="32"></span><h3>Claude Code</h3><p>From Anthropic. Your slash commands, hooks, MCP servers and settings work unchanged.</p></li>
             <li><span class="ic-tile ic-tile--48"><img class="ic ic-32 ic-ink" src="assets/icons/openai.svg" alt="" width="32" height="32"></span><h3>Codex CLI</h3><p>From OpenAI. Titles, live status and approvals come from Codex's own session logs.</p></li>
             <li><span class="ic-tile ic-tile--48"><img class="ic ic-32" src="assets/icons/google-icon.svg" alt="" width="31" height="32"></span><h3>Antigravity CLI</h3><p>From Google. The Studio tools arrive as a plugin you install once.</p></li>
           </ul>
-          <div class="panel span-6 start-7"><div class="mac"><div class="mac__bar" aria-hidden="true"><i></i><i></i><i></i><span>aicode — ~/code/aicode</span></div><img src="assets/shots/keepalive.webp" width="960" height="600" loading="lazy" alt="A Claude Code session explaining how Studio keeps sessions alive in tmux"></div></div>
+          <p class="muted">Tabs, live status, <kbd>⇧⌘K</kbd> messages, sessions that survive a restart, workers and the Studio MCP work with all 3 agents. Forking a conversation with <kbd>⌘E</kbd> works with Claude Code and Codex.</p>
         </div>
-      </div>
-      <div class="matrix" role="table" aria-label="What each agent gets in Studio">
-        <div role="row"><span role="columnheader">In Studio</span><span role="columnheader">Claude Code</span><span role="columnheader">Codex</span><span role="columnheader">Antigravity</span></div>
-        <div role="row"><span role="cell">Tabs, splits, titles and the session sidebar</span><span role="cell" class="yes"><span class="sr-only">Included</span></span><span role="cell" class="yes"><span class="sr-only">Included</span></span><span role="cell" class="yes"><span class="sr-only">Included</span></span></div>
-        <div role="row"><span role="cell">Live status, notifications and <kbd>⌘J</kbd></span><span role="cell" class="yes"><span class="sr-only">Included</span></span><span role="cell" class="yes"><span class="sr-only">Included</span></span><span role="cell" class="yes"><span class="sr-only">Included</span></span></div>
-        <div role="row"><span role="cell">Messages from <kbd>⇧⌘K</kbd>, with snippets</span><span role="cell" class="yes"><span class="sr-only">Included</span></span><span role="cell" class="yes"><span class="sr-only">Included</span></span><span role="cell" class="yes"><span class="sr-only">Included</span></span></div>
-        <div role="row"><span role="cell">Sessions that survive a restart</span><span role="cell" class="yes"><span class="sr-only">Included</span></span><span role="cell" class="yes"><span class="sr-only">Included</span></span><span role="cell" class="yes"><span class="sr-only">Included</span></span></div>
-        <div role="row"><span role="cell">Past conversations in <kbd>⌘P</kbd></span><span role="cell" class="yes"><span class="sr-only">Included</span></span><span role="cell" class="yes"><span class="sr-only">Included</span></span><span role="cell" class="yes"><span class="sr-only">Included</span></span></div>
-        <div role="row"><span role="cell">Studio MCP: the editor, workers and sandboxes</span><span role="cell" class="yes"><span class="sr-only">Included</span></span><span role="cell" class="yes"><span class="sr-only">Included</span></span><span role="cell" class="yes"><span class="sr-only">Included</span></span></div>
-        <div role="row"><span role="cell">Sessions on workers</span><span role="cell" class="yes"><span class="sr-only">Included</span></span><span role="cell" class="yes"><span class="sr-only">Included</span></span><span role="cell" class="yes"><span class="sr-only">Included</span></span></div>
-        <div role="row"><span role="cell">Model and tokens in the status bar</span><span role="cell" class="yes"><span class="sr-only">Included</span></span><span role="cell" class="yes"><span class="sr-only">Included</span></span><span role="cell" class="yes"><span class="sr-only">Included</span></span></div>
-        <div role="row"><span role="cell">Fork a conversation with <kbd>⌘E</kbd></span><span role="cell" class="yes"><span class="sr-only">Included</span></span><span role="cell" class="yes"><span class="sr-only">Included</span></span><span role="cell" class="no"><span class="sr-only">Not included</span></span></div>
+        <div class="panel span-6 start-7"><div class="mac"><div class="mac__bar" aria-hidden="true"><i></i><i></i><i></i><span>aicode — ~/code/aicode</span></div><img src="assets/shots/keepalive.webp" width="960" height="600" loading="lazy" alt="A Claude Code session explaining how Studio keeps sessions alive in tmux"></div></div>
       </div>
     </div>
   </section>
 
   <!-- COMPARE: Studio beside the two usual ways to run coding agents -->
-  <section class="section" id="compare" aria-labelledby="compare-h">
+  <section class="section g2" id="compare" aria-labelledby="compare-h" style="--hm: 2">
     <div class="wrap">
+      <div class="group">
       <div class="section-head">
         <h2 id="compare-h">Studio beside an AI editor and a terminal</h2>
         <p>Pick Studio when you already work in agent CLIs and run several at once. It keeps the CLIs and accounts you have and adds the window around them.</p>
@@ -378,8 +393,10 @@
         <div role="row"><span role="rowheader">Pages and machines</span><span role="cell" data-col="AI code editor">Varies by editor</span><span role="cell" data-col="Terminal and tmux">None built in</span><span role="cell" data-col="Studio">Web panels, remote sandboxes and workers</span></div>
         <div role="row"><span role="rowheader">Price</span><span role="cell" data-col="AI code editor">Usually a subscription</span><span role="cell" data-col="Terminal and tmux">Free</span><span role="cell" data-col="Studio">Free and MIT licensed</span></div>
       </div>
+      </div>
+      <div class="frame fill"><img src="assets/splits.webp" width="2000" height="1286" loading="lazy" alt="One Studio window in three panes: a Claude Code session, a second session listing the Studio tools, and a terminal with a git log"></div>
     </div>
-  </section>
+</section>
 
   <!-- PALETTE: the command palette over a window, drawn from the app's own layout -->
   <section class="section" id="palette" aria-labelledby="palette-h">
@@ -416,7 +433,7 @@
   <section class="section" id="themes" aria-labelledby="themes-h">
     <div class="wrap">
       <div class="grid section-head--grid">
-        <h2 class="span-5" id="themes-h">Nine themes and a text size you set</h2>
+        <h2 class="span-5" id="themes-h">Nine Studio themes and a text size you set</h2>
         <p class="span-6 start-7 t-lead">The session, the file tree and the editor all take the theme. Pick one in Settings (<kbd>⌘,</kbd>) or with Change Theme in the palette, which previews each as you move through the list.</p>
       </div>
       <div class="tabs" role="tablist" aria-label="Themes"><button class="tab" type="button" role="tab" id="tab-clear-dark" aria-controls="theme-clear-dark" aria-selected="true">Clear Dark</button><button class="tab" type="button" role="tab" id="tab-dark-modern" aria-controls="theme-dark-modern" aria-selected="false">Dark Modern</button><button class="tab" type="button" role="tab" id="tab-dark-plus" aria-controls="theme-dark-plus" aria-selected="false">Dark+</button><button class="tab" type="button" role="tab" id="tab-light-plus" aria-controls="theme-light-plus" aria-selected="false">Light+</button><button class="tab" type="button" role="tab" id="tab-monokai" aria-controls="theme-monokai" aria-selected="false">Monokai</button><button class="tab" type="button" role="tab" id="tab-solarized-dark" aria-controls="theme-solarized-dark" aria-selected="false">Solarized Dark</button><button class="tab" type="button" role="tab" id="tab-one-dark-pro" aria-controls="theme-one-dark-pro" aria-selected="false">One Dark Pro</button><button class="tab" type="button" role="tab" id="tab-github-dark" aria-controls="theme-github-dark" aria-selected="false">GitHub Dark</button><button class="tab" type="button" role="tab" id="tab-dracula" aria-controls="theme-dracula" aria-selected="false">Dracula</button></div>
@@ -453,7 +470,7 @@
       <div class="grid">
         <article class="card card--row card--open span-4">
           <span class="step-num">1</span>
-          <h3>Install the worker</h3>
+          <h3>Install the Studio worker</h3>
           <p>On the machine itself. It needs tmux and an agent CLI you are signed in to.</p>
           <div class="panel"><div class="term" role="img" aria-label="A terminal running the worker install script"><span><b>$</b> curl -fsSL https://raw.githubusercontent.com/fiberevm/studio/main/install-worker.sh | sh</span></div></div>
         </article>
@@ -477,7 +494,7 @@
   <section class="section" id="shortcuts" aria-labelledby="shortcuts-h">
     <div class="wrap">
       <div class="section-head">
-        <h2 id="shortcuts-h">Seven shortcuts for the whole app</h2>
+        <h2 id="shortcuts-h">Seven shortcuts for the whole Studio app</h2>
         <p>Every other command is in the palette, which also searches past sessions in every project.</p>
       </div>
       <div class="grid grid--top">
@@ -500,17 +517,17 @@
     <div class="wrap">
       <div class="grid grid--top">
         <div class="span-5 stack-5">
-          <img src="assets/icon.svg" alt="" width="96" height="96">
           <h2 id="questions-h">Questions</h2>
           <p class="t-lead">Studio is free. You pay only for the agent accounts and sandbox providers you already use.</p>
           <a class="link" href="https://github.com/fiberevm/studio/issues">Ask on GitHub</a>
+          <img src="assets/icon.svg" alt="" width="96" height="96">
         </div>
         <div class="faq span-6 start-7">
           <div class="faq__item"><h3>What do I need to run Studio?</h3><p>macOS 14 or later, and Claude Code installed and signed in. Codex and Antigravity are optional.</p></div>
           <div class="faq__item"><h3>Does it change how Claude Code works?</h3><p>No. It is the real CLI in a real terminal, so your slash commands, hooks, MCP servers and settings work as before.</p></div>
           <div class="faq__item"><h3>What happens to sessions when I quit?</h3><p>They keep running. Each tab runs in a hidden tmux session, and Studio reattaches to it on the next launch.</p></div>
           <div class="faq__item"><h3>Is Studio made by Anthropic?</h3><p>No. It is an independent open-source project, not affiliated with or endorsed by Anthropic.</p></div>
-          <div class="faq__item"><h3>Can I build it from source?</h3><p>Yes. Clone the repository and run <code>./build-app.sh --open</code>. It needs Xcode 16 or the Swift 6 toolchain.</p></div>
+          <div class="faq__item"><h3>Can I build Studio from source?</h3><p>Yes. Clone the repository and run <code>./build-app.sh --open</code>. It needs Xcode 16 or the Swift 6 toolchain.</p></div>
         </div>
       </div>
     </div>
@@ -524,7 +541,7 @@
         <h2 id="close-h">Download Studio for your Mac</h2>
         <p>Signed and notarized by Apple. Needs macOS 14 or later.</p>
       </div>
-      <a class="btn btn--primary btn--xl btn--wide" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg">Download for macOS</a>
+      <a class="btn btn--primary btn--xl" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg">Download for macOS</a>
     </div>
     <div class="closing__links">
       <div class="grid">
