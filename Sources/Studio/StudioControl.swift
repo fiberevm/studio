@@ -266,6 +266,13 @@ final class StudioControl {
             if !err.isEmpty { out["stderr"] = SecretRunner.clip(err, limit: 4000) }
             return out
 
+        case "secret_cancel":
+            // withdraw this window's pending requests (as if declined); not offered as an MCP tool
+            let pending = model?.secretAsks ?? []
+            model?.secretAsks = []
+            pending.forEach { $0.done(nil) }
+            return "cancelled \(pending.count)"
+
         case "secret_run":
             let cmd = try command()
             let r = try await run(cmd, with: uses)

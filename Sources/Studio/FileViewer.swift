@@ -127,6 +127,7 @@ struct FilePane: View {
     var register: (NSTextView) -> Void = { _ in }
     /// A link to another file was clicked in the Markdown preview.
     var openFile: (String) -> Void = { _ in }
+    @ObservedObject private var theme = ThemeChanges.shared   // recolor when the theme switches
 
     var body: some View {
         VStack(spacing: 0) {
@@ -193,6 +194,7 @@ struct FilePane: View {
 /// NSTextView in the theme's colors and terminal font: plain text, undo, find bar (⌘F), no smart quotes,
 /// with light syntax coloring. Text comes from the doc on load/reload; edits go back to it.
 struct CodeEditor: NSViewRepresentable {
+    @ObservedObject private var theme = ThemeChanges.shared   // updateNSView restyles when the theme switches
     @ObservedObject var doc: FileDoc
     let fontSize: CGFloat
     var register: (NSTextView) -> Void = { _ in }

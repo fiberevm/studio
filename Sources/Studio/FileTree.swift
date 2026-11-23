@@ -90,6 +90,7 @@ struct FileExplorer: View {
     @AppStorage(FileExplorer.widthKey) private var width = 220.0
     @State private var dragStart: Double?
     /// The repo's checkouts (main folder and worktrees), for the menu; empty outside git.
+    @ObservedObject private var theme = ThemeChanges.shared   // recolor when the theme switches
     @State private var checkouts: [Worktrees.Checkout] = []
     @State private var ticks = 0
     private let tick = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
@@ -208,6 +209,7 @@ private struct FileTreeRow: View {
     let row: FileTree.Row
     let selected: Bool
     @State private var hovering = false
+    @ObservedObject private var theme = ThemeChanges.shared
 
     var body: some View {
         HStack(spacing: 4) {
