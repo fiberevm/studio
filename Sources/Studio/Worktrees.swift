@@ -112,8 +112,14 @@ enum Worktrees {
 
     /// Every linked worktree of the known repos (not their main checkouts). Runs git: call off the main thread.
     static func all() -> [Info] {
-        let bases = UserDefaults.standard.dictionary(forKey: basesKey) as? [String: String] ?? [:]
         var out: [Info] = []
+        scan { out.append($0) }
+        return out
+    }
+
+    /// The same, one worktree at a time as each is found (for a list that fills in while git runs).
+    static func scan(_ found: (Info) -> Void) {
+        let bases = UserDefaults.standard.dictionary(forKey: basesKey) as? [String: String] ?? [:]
         for repo in knownRepos() {
             let main = defaultBranch(repo)
             for c in checkouts(of: repo).dropFirst() {
@@ -121,11 +127,10 @@ enum Worktrees {
                 let from = bases[c.path] ?? main
                 let ahead = from.flatMap { Int(git(["rev-list", "--count", "\($0)..HEAD"], in: c.path) ?? "") } ?? 0
                 let modified = (try? FileManager.default.attributesOfItem(atPath: c.path))?[.modificationDate] as? Date
-                out.append(Info(path: c.path, repo: repo, branch: c.branch, byStudio: bases[c.path] != nil,
-                                dirty: dirty, ahead: ahead, modified: modified))
+                found(Info(path: c.path, repo: repo, branch: c.branch, byStudio: bases[c.path] != nil,
+                           dirty: dirty, ahead: ahead, modified: modified))
             }
         }
-        return out
     }
 
     /// Disk space a folder takes, in bytes (`du`). Slow on big trees: call off the main thread.

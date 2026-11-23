@@ -189,7 +189,7 @@ struct StudioToggle: View {
 
 /// A setting that is on or off: title and description on the left, the switch on the right. `extra` goes under
 /// the description (a related button).
-private struct ToggleRow<Extra: View>: View {
+struct ToggleRow<Extra: View>: View {
     let title: String
     var detail: String? = nil
     @Binding var isOn: Bool
@@ -537,14 +537,10 @@ private struct SessionSettings: View {
     @AppStorage(Pref.closeTabEndsSession) private var closeEnds = true
     @AppStorage(Pref.keepSessionsAlive) private var keepAlive = true
     @AppStorage(Pref.nativePermissionMode) private var nativeMode = ""
-    @AppStorage(Worktrees.pref) private var worktrees = true
     @AppStorage(Pref.autoCloseEmptyPanes) private var autoClosePanes = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ToggleRow(title: "Give each new session its own worktree",
-                detail: "In a git repo, a new session starts in a fresh worktree (.claude/worktrees/<name>, branch studio/<name>) so agents working in parallel don't edit the same files. If a session ends without changes, its worktree and branch are removed; otherwise they stay for you to review.", isOn: $worktrees)
-            if worktrees { StartBranchSettings() }
             ToggleRow(title: "Closing a tab ends its session",
                 detail: "Off: the session keeps running in the background (reopen it from ⌘P). Right-click a tab for the other behavior either way.", isOn: $closeEnds)
             ToggleRow(title: "Close a pane when its last tab closes",
@@ -569,7 +565,7 @@ private struct SessionSettings: View {
 }
 
 /// Per project: the branch new session worktrees start from.
-private struct StartBranchSettings: View {
+struct StartBranchSettings: View {
     struct Repo: Identifiable { let path: String; let branches: [String]; let fallback: String; var id: String { path } }
     @State private var repos: [Repo]?
     @State private var choice: [String: String] = [:]

@@ -414,6 +414,7 @@ final class ProjectModel: ObservableObject {
 
     func windowClosed() {
         saveLayout()
+        OpenWindows.closed(folder)   // closed by you: not reopened next launch (quitting keeps the list)
         // Plain terminals live only in this window's layout; end them rather than leave them running unreachable.
         // (Quitting is different: hosted terminals keep running and the next launch reattaches them.)
         if !SessionStore.terminating {

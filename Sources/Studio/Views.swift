@@ -23,7 +23,7 @@ struct ProjectWindow: View {
             }
         }
         .background(SwiftUI.Color(nsColor: Theme.chrome).ignoresSafeArea())
-        .background(WindowConfigurator())
+        .background(WindowConfigurator(folder: folder))
         .modifier(HideTitlebarBackground())
         .ignoresSafeArea()
         .preferredColorScheme(Theme.current.isLight ? .light : .dark)
@@ -61,8 +61,11 @@ struct ProjectWindow: View {
             LaunchArgs.pendingResume = sid
             folder = projectRoot(store.records[sid]?.cwd ?? store.live[sid]?.cwd ?? NSHomeDirectory())
         } else if !args.contains("--no-restore") {
-            // Fresh launch: reopen a window for every project that had tabs open last time.
-            let projects = store.savedProjectFolders
+            // Fresh launch: reopen the windows that were open when Studio quit (before that list existed: the
+            // project with saved tabs that comes first, rather than every project that ever had a session).
+            let saved = store.savedProjectFolders
+            let projects = OpenWindows.list.map { l in l.filter { FileManager.default.fileExists(atPath: $0) } }
+                ?? Array(saved.prefix(1))
             if let first = projects.first {
                 folder = first
                 for p in projects.dropFirst() { openWindow(value: p) }
@@ -1702,9 +1705,36 @@ struct WindowDragArea: NSViewRepresentable {
 
 /// Hides the title bar and lets content extend under it, keeping the traffic lights.
 struct WindowConfigurator: NSViewRepresentable {
+    /// The project the window shows: its size and place are saved and restored under it.
+    var folder: String? = nil
+
     final class Probe: NSView {
+        var folder: String? { didSet { if folder != oldValue { track() } } }
+        private var observers: [Any] = []
+        private var tracked: (window: NSWindow, folder: String)?
+
+        /// Restore the project's last frame once, then save it whenever the window moves or resizes.
+        private func track() {
+            guard let w = window, let folder, tracked?.window !== w || tracked?.folder != folder else { return }
+            observers.forEach(NotificationCenter.default.removeObserver)
+            observers = []
+            tracked = (w, folder)
+            MainActor.assumeIsolated { OpenWindows.opened(folder) }
+            // a beat later, so it lands after SwiftUI sizes a new window to its default
+            DispatchQueue.main.async { MainActor.assumeIsolated { OpenWindows.restoreFrame(w, folder: folder) } }
+            for name in [NSWindow.didEndLiveResizeNotification, NSWindow.didMoveNotification, NSWindow.didResizeNotification] {
+                observers.append(NotificationCenter.default.addObserver(forName: name, object: w, queue: .main) { [weak w] _ in
+                    guard let w else { return }
+                    MainActor.assumeIsolated { OpenWindows.saveFrame(w, folder: folder) }
+                })
+            }
+        }
+
+        deinit { observers.forEach(NotificationCenter.default.removeObserver) }
+
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            track()
             guard let w = window else { return }
             w.titleVisibility = .hidden
             w.titlebarAppearsTransparent = true
@@ -1716,8 +1746,8 @@ struct WindowConfigurator: NSViewRepresentable {
             if CommandLine.arguments.contains("--order-front") { w.orderFrontRegardless() }
         }
     }
-    func makeNSView(context: Context) -> NSView { Probe() }
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func makeNSView(context: Context) -> NSView { let p = Probe(); p.folder = folder; return p }
+    func updateNSView(_ nsView: NSView, context: Context) { (nsView as? Probe)?.folder = folder }
 }
 
 struct HideTitlebarBackground: ViewModifier {
