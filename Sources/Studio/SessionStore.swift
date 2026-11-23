@@ -540,6 +540,7 @@ final class SessionStore: ObservableObject {
     /// In a git repo it starts in its own worktree unless Settings → Sessions says otherwise (see Worktrees).
     func newSession(in folder: String, prompt: String? = nil, agent: Agent? = nil) -> TerminalSession {
         let agent = agent ?? Agent.preferred
+        Telemetry.capture("session_started", ["agent": agent.rawValue, "worktree": Worktrees.enabled, "with_prompt": prompt != nil])
         // The tab opens at once, showing "Creating worktree"; the agent starts when the worktree is ready.
         let wants = Worktrees.enabled && !folder.contains("/.claude/worktrees/")
         let name = Worktrees.newName()

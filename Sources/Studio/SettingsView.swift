@@ -56,7 +56,7 @@ struct SettingsView: View {
     }()
 
     enum Section: String, CaseIterable, Identifiable {
-        case appearance = "Appearance", agents = "Agents", workers = "Workers", sessions = "Sessions", worktrees = "Worktrees", sandboxes = "Sandboxes", secrets = "Secrets", about = "About"
+        case appearance = "Appearance", agents = "Agents", workers = "Workers", sessions = "Sessions", worktrees = "Worktrees", sandboxes = "Sandboxes", secrets = "Secrets", updates = "Updates", telemetry = "Telemetry", about = "About"
         var id: String { rawValue }
         var icon: String {
             switch self {
@@ -67,6 +67,8 @@ struct SettingsView: View {
             case .sandboxes: return "sailboat"
             case .worktrees: return "arrow.triangle.branch"
             case .secrets: return "key"
+            case .updates: return "arrow.down.circle"
+            case .telemetry: return "chart.bar"
             case .about: return "info.circle"
             }
         }
@@ -98,6 +100,8 @@ struct SettingsView: View {
                         case .sandboxes: SandboxSettings(registry: store.sandboxes)
                         case .worktrees: WorktreeSettings()
                         case .secrets: SecretSettings()
+                        case .updates: UpdatesSettings()
+                        case .telemetry: TelemetrySettings()
                         case .about: AboutSettings()
                         }
                     }
@@ -152,7 +156,7 @@ let settingsMenuWidth: CGFloat = 220
 /// A setting: title and description on the left, its control on the right edge, centred on the text (like
 /// ToggleRow's switch). `wide` puts a control that needs the room (a field, a list) under the text instead,
 /// across the whole row.
-private struct Row<Control: View>: View {
+struct Row<Control: View>: View {
     let title: String
     var detail: String? = nil
     var wide = false
@@ -240,7 +244,7 @@ extension ToggleRow where Extra == EmptyView {
     }
 }
 
-private struct Group_: View {
+struct Group_: View {
     let title: String
     var body: some View {
         Text(title.uppercased()).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
@@ -843,23 +847,52 @@ private struct AWSProviderCard: View {
     }
 }
 
+// MARK: - Telemetry
+
+private struct TelemetrySettings: View {
+    @AppStorage(Telemetry.pref) private var enabled = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ToggleRow(title: "Share anonymous usage data",
+                      detail: "Helps us see which parts of Studio get used and what to improve. It never includes your code, prompts, file or project names, or anything else about your work.",
+                      isOn: $enabled)
+            Group_(title: "What is sent")
+            VStack(alignment: .leading, spacing: 6) {
+                bullet("A random id for this install, made up when Studio first runs")
+                bullet("Studio's version, whether it's a release or built from source, the macOS version and the chip type")
+                bullet("When Studio opens, and when a session starts: which agent (Claude Code, Codex or Antigravity) and whether it got a worktree")
+            }
+            .padding(.vertical, 10)
+            Group_(title: "What is never sent")
+            VStack(alignment: .leading, spacing: 6) {
+                bullet("Prompts, replies, code, terminal output, secrets")
+                bullet("File, folder, project or branch names, and paths")
+                bullet("Your name, email, IP-based location or any account")
+            }
+            .padding(.vertical, 10)
+            Text("Events go to PostHog. Turning this off stops them at once.")
+                .font(.system(size: 12)).foregroundStyle(.secondary).padding(.top, 8)
+        }
+    }
+
+    private func bullet(_ s: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("•").foregroundStyle(.secondary)
+            Text(s).fixedSize(horizontal: false, vertical: true)
+        }
+        .font(.system(size: 12.5))
+    }
+}
+
 // MARK: - About
 
 private struct AboutSettings: View {
-    @ObservedObject private var updater = Updater.shared
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             about
-            if updater.enabled {
-                ToggleRow(title: "Update automatically",
-                          detail: "Studio checks for a new version about once a day, downloads it in the background and installs it when you quit. Off: check yourself with Studio → Check for Updates….",
-                          isOn: $updater.automatic) {
-                    Button("Check for Updates…") { updater.checkForUpdates() }.disabled(!updater.canCheck)
-                }
-            } else {
-                Text("This build doesn't update itself (built from source). Releases from GitHub do.")
-                    .font(.system(size: 12)).foregroundStyle(.secondary).padding(.top, 8)
-            }
+            Text("Updates, release notes and earlier versions are in Settings → Updates.")
+                .font(.system(size: 12)).foregroundStyle(.secondary).padding(.top, 8)
         }
     }
     private var about: some View {

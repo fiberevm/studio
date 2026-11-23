@@ -702,6 +702,20 @@ final class StudioControl {
             let t = model.openWeb(url, beside: callerGroup, zone: try zone("split") ?? .right)
             return ["tab": t.id.uuidString]
 
+        case "updater":
+            // for testing the update window without a mouse; not offered as an MCP tool
+            let u = Updater.shared
+            switch p["action"] as? String {
+            case "check": u.checkForUpdates()
+            case "install": u.installNowPressed()
+            case "later": u.later()
+            case "install_zip":
+                if let z = (p["url"] as? String).flatMap(URL.init(string:)) { VersionInstaller.shared.install(zip: z, version: p["version"] as? String ?? "test") }
+                return "\(VersionInstaller.shared.state)"
+            default: break
+            }
+            return "\(u.phase)"
+
         case "open_files":
             model.openFiles()
             return ["tab": model.selectedTerminal?.id.uuidString ?? ""]

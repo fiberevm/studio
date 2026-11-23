@@ -43,6 +43,13 @@ jobs:
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
+      - name: Release notes
+        run: |
+          # every release has notes: docs/releases/<version>.md (shown on GitHub and in Settings → Updates)
+          f="docs/releases/${TAG#v}.md"
+          [ -s "$f" ] || { echo "::error::No release notes: write $f before tagging $TAG"; exit 1; }
+          cat "$f"
+
       - name: Select Xcode
         run: |
           # Newest stable Xcode 26 (SwiftTerm 1.99 needs Swift 6.2+)
@@ -157,6 +164,12 @@ jobs:
           shasum -a 256 Studio.dmg Studio.zip | tee Studio.sha256
           shasum -a 256 studio-worker-* | tee studio-worker.sha256
           {
+            cat "../../docs/releases/${TAG#v}.md"
+            echo
+            echo "<!-- install -->"
+            echo
+            echo "---"
+            echo
             echo "**Install:** download \`Studio.dmg\`, open it and drag Studio to Applications (or use \`Studio.zip\`). Universal (Apple silicon and Intel), macOS 14+. Needs [Claude Code](https://docs.claude.com/en/docs/claude-code) (or Codex, or Antigravity); \`brew install tmux\` recommended."
             echo
             echo "**Workers:** on a Linux or macOS machine you want to run sessions on, \`curl -fsSL https://raw.githubusercontent.com/fiberevm/studio/main/install-worker.sh | sh\`, then pair it in Settings → Workers."
@@ -175,7 +188,7 @@ jobs:
             gh release upload "$TAG" Studio.dmg Studio.zip Studio.sha256 studio-worker-* studio-worker.sha256 $FEED --clobber
             gh release edit "$TAG" --notes-file notes.md
           else
-            gh release create "$TAG" Studio.dmg Studio.zip Studio.sha256 studio-worker-* studio-worker.sha256 $FEED --title "Studio ${TAG#v}" --notes-file notes.md --generate-notes
+            gh release create "$TAG" Studio.dmg Studio.zip Studio.sha256 studio-worker-* studio-worker.sha256 $FEED --title "Studio ${TAG#v}" --notes-file notes.md
           fi
 
       - name: Clean up keychain

@@ -172,7 +172,9 @@ The worker listens on port 7420 and Studio talks to it directly, so the Mac must
 
 **Download:** grab `Studio.dmg` from the [latest release](https://github.com/fiberevm/studio/releases/latest), open it and drag Studio into Applications (releases before 0.0.5 only have `Studio.zip`: unzip it and move Studio to Applications). Release builds are signed with a Developer ID and notarized by Apple.
 
-**Updates:** a downloaded Studio keeps itself up to date. About once a day it checks the latest release, downloads a new version in the background, verifies its signature and installs it when you quit. Once it's downloaded, an **Update to x.y.z** pill appears in the title bar: click it to restart into the new version right away (sessions keep running in tmux), see what's new, or put it off. *Studio → Check for Updates…* checks right away, and Settings → About turns automatic updates off. Releases up to 0.0.6 have no updater: download the latest `Studio.dmg` once. A build from source never updates itself.
+**Updates:** a downloaded Studio keeps itself up to date. About once a day it checks the latest release, downloads a new version in the background, verifies its signature and installs it when you quit. Once it's downloaded, an **Update to x.y.z** pill appears in the title bar: click it to restart into the new version right away (sessions keep running in tmux), see what's new, or put it off. *Studio → Check for Updates…* checks right away, and Settings → About turns automatic updates off. Releases up to 0.0.6 have no updater: download the latest `Studio.dmg` once. A build from source never updates itself. **Settings → Updates** lists every release with its notes, checks for a new one (Studio → Check for Updates… opens a window with the download's progress and Install Now), and installs any earlier version to go back to (signature checked, sessions keep running; automatic updates turn off so it stays there).
+
+**Telemetry:** Studio sends anonymous usage events to PostHog: a random install id, the app and macOS versions, and when Studio opens or a session starts (which agent). Never prompts, code, output, secrets, file, project or branch names, paths, or IP-based location. It's on by default; turn it off on the welcome window's last page or in Settings → Telemetry.
 
 **Build from source** — requirements: **macOS 14+**, **Xcode 16+ / Swift 6 toolchain**, and [Claude Code](https://docs.claude.com/en/docs/claude-code) (or [Codex](https://github.com/openai/codex), or Antigravity's `agy`) installed and logged in. Recommended: [tmux](https://github.com/tmux/tmux) (`brew install tmux`) so sessions survive Studio restarts. Optional: the [`gh` CLI](https://cli.github.com) for PR detection, and the [`boat` CLI](https://boat.dev) for sandboxes.
 
@@ -288,6 +290,8 @@ Sources/Studio/          the app
   Workers.swift            paired workers: pairing, tokens, status polling, their API
   BackgroundTasks.swift    the shells and servers each agent has running (process table, listening ports) and their status-bar chips
   Secrets.swift            secrets: the store (keychain), scrubbing command output, the request panel, Settings → Secrets
+  UpdatesSettings.swift    Settings → Updates: releases and their notes, installing another version
+  Telemetry.swift          anonymous usage events (opt out in Settings → Telemetry)
   Updater.swift            in-app updates (Sparkle): background check, the title bar nudge, Check for Updates…, the Settings → About switch
 Sources/StudioMCP/       the stdio MCP server bundled next to the app
 Sources/StudioAttach/    studio-attach: a worker tab's terminal (WebSocket ⇄ pty, reconnects on its own)
@@ -323,6 +327,8 @@ It needs repository secrets: `MACOS_CERT_P12` (base64 of a *Developer ID Applica
 - Sparkle compares `CFBundleVersion`, which the workflow sets to its run number, so every release must come from this workflow (or use a higher `BUILD_NUMBER`).
 - Only the release marked *latest* is offered: drafts and pre-releases aren't.
 - Without the secret, the release is published as before and that build doesn't update itself.
+
+**Release notes are required:** write `docs/releases/<version>.md` before tagging. The workflow fails without it, and the notes appear on the GitHub release and in Settings → Updates.
 
 ## Contributing
 

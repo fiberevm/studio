@@ -394,6 +394,25 @@ private struct LayoutArt: View {
 
 // MARK: - Ready
 
+/// The welcome window's question: keep anonymous telemetry on (the default) or turn it off.
+private struct TelemetryChoice: View {
+    @AppStorage(Telemetry.pref) private var enabled = true
+    var body: some View {
+        HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Share anonymous usage data").font(.system(size: 13, weight: .medium))
+                Text("It helps us improve Studio. Never your code, prompts or project names. Change it in Settings → Telemetry.")
+                    .font(.system(size: 11.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            StudioToggle(isOn: $enabled)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: 10).fill(SwiftUI.Color(nsColor: Theme.background)))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(SwiftUI.Color.primary.opacity(0.1)))
+    }
+}
+
 /// What's installed, checked live, then Open a Project….
 private struct ReadyPage: View {
     @ObservedObject private var checker = AgentChecker.shared
@@ -418,7 +437,7 @@ private struct ReadyPage: View {
         let anyAgent = Agent.allCases.contains { LaunchEnv.has($0.command) == true }
         VStack(spacing: 0) {
             Text("ALMOST THERE").font(.system(size: 11, weight: .semibold)).tracking(1.2).foregroundStyle(brand)
-                .padding(.top, 44)
+                .padding(.top, 26)
             Text(anyAgent || list.allSatisfy({ $0.ok == nil }) ? "You're set up" : "Install an agent to start")
                 .font(.system(size: 24, weight: .semibold)).padding(.top, 10)
             Text("Studio runs the agent CLIs you already use. Here's what it found on this Mac.")
@@ -453,7 +472,8 @@ private struct ReadyPage: View {
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(SwiftUI.Color.primary.opacity(0.1)))
             .padding(.top, 24)
             Text("Change your default agent and sign in under Settings → Agents.")
-                .font(.system(size: 12)).foregroundStyle(.tertiary).padding(.top, 14)
+                .font(.system(size: 12)).foregroundStyle(.tertiary).padding(.top, 10)
+            TelemetryChoice().frame(width: 470).padding(.top, 14)
             Spacer(minLength: 0)
         }
         .onAppear {

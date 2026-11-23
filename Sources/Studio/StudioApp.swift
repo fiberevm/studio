@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         NSWindow.allowsAutomaticWindowTabbing = false
         MainActor.assumeIsolated { _ = Updater.shared }   // starts the background update check (release builds)
+        Telemetry.capture("app_opened")
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
@@ -96,7 +97,6 @@ struct AppCommands: Commands {
     var body: some Commands {
         CommandGroup(after: .appInfo) {
             Button("Check for Updates…") { updater.checkForUpdates() }
-                .disabled(!updater.canCheck)
             if let r = updater.ready { Button("Restart to Update to \(r.version)") { updater.restartToUpdate() } }
         }
         CommandGroup(replacing: .newItem) {

@@ -221,6 +221,23 @@
     #sandboxes .panel { --p-h: 260px; }
   }
 </style>
+<!-- PostHog: anonymous page views and download clicks. No cookies or local storage (memory only), no person profiles -->
+<script>
+  !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+  posthog.init('phc_q7FYZeELCWZVJo9u5m98p7dqdWnsSHru3i3ZqdSDxVzw', {
+    api_host: 'https://us.i.posthog.com',
+    persistence: 'memory',
+    person_profiles: 'identified_only',
+    autocapture: false,
+    capture_pageview: true,
+    disable_session_recording: true
+  });
+  // every download button: which one (where on the page) was clicked
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('a[href$="/Studio.dmg"]');
+    if (a) posthog.capture('download_clicked', { location: a.dataset.track || 'unknown', label: a.textContent.trim() });
+  });
+</script>
 </head>
 <body>
 <!-- type: software
@@ -264,7 +281,7 @@
     </nav>
     <div class="nav__actions">
       <a class="nav__link nav__gh" href="https://github.com/fiberevm/studio"><img class="ic ic-20 ic-ink" src="assets/icons/github.svg" alt="" width="20" height="20">GitHub</a>
-      <a class="btn btn--primary" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg">Download for macOS</a>
+      <a data-track="nav" class="btn btn--primary" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg">Download for macOS</a>
     </div>
     <a class="nav__gh nav__gh--icon" href="https://github.com/fiberevm/studio" aria-label="Studio on GitHub"><img class="ic ic-24 ic-ink" src="assets/icons/github.svg" alt="" width="24" height="24"></a>
     <button class="nav__toggle" type="button" aria-expanded="false" aria-label="Menu">
@@ -281,7 +298,7 @@
         <a class="pill" href="https://github.com/fiberevm/studio"><span>Free and open source</span><span class="muted">See the code on GitHub</span></a>
         <h1 id="hero-h">The Mac workspace for coding agents</h1>
         <p class="hero__lead">Studio runs Claude Code, Codex and Antigravity in tabs and split panes, and marks the session that is waiting for you. Free and MIT licensed, for macOS 14 or later.</p>
-        <div class="btn-row"><a class="btn btn--primary" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg">Download for macOS</a><a class="btn btn--secondary" href="#sessions">Watch the recording</a></div>
+        <div class="btn-row"><a data-track="hero" class="btn btn--primary" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg">Download for macOS</a><a class="btn btn--secondary" href="#sessions">Watch the recording</a></div>
       </div>
       <div class="hero__window">
         <div class="ly-piece mac"><div class="mac__bar" aria-hidden="true"><i></i><i></i><i></i><span>aicode — ~/code/aicode</span></div><img src="assets/shots/hero-2x.webp" width="2800" height="1744" fetchpriority="high" alt="Studio with a Claude Code session on the left, a web panel showing documentation on the right and a terminal under it"></div>
@@ -541,7 +558,7 @@
         <h2 id="close-h">Download Studio for your Mac</h2>
         <p>Signed and notarized by Apple. Needs macOS 14 or later.</p>
       </div>
-      <a class="btn btn--primary btn--xl" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg">Download for macOS</a>
+      <a data-track="closing" class="btn btn--primary btn--xl" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg">Download for macOS</a>
     </div>
     <div class="closing__links">
       <div class="grid">
@@ -563,7 +580,7 @@
 </footer>
 
 <nav class="actionbar" aria-label="Quick actions">
-  <a class="btn btn--primary" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg">Download for macOS</a>
+  <a data-track="mobile-bar" class="btn btn--primary" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg">Download for macOS</a>
 </nav>
 
 <script type="module" src="assets/system.js"></script>
