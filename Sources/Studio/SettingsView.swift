@@ -146,21 +146,42 @@ private struct SectionRow: View {
 }
 
 /// VS Code-style setting: bold title, one-line description, control underneath; hairline between settings.
+/// The width of a settings text field that sits on the right of its row.
+let settingsMenuWidth: CGFloat = 220
+
+/// A setting: title and description on the left, its control on the right edge, centred on the text (like
+/// ToggleRow's switch). `wide` puts a control that needs the room (a field, a list) under the text instead,
+/// across the whole row.
 private struct Row<Control: View>: View {
     let title: String
     var detail: String? = nil
+    var wide = false
     @ViewBuilder let control: () -> Control
     var body: some View {
+        Group {
+            if wide {
+                VStack(alignment: .leading, spacing: 10) {
+                    text
+                    control().frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else {
+                HStack(alignment: .center, spacing: 24) {
+                    text.frame(maxWidth: .infinity, alignment: .leading)
+                    control().fixedSize()
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 12)
+        .overlay(alignment: .bottom) { Hairline() }
+    }
+    private var text: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title).font(.system(size: 13, weight: .semibold))
             if let detail {
                 Text(detail).font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
-            control().padding(.top, 2)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 12)
-        .overlay(alignment: .bottom) { Hairline() }
     }
 }
 
@@ -243,10 +264,10 @@ private struct AppearanceSettings: View {
                 })) {
                     ForEach(AppTheme.all, id: \.id) { Text($0.name).tag($0.id) }
                 }
-                .labelsHidden().frame(width: 200)
+                .labelsHidden().fixedSize()
             }
             Row(title: "Text size", detail: "Terminals and the native view. ⌘+ / ⌘− / ⌘0.") {
-                Stepper("\(Int(store.fontSize)) pt", value: $store.fontSize, in: 9...24, step: 1).frame(width: 120)
+                Stepper("\(Int(store.fontSize)) pt", value: $store.fontSize, in: 9...24, step: 1)
             }
             Group_(title: "Layout")
             ToggleRow(title: "Show session sidebar",
@@ -307,7 +328,7 @@ private struct AgentSettings: View {
                         Text(a.name + (missing ? " (CLI not found)" : "")).tag(a.rawValue)
                     }
                 }
-                .labelsHidden().frame(width: 240)
+                .labelsHidden().fixedSize()
             }
             HStack {
                 Group_(title: "Agent CLIs")
@@ -446,7 +467,7 @@ private struct WorkerSettings: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Row(title: "Add a worker",
-                detail: "On the machine, run `studio-worker serve` (or `studio-worker install-service` to keep it running) and paste the studio://worker link it prints. The machine must be reachable from this Mac: on the same Tailscale tailnet, Cloudflare Zero Trust private network, or LAN.") {
+                detail: "On the machine, run `studio-worker serve` (or `studio-worker install-service` to keep it running) and paste the studio://worker link it prints. The machine must be reachable from this Mac: on the same Tailscale tailnet, Cloudflare Zero Trust private network, or LAN.", wide: true) {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         TextField("studio://worker?url=…&token=…", text: $link)
@@ -558,7 +579,7 @@ private struct SessionSettings: View {
                     Text("Auto-accept edits").tag("acceptEdits")
                     Text("Full access").tag("bypassPermissions")
                 }
-                .labelsHidden().frame(width: 200)
+                .labelsHidden().fixedSize()
             }
         }
     }
@@ -572,14 +593,14 @@ struct StartBranchSettings: View {
 
     var body: some View {
         Row(title: "Start branch",
-            detail: "The branch each project's new worktrees start from. Default is the repo's default branch (origin's HEAD, else main or master); Current branch follows whatever the project folder has checked out.") {
+            detail: "The branch each project's new worktrees start from. Default is the repo's default branch (origin's HEAD, else main or master); Current branch follows whatever the project folder has checked out.", wide: true) {
             if let repos {
                 if repos.isEmpty {
                     Text("No git projects yet. Open one and it shows up here.").font(.system(size: 12)).foregroundStyle(.secondary)
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(repos) { r in
-                        HStack {
+                        HStack(spacing: 24) {
                             VStack(alignment: .leading, spacing: 1) {
                                 Text((r.path as NSString).lastPathComponent).font(.system(size: 12, weight: .medium))
                                 Text((r.path as NSString).abbreviatingWithTildeInPath).font(.system(size: 11)).foregroundStyle(.secondary)
@@ -596,8 +617,9 @@ struct StartBranchSettings: View {
                                 let saved = choice[r.path] ?? ""
                                 if !saved.isEmpty, saved != Worktrees.currentBranch, !r.branches.contains(saved) { Text(saved).tag(saved) }
                             }
-                            .labelsHidden().frame(width: 200)
+                            .labelsHidden().fixedSize()
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             } else {
@@ -645,7 +667,7 @@ private struct SandboxSettings: View {
                     Text("Boat").tag("boat")
                     Text("AWS Lambda MicroVMs").tag("aws")
                 }
-                .labelsHidden().pickerStyle(.segmented).frame(width: 280)
+                .labelsHidden().pickerStyle(.segmented).frame(width: 300)
             }
 
             Group_(title: "When Claude uses sandboxes")
@@ -656,7 +678,7 @@ private struct SandboxSettings: View {
                     Text("When helpful").tag("auto")
                     Text("Only when I ask").tag("ask")
                 }
-                .labelsHidden().pickerStyle(.segmented).frame(width: 230)
+                .labelsHidden().pickerStyle(.segmented).frame(width: 240)
             }
 
             Group_(title: "New sandboxes")
@@ -664,13 +686,13 @@ private struct SandboxSettings: View {
                 Picker("", selection: $type) {
                     ForEach(["small", "default", "large", "xlarge"], id: \.self) { Text($0).tag($0) }
                 }
-                .labelsHidden().frame(width: 140)
+                .labelsHidden().fixedSize()
             }
             Row(title: "Auto-stop after", detail: "Stops (and snapshots) an idle sandbox so it doesn't keep billing. 0 uses Boat's default.") {
-                Stepper(ttl == 0 ? "Boat default" : "\(ttl) min", value: $ttl, in: 0...1440, step: 15).frame(width: 150)
+                Stepper(ttl == 0 ? "Boat default" : "\(ttl) min", value: $ttl, in: 0...1440, step: 15)
             }
             Row(title: "Environment", detail: "A named Boat environment (repos, env vars, secrets). Empty uses your default.") {
-                TextField("base", text: $environment).textFieldStyle(.roundedBorder).frame(width: 160)
+                TextField("base", text: $environment).textFieldStyle(.roundedBorder).frame(width: settingsMenuWidth)
             }
         }
         .task { await load() }
