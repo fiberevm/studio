@@ -252,6 +252,7 @@ struct CommandPalette: View {
             cmd("Session: New Antigravity Session", "", "chevron.left.forwardslash.chevron.right") { m.select(m.store.newSession(in: m.folder, agent: .agy)) },
             cmd("Terminal: New Terminal", "⌃`", "terminal") { m.newShellTab() },
             cmd("Web: Open URL…", "", "globe") { m.openWeb(nil, zone: .center) },
+            cmd("Files: Open File Tree", "⇧⌘E", "folder") { m.openFiles() },
             cmd("Session: Next Up (waiting for you)", "⌘J", "arrow.turn.down.right") { m.goToNextUp() },
             cmd("Session: Switch to Open Session…", "⌘K", "rectangle.stack") { m.paletteSwitcher = true; m.palette = "" },
             cmd("Session: Quick Prompt…", "⇧⌘K", "text.bubble") { m.quickPrompt = true },

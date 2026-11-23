@@ -125,6 +125,9 @@ struct AppCommands: Commands {
                 Button("Web Browser") { project?.openWeb(nil, zone: .center) }
                     .keyboardShortcut(NewTabKind.browser.shortcut)
                     .disabled(project == nil)
+                Button("Files") { project?.openFiles() }
+                    .keyboardShortcut(NewTabKind.files.shortcut)
+                    .disabled(project == nil)
             }
             Button("Open Project…") {
                 if let f = pickFolder(prompt: "Open", startingAt: project.map { ($0.folder as NSString).deletingLastPathComponent }) {

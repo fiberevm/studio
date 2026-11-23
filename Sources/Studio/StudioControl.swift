@@ -595,6 +595,10 @@ final class StudioControl {
             let t = model.openWeb(url, beside: callerGroup, zone: try zone("split") ?? .right)
             return ["tab": t.id.uuidString]
 
+        case "open_files":
+            model.openFiles()
+            return ["tab": model.selectedTerminal?.id.uuidString ?? ""]
+
         case "open_file":
             guard let raw = p["path"] as? String, !raw.isEmpty else { throw ControlError(message: "path is required") }
             let path = raw.hasPrefix("/") ? raw : (raw.hasPrefix("~") ? (raw as NSString).expandingTildeInPath : model.folder + "/" + raw)

@@ -81,6 +81,8 @@ struct FileExplorer: View {
     @ObservedObject var tree: FileTree
     /// The file shown in this tab.
     let active: String?
+    /// A file was clicked.
+    let onOpen: (String) -> Void
     @AppStorage(FileExplorer.widthKey) private var width = 220.0
     @State private var dragStart: Double?
     private let tick = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
@@ -104,7 +106,7 @@ struct FileExplorer: View {
                         LazyVStack(spacing: 0) {
                             ForEach(tree.rows) { r in
                                 FileTreeRow(row: r, selected: r.path == active)
-                                    .onTapGesture { if r.isDir { tree.toggle(r.path) } else { model.openFile(r.path) } }
+                                    .onTapGesture { if r.isDir { tree.toggle(r.path) } else { onOpen(r.path) } }
                                     .contextMenu { menu(r) }
                                     .id(r.id)
                             }
@@ -142,7 +144,7 @@ struct FileExplorer: View {
     }
 
     @ViewBuilder private func menu(_ r: FileTree.Row) -> some View {
-        if !r.isDir { Button("Open") { model.openFile(r.path) } }
+        if !r.isDir { Button("Open") { onOpen(r.path) } }
         Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: r.path)]) }
         Divider()
         Button("Copy Path") { copy(r.path) }

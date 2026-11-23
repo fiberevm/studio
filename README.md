@@ -69,7 +69,7 @@ Everything here is about one thing: spending your attention only where a session
 | 💾 | **Restarts don't interrupt anything** | Each tab lives in a hidden tmux session, so quitting Studio leaves Claude, its commands and your dev servers running; relaunching reattaches every tab, with the same layout and the same processes. |
 | 🌿 | **Context at a glance** | Each session's status bar shows its git branch, model and tokens in/out, and Studio finds the PR it opened, with CI and review state. |
 | 📡 | **Running shells and servers** | Dev servers, watchers and long commands an agent started in the background show up in its status bar, each with what it runs and the port it listens on. Click one to open `localhost:<port>` in a split or the browser, copy its command, or stop it. |
-| 🗂 | **File tree** | A file tab shows the project's files on its left, like VS Code's Explorer: folders expand in place, the open file is highlighted, and new files appear on their own. Click a file to open it; drag the edge to resize; the sidebar button in the status bar hides it. |
+| 🗂 | **File tree** | A file tab shows the project's files on its left, like VS Code's Explorer: folders expand in place, the open file is highlighted, and new files appear on their own. Click a file to open it; drag the edge to resize; the sidebar button in the status bar hides it. **Files** in the + menu (<kbd>⇧⌘E</kbd>, also in <kbd>⌘P</kbd> and <kbd>⇧⌘K</kbd>) opens a tab with just the tree; the file you pick opens in that tab. |
 | 🌐 | **Web panels** | Open a page in a tab or split, right next to your sessions: a dev server, a sandbox URL, a PR, docs. Back, forward, reload, an editable address bar, and Open in browser; web tabs come back after a restart. Agents open them with `open_url` and drive them like a person: read the page and its numbered elements, click, type and submit, wait, go back, screenshot, or run JavaScript (`web_*` tools). A sandbox's **Open Desktop** shows its desktop in a panel. From ⌘P → *Web: Open URL…*. |
 | 🖼 | **Drop to paste** | Drag files or screenshots onto a session to paste their paths into the prompt. |
 | ⛵ | **Sandboxes** ([more ↓](#sandboxes)) | Every session can run work in a remote Linux sandbox through `sandbox_*` MCP tools: create one (the project is pushed in), run commands and servers, get an HTTPS URL for a port, open a shell in a split. Claude uses sandboxes when they help (configurable), and deletes one only when you ask. The sandboxes a session uses show as chips in its status bar, with live state and Open Terminal / Desktop / Stop / Resume / Delete. |
@@ -194,6 +194,7 @@ open build/Studio.app --args --resume <session-id>        # resume a specific se
 | <kbd>⌃⌘1</kbd> / <kbd>⌃⌘2</kbd> / <kbd>⌃⌘3</kbd> | New Claude Code / Codex / Antigravity session, whatever the default |
 | <kbd>⌃`</kbd> | New terminal tab |
 | <kbd>⇧⌘B</kbd> | New web browser tab |
+| <kbd>⇧⌘E</kbd> | New Files tab (the project's file tree) |
 | <kbd>⇧⌘N</kbd> | Open another project window |
 | <kbd>⇧⌘[</kbd> / <kbd>⇧⌘]</kbd> | Previous / next tab, like a browser |
 | <kbd>⌘1</kbd>…<kbd>⌘9</kbd> | Jump to tab (picking a session anywhere puts the cursor in its input) |

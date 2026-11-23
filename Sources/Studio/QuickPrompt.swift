@@ -169,6 +169,7 @@ struct QuickPrompt: View {
             case .agent(let a): return "First message for a new \(a.name) session (optional)…"
             case .terminal: return "Command to run in a new terminal (optional)…"
             case .browser: return "Address for a new web browser tab (optional)…"
+            case .files: return "Open the project's file tree in a new tab…"
             }
         }
         guard let t = targets[safe: index - kinds.count] else { return "Message…" }
@@ -237,6 +238,8 @@ struct QuickPrompt: View {
         case .browser:
             let address = m.isEmpty || m.contains(" ") ? nil : URL(string: m.contains("://") ? m : (m.hasPrefix("localhost") ? "http://" : "https://") + m)
             model.openWeb(address, zone: .center)
+        case .files:
+            model.openFiles()
         }
     }
 

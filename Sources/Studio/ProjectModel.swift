@@ -232,11 +232,42 @@ final class ProjectModel: ObservableObject {
             if let g = group(containing: t.id) { select(t, in: g) } else { select(t) }
             return
         }
+        // an empty Files tab in front takes the file instead of sitting there empty
+        if let t = selectedTerminal, t.isFile, t.filePath == nil { fill(t, with: path); return }
         recentFiles.removeAll { $0 == path }
         recentFiles.insert(path, at: 0)
         if recentFiles.count > 20 { recentFiles.removeLast() }
         select(store.newFile(path, cwd: folder))
     }
+    /// The Files tab (+ → Files, ⇧⌘E): the project's file tree with nothing open yet. Reuses this window's
+    /// empty Files tab if there is one.
+    func openFiles() {
+        if let t = groups.flatMap(tabs(in:)).first(where: { $0.isFile && $0.filePath == nil }) {
+            if let g = group(containing: t.id) { select(t, in: g) } else { select(t) }
+            return
+        }
+        select(store.newFiles(cwd: folder))
+    }
+
+    /// A file picked in `tab`'s tree. An empty Files tab becomes that file's tab; otherwise it opens like ⌘K
+    /// (its existing tab, else a new one).
+    func openFile(_ path: String, from tab: TerminalSession) {
+        let open = groups.flatMap(tabs(in:)).contains { $0.isFile && $0.filePath == path }
+        if tab.isFile, tab.filePath == nil, !open { fill(tab, with: path) } else { openFile(path) }
+    }
+
+    /// Turn an empty Files tab into `path`'s tab.
+    private func fill(_ tab: TerminalSession, with path: String) {
+        tab.filePath = path
+        tab.fileDoc = FileDoc(path: path)
+        tab.objectWillChange.send()
+        objectWillChange.send()     // the tab strip shows the file's name
+        recentFiles.removeAll { $0 == path }
+        recentFiles.insert(path, at: 0)
+        if recentFiles.count > 20 { recentFiles.removeLast() }
+        saveLayout()
+    }
+
     /// The tree of this project's files that file tabs show on their left (built the first time a file is opened).
     lazy var fileTree = FileTree(root: folder)
 
@@ -591,7 +622,7 @@ final class ProjectModel: ObservableObject {
                 func token(_ t: TerminalSession?) -> String? {
                     guard let t else { return nil }
                     if t.isWeb { return "web:" + (t.url?.absoluteString ?? "about:blank") }
-                    if t.isFile, let p = t.filePath { return "file:" + p }
+                    if t.isFile { return t.filePath.map { "file:" + $0 } ?? "files:" }
                     if t.isWorker, let r = t.remote { return "worker:\(r.worker)|\(r.session)|\(t.cwd)" }
                     if t.isAgent, !t.isClaude, let sid = t.sessionId { return sid }   // restored like a Claude tab, by session id
                     if t.isAgy { return "agy:" + t.cwd }   // not prompted yet: a fresh agy there
@@ -643,6 +674,8 @@ final class ProjectModel: ObservableObject {
                     let t: TerminalSession?
                     if sid.hasPrefix("web:") {
                         t = store.newWeb(URL(string: String(sid.dropFirst(4))), cwd: folder)
+                    } else if sid == "files:" {
+                        t = store.newFiles(cwd: folder)
                     } else if sid.hasPrefix("file:") {
                         let p = String(sid.dropFirst(5))
                         t = FileManager.default.fileExists(atPath: p) ? store.newFile(p, cwd: folder) : nil

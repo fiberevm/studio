@@ -629,6 +629,13 @@ final class SessionStore: ObservableObject {
         return t
     }
 
+    /// A Files tab: the project's file tree with no file picked yet. Picking one turns it into that file's tab.
+    func newFiles(cwd: String) -> TerminalSession {
+        let t = TerminalSession(cwd: cwd, claudeArgs: [], sessionId: nil, fontSize: fontSize, kind: .file)
+        add(t)
+        return t
+    }
+
     /// Reattach to a terminal tab still running in its host session (or start a fresh shell there).
     func reattachShell(tab: UUID, host: String, cwd: String) -> TerminalSession {
         if let t = terminals.first(where: { $0.id == tab }) { return t }

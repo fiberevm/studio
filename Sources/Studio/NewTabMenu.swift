@@ -4,13 +4,14 @@ import SwiftUI
 /// What + can open, with its shortcut. The same list backs the + dropdowns and the File menu,
 /// so the shortcuts shown in the dropdown are the ones that work everywhere.
 enum NewTabKind: Hashable {
-    case agent(Agent), terminal, browser
+    case agent(Agent), terminal, browser, files
 
     var title: String {
         switch self {
         case .agent(let a): return "\(a.name) Session"
         case .terminal: return "Terminal"
         case .browser: return "Web Browser"
+        case .files: return "Files"
         }
     }
     var icon: String {
@@ -20,6 +21,7 @@ enum NewTabKind: Hashable {
         case .agent(.agy): return "atom"
         case .terminal: return "terminal"
         case .browser: return "globe"
+        case .files: return "folder"
         }
     }
     /// ⌘N opens the default agent; each agent also has ⌃⌘1/2/3.
@@ -28,6 +30,7 @@ enum NewTabKind: Hashable {
         case .agent(let a): return (String((Agent.allCases.firstIndex(of: a) ?? 0) + 1), [.control, .command])
         case .terminal: return ("`", [.control])
         case .browser: return ("b", [.command, .shift])
+        case .files: return ("e", [.command, .shift])    // VS Code's Explorer shortcut
         }
     }
     /// "⌃⌘1", "⌃`", "⇧⌘B"
@@ -46,11 +49,11 @@ enum NewTabKind: Hashable {
         return KeyboardShortcut(KeyEquivalent(Character(k)), modifiers: mods)
     }
 
-    /// Installed agents (default first), then Terminal and Web Browser.
+    /// Installed agents (default first), then Terminal, Web Browser and Files.
     @MainActor static var available: [NewTabKind] {
         let check = AgentChecker.shared
         let agents = [Agent.preferred] + Agent.allCases.filter { $0 != Agent.preferred }
-        return agents.filter(check.isInstalled).map(NewTabKind.agent) + [.terminal, .browser]
+        return agents.filter(check.isInstalled).map(NewTabKind.agent) + [.terminal, .browser, .files]
     }
 
     @MainActor func open(in model: ProjectModel) {
@@ -58,6 +61,7 @@ enum NewTabKind: Hashable {
         case .agent(let a): model.newTab(a)
         case .terminal: model.newShellTab()
         case .browser: model.openWeb(nil, zone: .center)
+        case .files: model.openFiles()
         }
     }
 }

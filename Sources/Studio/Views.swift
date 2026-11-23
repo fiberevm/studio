@@ -883,7 +883,7 @@ struct TabButton: View {
     private var tabStatus: SessionStatus { item?.status ?? (terminal.running ? .starting : .exited) }
 
     private var tabTitle: String {
-        let t = terminal.isFile ? ((terminal.filePath ?? "File") as NSString).lastPathComponent
+        let t = terminal.isFile ? ((terminal.filePath ?? "Files") as NSString).lastPathComponent
             : terminal.isWeb ? (terminal.webTitle.isEmpty ? (terminal.url?.host ?? "New tab") : terminal.webTitle)
             : terminal.isShell ? shellTitle : (terminal.isAgent && !terminal.isClaude) ? agentTitle : (item?.title ?? "New session")
         return t.count > 28 ? String(t.prefix(27)) + "…" : t
@@ -1075,6 +1075,7 @@ struct SessionStatusBar: View {
                 stat("doc.text", relativePath(p, to: model.folder), help: p)
                 if let d = terminal.fileDoc, d.content == .text { FileCaretStats(doc: d, caret: d.caret) }
             }
+            else if terminal.isFile { stat("folder", abbreviatePath(model.folder), help: "Files in this project") }
             else if terminal.isWeb { stat("globe", terminal.url?.host ?? "", help: terminal.url?.absoluteString ?? "") }
             else if terminal.isShell { stat("folder", abbreviatePath(terminal.cwd), help: "Started in") }
             if let b = st?.gitBranch { stat("arrow.triangle.branch", b, help: "Git branch") }
@@ -1272,11 +1273,23 @@ struct TerminalPane: View {
 
     var body: some View {
         VStack(spacing: 0) {
-        if terminal.isFile, let doc = terminal.fileDoc {
+        if terminal.isFile {
             HStack(spacing: 0) {
-                // the project's file tree, to the left of the file (like VS Code's Explorer)
-                if explorerShown { FileExplorer(tree: model.fileTree, active: terminal.filePath) }
-                FilePane(doc: doc, fontSize: model.store.fontSize) { [weak terminal] tv in terminal?.fileTextView = tv }
+                // the project's file tree, to the left of the file (like VS Code's Explorer); a Files tab with
+                // nothing open yet always shows it
+                if explorerShown || terminal.filePath == nil {
+                    FileExplorer(tree: model.fileTree, active: terminal.filePath) { [weak terminal] p in
+                        if let terminal { model.openFile(p, from: terminal) }
+                    }
+                }
+                if let doc = terminal.fileDoc {
+                    FilePane(doc: doc, fontSize: model.store.fontSize) { [weak terminal] tv in terminal?.fileTextView = tv }
+                        .id(doc.path)
+                } else {
+                    Text("Pick a file to open it here").font(.system(size: 13)).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(SwiftUI.Color(nsColor: Theme.background))
+                }
             }
         } else if terminal.isWeb {
             WebPane(tab: terminal)
@@ -1721,7 +1734,8 @@ struct PointingHandCursor: ViewModifier {
 struct FileTabIcon: View {
     @ObservedObject var terminal: TerminalSession
     var body: some View {
-        if let d = terminal.fileDoc { Inner(doc: d) } else { Image(systemName: "doc.text").font(.system(size: 10)) }
+        if let d = terminal.fileDoc { Inner(doc: d) }
+        else { Image(systemName: terminal.filePath == nil ? "folder" : "doc.text").font(.system(size: 10)).foregroundStyle(.secondary).frame(width: 12) }
     }
     private struct Inner: View {
         @ObservedObject var doc: FileDoc
