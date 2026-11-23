@@ -741,7 +741,9 @@ final class ProjectModel: ObservableObject {
                     return t
                 }
                 ts.forEach { used.insert($0.id) }
-                // an empty pane was kept on purpose (closing its last tab leaves it), so it comes back empty
+                // an empty pane comes back empty only when empty panes are kept (Settings → Sessions); otherwise
+                // it is dropped, and the panes beside it take the room
+                if ts.isEmpty, Pref.bool(Pref.autoCloseEmptyPanes, default: true) { return nil }
                 let g = GroupNode(tabIds: ts.map(\.id), selection: (selected ?? ts.first).map { "t:\($0.id)" })
                 if isActive { active = g.id }
                 return .group(g)
@@ -756,7 +758,9 @@ final class ProjectModel: ObservableObject {
             }
         }
 
-        guard let node = build(saved) else { return false }
+        // every pane empty (all its sessions gone): start from one pane, which the leftovers below fill
+        guard let node = build(saved) ?? (Pref.bool(Pref.autoCloseEmptyPanes, default: true) ? .group(GroupNode(tabIds: [], selection: nil)) : nil)
+        else { return false }
         root = node
         // this project's sessions that were restored but missing from the saved layout go into the first group
         // (only this project's: a window on ~ must not take every project's sessions, nor another window's tabs)
@@ -764,7 +768,10 @@ final class ProjectModel: ObservableObject {
             !used.contains($0.id) && $0.sessionId != nil && $0.isAgent && projectRoot($0.cwd) == folder
                 && !StudioControl.shared.isOpen($0.id, elsewhereThan: self)
         }
-        if let g = root.groups.first { g.tabIds += leftovers.map(\.id) }
+        if let g = root.groups.first {
+            g.tabIds += leftovers.map(\.id)
+            if g.selection == nil, let first = g.tabIds.first { g.selection = "t:\(first)" }
+        }
         activeGroupId = active ?? root.groups.first?.id ?? activeGroupId
         return true
     }
