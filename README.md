@@ -300,7 +300,7 @@ install-worker.sh        installs studio-worker from the latest release
 Resources/               app icon (SVG source + generated .icns), the Markdown preview's renderer (Preview/marked.min.js, MIT)
 scripts/make-icon.sh     regenerates AppIcon.icns from AppIcon.svg
 scripts/make-appcast.sh  writes a release's update feed (appcast.xml), signed with the update key
-website/                 the one-page download site (static HTML on the taste-skill kit in assets/; captures in assets/shots, the recording in assets/demo.mp4)
+website/                 the download site: a guided tour of Studio drawn in HTML (one self-contained index.html, the app's real theme colours and sizes; #step-N links to a step)
 wrangler.jsonc           serves website/ at getstudio.dev (a Cloudflare static-assets Worker): npx wrangler deploy
 ```
 

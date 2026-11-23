@@ -1,603 +1,783 @@
 <!doctype html>
-<html lang="en" data-type="software" data-radius="soft" data-buttons="solid" data-motion>
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Studio: a Mac workspace for coding agents</title>
-<meta name="description" content="Studio is a free, open-source macOS app that runs Claude Code, Codex and Antigravity sessions in tabs and split panes and shows which one is waiting for you.">
+<meta name="description" content="A hands-on tour of Studio, the free macOS app that runs Claude Code, Codex and Antigravity sessions in tabs and split panes and shows which one is waiting for you.">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Studio: a Mac workspace for coding agents">
-<meta property="og:description" content="Run Claude Code, Codex and Antigravity in tabs and split panes, with terminals, web panels and remote sandboxes beside them.">
+<meta property="og:description" content="Take the tour: tabs of live agent sessions, ⌘J to whoever needs you, splits, terminals, web panels, the palette and nine themes.">
 <meta property="og:image" content="share.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#10131a" media="(prefers-color-scheme: dark)">
 <meta name="color-scheme" content="light dark">
-<!-- <link rel="canonical" href="https://[the site's domain]/"> -->
-<meta name="site-kind" content="software">
-<meta name="page-type" content="software">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/system.css">
-<link rel="stylesheet" href="assets/ui/cards.css">
-<link rel="stylesheet" href="assets/motion/motion.css">
-<link rel="stylesheet" href="assets/backgrounds/backgrounds.css">
-<link rel="stylesheet" href="assets/layout/layout.css">
-<link rel="stylesheet" href="assets/icons/icon.css">
+<meta name="theme-color" content="#f1f2f5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0c0e13" media="(prefers-color-scheme: dark)">
 <style>
+/* ------------------------------------------------------------------ the page around the window */
 :root {
-  --p-bg: #ffffff; --p-surface: #f2f3f5; --p-ink: #141824; --p-muted: #596072;
-  --p-accent: #c24e1c; --p-accent-ink: #ffffff; --p-action: #ee8a5c; --p-action-ink: #141824;
-  --p-inv-bg: #10131a; --p-inv-surface: #1b202c; --p-inv-ink: #eef0f4; --p-inv-muted: #a1a8b8;
-  --p-inv-accent: #f6a877; --p-inv-accent-ink: #141824; --p-inv-action: #ee8a5c; --p-inv-action-ink: #141824;
-  --font-display: "Geist", system-ui, sans-serif;
-  --font-text: "Geist", system-ui, sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  --display-weight: 500;
-  --display-tracking: -0.035em;
-  --display-tracking-xl: -0.045em;
+  --page: #f1f2f5; --page-2: #e6e8ed; --ink: #15171c; --ink-2: #5b606b; --line: rgb(0 0 0 / .1);
+  --card: #ffffff; --card-line: rgb(0 0 0 / .08); --orange: #e8875a; --orange-ink: #1a1208; --ring: #4a9eff;
+  --ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
 }
-/* dark mode follows the system setting: the app's own navy as the page, a step darker for the band and the footer */
 @media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --p-bg: #10131a; --p-surface: #1b202c; --p-ink: #eef0f4; --p-muted: #a1a8b8;
-    --p-accent: #f6a877; --p-accent-ink: #141824; --p-action: #ee8a5c; --p-action-ink: #141824;
-    --p-inv-bg: #0a0c11; --p-inv-surface: #151925; --p-inv-ink: #eef0f4; --p-inv-muted: #a1a8b8;
-    --p-inv-accent: #f6a877; --p-inv-accent-ink: #141824; --p-inv-action: #ee8a5c; --p-inv-action-ink: #141824;
-  }
+  :root { --page: #0c0e13; --page-2: #141821; --ink: #eef0f4; --ink-2: #9aa1ae; --line: rgb(255 255 255 / .09);
+          --card: #1b1f29; --card-line: rgb(255 255 255 / .1); }
 }
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--page); color: var(--ink); font: 15px/1.5 var(--ui); -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+kbd { font: 500 .86em/1 var(--ui); padding: .2em .45em; border-radius: 5px; border: 1px solid var(--line); background: var(--page-2); white-space: nowrap; }
+
+.top { position: fixed; inset: 0 0 auto; z-index: 50; height: 56px; display: flex; align-items: center; gap: 20px; padding: 0 20px;
+       background: color-mix(in srgb, var(--page) 88%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 16px; text-decoration: none; }
+.brand img { width: 26px; height: 26px; }
+.top__steps { display: flex; gap: 5px; margin: 0 auto; }
+.top__steps button { width: 22px; height: 22px; padding: 0; border: 0; background: none; cursor: pointer; display: grid; place-items: center; }
+.top__steps button::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--line); transition: background .2s, transform .2s; }
+.top__steps button.done::before { background: var(--ink-2); }
+.top__steps button.on::before { background: var(--orange); transform: scale(1.35); }
+.top__gh { display: flex; align-items: center; gap: 7px; text-decoration: none; font-size: 14px; color: var(--ink-2); }
+.top__gh:hover { color: var(--ink); }
+.top__gh svg { width: 18px; height: 18px; }
+.dl { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 16px; border-radius: 8px; background: var(--orange); color: var(--orange-ink);
+      font-weight: 600; font-size: 14px; text-decoration: none; white-space: nowrap; transition: filter .15s, transform .15s; }
+.dl:hover { filter: brightness(1.06); }
+.dl:active { transform: translateY(1px); }
+.dl svg { width: 15px; height: 15px; }
+.dl--big { height: 48px; padding: 0 22px; font-size: 16px; border-radius: 10px; }
+
+.stage { position: relative; min-height: 100svh; padding: 80px 24px 28px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; overflow: hidden;
+         background: radial-gradient(1200px 600px at 50% 10%, color-mix(in srgb, var(--orange) 9%, transparent), transparent 70%), var(--page); }
+.stage__lede { text-align: center; max-width: 720px; }
+.stage__lede h1 { margin: 0; font-size: 30px; line-height: 1.15; letter-spacing: -.02em; font-weight: 650; }
+.stage__lede p { margin: 6px 0 0; color: var(--ink-2); }
+.frame { position: relative; flex: none; }
+
+/* the coach card and the ring around what it points at */
+.ring { position: fixed; z-index: 40; pointer-events: none; border-radius: 7px; box-shadow: 0 0 0 2px var(--ring), 0 0 0 6px color-mix(in srgb, var(--ring) 28%, transparent);
+        transition: left .35s cubic-bezier(.2,.8,.2,1), top .35s cubic-bezier(.2,.8,.2,1), width .35s cubic-bezier(.2,.8,.2,1), height .35s cubic-bezier(.2,.8,.2,1), opacity .2s; animation: ring 2s ease-in-out infinite; }
+@keyframes ring { 50% { box-shadow: 0 0 0 2px var(--ring), 0 0 0 10px color-mix(in srgb, var(--ring) 10%, transparent); } }
+.coach { position: fixed; z-index: 45; width: 340px; padding: 18px 18px 14px; border-radius: 12px; background: var(--card); color: var(--ink); border: 1px solid var(--card-line);
+         box-shadow: 0 18px 50px -12px rgb(0 0 0 / .45); }
+.coach.live { transition: left .35s cubic-bezier(.2,.8,.2,1), top .35s cubic-bezier(.2,.8,.2,1); }
+.ring:not(.live) { transition: none; }
+.coach__n { font: 500 12px/1 var(--mono); color: var(--ink-2); }
+.coach h2 { margin: 8px 0 6px; font-size: 18px; line-height: 1.25; letter-spacing: -.01em; font-weight: 650; }
+.coach p { margin: 0 0 8px; font-size: 14px; line-height: 1.5; color: color-mix(in srgb, var(--ink) 86%, transparent); }
+.coach ul { margin: 0 0 8px; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 14px; line-height: 1.4; }
+.coach li { display: grid; grid-template-columns: 18px 1fr; gap: 8px; align-items: start; }
+.coach li svg { width: 14px; height: 14px; margin-top: 3px; }
+.coach__do { display: inline-flex; align-items: center; gap: 8px; margin: 4px 0 10px; height: 34px; padding: 0 12px; border-radius: 8px; border: 1px dashed var(--ring);
+             background: color-mix(in srgb, var(--ring) 10%, transparent); color: var(--ink); font: 500 13.5px var(--ui); cursor: pointer; }
+.coach__do kbd { background: var(--card); }
+.coach__do[hidden] { display: none; }
+.coach__nav { display: flex; align-items: center; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+.coach__nav button { height: 32px; padding: 0 12px; border-radius: 7px; border: 1px solid var(--line); background: none; color: var(--ink); font: 500 13.5px var(--ui); cursor: pointer; }
+.coach__nav button:hover { background: var(--page-2); }
+.coach__nav .next { margin-left: auto; background: var(--ink); color: var(--page); border-color: transparent; }
+.coach__nav .next:hover { background: var(--ink); filter: brightness(1.2); }
+.coach__hint { font-size: 12px; color: var(--ink-2); }
+.coach__arrow { position: absolute; width: 12px; height: 12px; background: var(--card); border: 1px solid var(--card-line); transform: rotate(45deg); }
+.coach__end { display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0 12px; }
+.coach__end .dl { height: 40px; }
+
+/* below the tour */
+.more { max-width: 1040px; margin: 0 auto; padding: 72px 24px 40px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; border-top: 1px solid var(--line); }
+.more > div { min-width: 0; }
+.more h3 { margin: 0 0 8px; font-size: 16px; }
+.more p { margin: 0 0 10px; color: var(--ink-2); font-size: 14.5px; }
+.more pre { margin: 0; padding: 12px 14px; border-radius: 8px; background: var(--page-2); border: 1px solid var(--line); font: 12.5px/1.6 var(--mono); overflow-x: auto; }
+.foot { max-width: 1040px; margin: 0 auto; padding: 24px 24px 48px; display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; color: var(--ink-2); font-size: 13px; }
+
+@media (max-width: 899px) {
+  .top { gap: 12px; padding: 0 14px; }
+  .top__steps { display: none; }
+  .top__gh span { display: none; }
+  .brand { margin-right: auto; }
+  .stage { justify-content: flex-start; padding: 72px 14px 24px; min-height: 0; }
+  .stage__lede h1 { font-size: 24px; }
+  .coach { position: relative; inset: auto !important; width: 100%; max-width: 560px; }
+  .coach__arrow { display: none; }
+  .more { grid-template-columns: 1fr; padding-top: 48px; }
+}
+.dl .short { display: none; }
+@media (max-width: 420px) { .dl .full { display: none; } .dl .short { display: inline; } .dl:not(.dl--big) { padding: 0 12px; } }
+
+/* ------------------------------------------------------------------ the Studio window, at its real point sizes */
+.win { --sec: rgb(255 255 255 / .55); --ter: rgb(255 255 255 / .26); --pri: rgb(255 255 255 / .86); --hover: rgb(255 255 255 / .04);
+       position: absolute; left: 0; top: 0; transform-origin: 0 0; display: flex; flex-direction: column; overflow: hidden;
+       border-radius: 12px; background: var(--chrome); color: var(--pri); font: 13px/1.2 var(--ui); cursor: default; user-select: none; -webkit-user-select: none;
+       box-shadow: 0 0 0 .5px rgb(0 0 0 / .7), inset 0 0 0 1px rgb(255 255 255 / .09), 0 32px 80px -20px rgb(0 0 0 / .6); }
+.win.light { --sec: rgb(0 0 0 / .5); --ter: rgb(0 0 0 / .25); --pri: rgb(0 0 0 / .85); --hover: rgb(0 0 0 / .04);
+             box-shadow: 0 0 0 .5px rgb(0 0 0 / .3), 0 32px 80px -20px rgb(0 0 0 / .35); }
+.win svg { display: block; flex: none; }
+.titlebar { position: relative; height: 28px; flex: none; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 0 90px; }
+.titlebar b { font-size: 13px; font-weight: 600; }
+.titlebar .dash { color: var(--ter); }
+.titlebar span { font-size: 12px; color: var(--sec); }
+.lights { position: absolute; left: 10px; top: 9px; display: flex; gap: 11px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .18); }
+.lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; }
+.hair { height: 1px; background: var(--border); flex: none; }
+.vhair { width: 1px; background: var(--border); flex: none; align-self: stretch; }
+.wbody { flex: 1; min-height: 0; display: flex; }
+
+.sidebar { width: 236px; flex: none; display: flex; flex-direction: column; background: var(--chrome); }
+.sb__head { height: 30px; display: flex; align-items: center; padding: 0 8px 0 16px; font-size: 11px; font-weight: 600; color: var(--sec); }
+.sb__head .plus { margin-left: auto; width: 20px; height: 20px; display: grid; place-items: center; }
+.sb__sec { height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 16px; font-size: 10px; font-weight: 600; color: var(--sec); }
+.count { font-size: 10px; font-weight: 600; padding: 0 5px; background: color-mix(in srgb, var(--pri) 12%, transparent); font-variant-numeric: tabular-nums; }
+.sb__rows { flex: 1; }
+.srow { height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 12px 0 16px; font-size: 13px; color: var(--sec); cursor: pointer; }
+.srow > span:first-child { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.srow.att > span:first-child { font-weight: 600; }
+.srow.sel { background: var(--sel); color: var(--pri); }
+.srow:not(.sel):hover { background: var(--hover); }
+.sb__busy { height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 12px; font-size: 11px; font-weight: 600; color: var(--sec); background: var(--chrome); }
+.sb__busy .spin { margin-left: auto; }
+
+.layout { flex: 1; min-width: 0; display: flex; }
+.split { flex: 1; min-width: 0; min-height: 0; display: flex; }
+.split.v { flex-direction: column; }
+.pdiv { flex: none; background: var(--divider); width: .5px; }
+.split.v > .pdiv { width: auto; height: .5px; }
+.group { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--bg); }
+.tabstrip { height: 35px; flex: none; display: flex; background: var(--chrome); }
+.tab { position: relative; height: 35px; display: flex; align-items: center; gap: 8px; padding: 0 10px 0 16px; font-size: 12px; color: var(--sec); white-space: nowrap; cursor: pointer; }
+.tab:hover { background: var(--hover); }
+.tab.sel { background: var(--bg); z-index: 1; }
+.tab.sel.act { color: var(--pri); }
+.tab.sel.act::before { content: ""; position: absolute; inset: 0 0 auto; height: 1px; background: var(--accent); }
+.tab.sel::after { content: ""; position: absolute; inset: auto 0 -1px; height: 1px; background: var(--bg); }
+.tab .x { width: 16px; height: 16px; display: grid; place-items: center; opacity: 0; color: var(--sec); }
+.tab.sel .x, .tab:hover .x { opacity: 1; }
+.tab .ico { width: 12px; display: grid; place-items: center; color: var(--sec); }
+.newtab { width: 30px; display: grid; place-items: center; color: var(--sec); }
+.pane { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--bg); }
+.statusbar { height: 28px; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 10px; background: var(--chrome); font-size: 11px; color: var(--sec); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
+.stat { display: flex; align-items: center; gap: 4px; }
+.chip { display: flex; align-items: center; gap: 4px; }
+.chip i { width: 5px; height: 5px; border-radius: 50%; background: #34c759; }
+
+/* status marks */
+.mark { width: 14px; height: 12px; display: grid; place-items: center; flex: none; }
+.pulse { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .45; } }
+.spin { width: 12px; height: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; flex: none; }
+.spin i { border-radius: 1px; background: color-mix(in srgb, var(--fg) 16%, transparent); animation: walk 1.2s steps(1) infinite; }
+.spin i:nth-child(2) { animation-delay: .3s; } .spin i:nth-child(4) { animation-delay: .6s; } .spin i:nth-child(3) { animation-delay: .9s; }
+@keyframes walk { 0%, 24% { background: #e8875a; } }
+
+/* the terminal, as Claude Code draws it */
+.term { position: absolute; inset: 0; padding: 4px 8px; display: flex; flex-direction: column; font: 12px/15px var(--mono); color: var(--fg); white-space: pre; overflow: hidden; user-select: text; -webkit-user-select: text; }
+.term__out { flex: 1; min-height: 0; overflow: hidden; }
+.term__in { flex: none; }
+.ln { min-height: 15px; overflow: hidden; text-overflow: clip; }
+.wrap { white-space: pre-wrap; padding-left: 2ch; text-indent: -2ch; }
+.d { opacity: .55; } .b { font-weight: 700; } .y { color: var(--a11); } .bl { color: var(--a12); } .g { color: var(--a2); } .r { color: var(--a9); } .or { color: #d77757; }
+.band { background: var(--band); padding-left: 2ch; }
+.rule { height: 15px; display: flex; align-items: center; } .rule::before { content: ""; flex: 1; height: 1px; background: color-mix(in srgb, var(--fg) 80%, transparent); }
+.rule.perm::before { background: var(--a12); }
+.cur { display: inline-block; width: 7.2px; height: 15px; vertical-align: top; background: var(--cursor); }
+.cur.hollow { background: none; box-shadow: inset 0 0 0 1px var(--cursor); }
+.logo { display: flex; gap: 14px; align-items: center; margin: 15px 0 15px 2px; }
+.logo svg { width: 65px; height: 37px; }
+.popt { cursor: pointer; } .popt:hover { background: var(--hover); }
+.popt.on { color: var(--a12); }
+.star { color: #d77757; display: inline-block; width: 1ch; }
+
+/* the web panel */
+.webbar { height: 34px; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 8px; background: var(--chrome); }
+.webbar .btn { width: 22px; height: 22px; display: grid; place-items: center; color: var(--sec); }
+.addr { flex: 1; height: 24px; display: flex; align-items: center; padding: 0 8px; font-size: 12px; background: var(--bg); box-shadow: inset 0 0 0 1px var(--divider); color: var(--pri); }
+.webview { position: absolute; inset: 35px 0 0; background: #fff; color: #17181c; font: 14px/1.45 var(--ui); overflow: hidden; }
+.shop { display: flex; flex-direction: column; height: 100%; }
+.shop__nav { height: 48px; display: flex; align-items: center; gap: 20px; padding: 0 24px; border-bottom: 1px solid #ececec; font-size: 13px; color: #555; }
+.shop__nav b { color: #111; font-size: 15px; margin-right: auto; }
+.shop__main { padding: 24px; display: grid; gap: 14px; }
+.shop__main h3 { margin: 0; font-size: 20px; letter-spacing: -.01em; }
+.line { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; font-size: 13.5px; }
+.line.total { font-weight: 600; border: 0; }
+.shop__pay { align-self: start; height: 38px; padding: 0 18px; border-radius: 8px; background: #111; color: #fff; display: inline-flex; align-items: center; font-size: 13.5px; font-weight: 500; width: max-content; }
+
+/* overlays: the palette, the quick prompt, the peek card, the drop preview, a toast */
+.overlay { position: absolute; left: 50%; top: 34px; transform: translateX(-50%); z-index: 20; width: 620px; padding-bottom: 4px; background: var(--chrome);
+           box-shadow: inset 0 0 0 1px var(--border), 0 4px 20px rgb(0 0 0 / .3); }
+.field { margin: 6px; height: 30px; display: flex; align-items: center; padding: 0 10px; font-size: 13px; background: var(--bg); box-shadow: inset 0 0 0 1px var(--accent); color: var(--pri); white-space: pre; }
+.field .ph { color: var(--ter); }
+.field .caret { width: 1px; height: 15px; background: var(--pri); margin-left: 1px; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.prow { height: 26px; display: flex; align-items: center; gap: 8px; padding: 0 12px; cursor: pointer; }
+.prow.on { background: var(--sel); }
+.prow .lead { width: 14px; display: grid; place-items: center; color: var(--sec); }
+.prow .t { font-size: 13px; white-space: nowrap; }
+.prow .s { font-size: 12px; color: var(--sec); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prow .r { margin-left: auto; padding-left: 8px; font-size: 11px; color: var(--sec); white-space: nowrap; }
+.prow .tick { width: 13px; height: 13px; border-radius: 3px; box-shadow: inset 0 0 0 1px var(--sec); display: grid; place-items: center; color: #fff; }
+.prow .tick.on { background: var(--accent); box-shadow: none; }
+.qsec { height: 20px; padding: 2px 12px 0; display: flex; align-items: center; font-size: 10px; font-weight: 600; color: var(--sec); }
+.qfoot { padding: 6px 12px; font-size: 11px; color: var(--ter); }
+.peek { position: absolute; z-index: 15; width: 400px; padding: 12px; display: grid; gap: 6px; background: var(--chrome); box-shadow: inset 0 0 0 1px var(--divider), 0 6px 20px rgb(0 0 0 / .25); }
+.peek__t { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
+.peek__s { font-size: 11px; color: var(--sec); }
+.peek__r { font-size: 12px; line-height: 1.4; color: var(--pri); }
+.peek__you { font-size: 11px; color: var(--sec); } .peek__you b { font-weight: 600; margin-right: 4px; }
+.drop { position: absolute; z-index: 10; background: color-mix(in srgb, var(--accent) 18%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent); transition: all .1s; pointer-events: none; }
+.ghost { position: absolute; z-index: 30; height: 35px; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-size: 12px; background: var(--bg); color: var(--pri); box-shadow: 0 6px 18px rgb(0 0 0 / .35); opacity: .92;
+         transition: left .9s cubic-bezier(.4,0,.2,1), top .9s cubic-bezier(.4,0,.2,1); pointer-events: none; }
+.toast { position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); z-index: 25; padding: 7px 14px; font-size: 12px; border-radius: 6px; background: var(--chrome); color: var(--pri);
+         box-shadow: inset 0 0 0 1px var(--border), 0 4px 16px rgb(0 0 0 / .3); white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .pulse, .spin i, .ring, .field .caret { animation: none !important; } .ring, .coach, .ghost { transition: none !important; } }
 </style>
-<link rel="stylesheet" href="assets/ui/base.css">
-<link rel="stylesheet" href="assets/diagrams/diagram.css">
-<script>document.documentElement.classList.add('m-enter');setTimeout(()=>document.documentElement.classList.add('m-enter-done'),700)</script>
-<script src="assets/backgrounds/backgrounds.js"></script>
-<script>document.documentElement.classList.add('mo-js');setTimeout(()=>document.documentElement.classList.add('mo-safe'),2500)</script>
-<link rel="modulepreload" href="assets/moments/moments.js">
-<link rel="modulepreload" href="assets/moments/lib.js">
-<link rel="modulepreload" href="assets/moments/word-highlight/moment.js">
-<style>
-  /* page CSS: what sits inside a visual, and one --p-h per card group */
-  /* the GitHub link: icon and word in the bar; the icon alone where the bar folds into the menu */
-  .nav__gh { display: inline-flex; align-items: center; gap: var(--s-2); }
-  .nav__gh--icon { display: none; width: 44px; height: 44px; justify-content: center; margin-left: auto; }
-  @media (max-width: 1023px) {
-    .nav__gh--icon { display: inline-flex; }
-    .nav .nav__bar > .nav__actions { margin-left: auto; }
-    .nav .nav__bar > .nav__gh--icon { margin-left: var(--s-2); }
-    :root .nav.nav .nav__bar > .nav__gh--icon + .nav__toggle { margin-left: var(--s-2); }
-  }
-  @media (max-width: 639px) { .nav .nav__bar > .nav__gh--icon { margin-left: auto; } }
-  kbd { font: 500 .88em/1 var(--font-mono); padding: .22em .5em; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); white-space: nowrap; }
-  code { font: 400 .92em/1.4 var(--font-mono); }
-
-  /* the hero's painted ground when WebGL is not there, and the app window on it */
-  /* the ground behind every window: one flat soft black */
-  .hero--centred .hero__window, #sessions .frame, #themes .frame, .panel:has(> .mac) { background: #17181b !important; border: 0; }
-  /* the hero is one screen and shows its window whole: the window takes the room the screen leaves under the
-     text and is sized by that height, never cut by the fold */
-  .hero--centred .hero__window { flex: 1 1 0; min-height: 0; padding: var(--s-5); -webkit-mask-image: none; mask-image: none; display: grid; place-items: center; overflow: hidden; }
-  .hero--centred .hero__window > .ly-piece { position: static; transform: none; height: 100%; width: auto; max-width: 100%; aspect-ratio: 2800 / 1846; }
-  .hero--centred .hero__window > .mac > img { flex: 1 1 0; min-height: 0; height: 0; object-fit: cover; object-position: left top; }
-  /* on a wide screen the headline is one line and the lead two, which leaves the window more of the screen */
-  @media (min-width: 1200px) {
-    .hero--centred .hero__c { max-width: none; gap: var(--s-3); }
-    .hero--centred h1 { max-width: none; }
-    .hero--centred .hero__lead { max-width: 76ch; }
-    .hero--centred .hero__window { padding: var(--s-4); }
-  }
-  @media (max-width: 639px) {
-    .hero--centred .hero__window { padding: var(--s-4); -webkit-mask-image: none; mask-image: none; min-height: 0; }
-    .hero--centred .hero__window > .ly-piece { width: 100%; height: auto; aspect-ratio: auto; }
-    .hero--centred .hero__window > .mac > img { flex: none; height: auto; }
-    main #sessions .frame, main #themes .frame { padding: var(--s-4); }
-    main #sessions .frame > .mac, main #themes .frame > .mac { height: auto; width: 100%; aspect-ratio: auto; }
-    main #themes .mac [role=tabpanel] { flex: none; aspect-ratio: 1600 / 996; }
-    main #sessions .mac__film { flex: none; aspect-ratio: 1920 / 1196; }
-    .mac .mac__bar span { padding-left: 56px; }
-  }
-  .t-label { font-family: var(--font-mono); }
-  @media (prefers-color-scheme: dark) {
-    /* the screenshot grounds lift a step off the page, and black marks (GitHub, OpenAI) turn white outside their tiles */
-    .hero--centred .hero__window, #sessions .frame, #themes .frame { background: #1a1d25; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .06); }
-    .panel:has(> .mac) { background: #1a1d25 !important; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .06); }
-    .nav .ic-ink { filter: invert(1); }
-  }
-  /* every capture sits in a Mac window: the bar with its three lights, then the capture at half its pixel width */
-  .mac { border-radius: 10px; overflow: hidden; background: #1d2230; box-shadow: 0 0 0 1px rgb(255 255 255 / .1), 0 28px 60px -20px rgb(0 0 0 / .7); display: flex; flex-direction: column; }
-  .mac__bar { flex: none; position: relative; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: #151925; color: #aab1c0; font: 500 13px/1 var(--font-text); }
-  .mac__bar i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; }
-  .mac__bar i:nth-child(2) { background: #febc2e; }
-  .mac__bar i:nth-child(3) { background: #28c840; }
-  .mac__bar span { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
-  .mac > img { display: block; width: 100%; height: auto; }
-  .panel > .mac { position: absolute; top: 50%; left: 50%; translate: -50% -50%; width: min(500px, calc(100% - 48px)); max-height: calc(100% - 32px); }
-
-  /* the recording: one frame that takes what the screen leaves under the heading */
-  #sessions .section-head--grid { margin-bottom: var(--s-7); }
-  #sessions .frame { padding: var(--s-6); align-items: center; }
-  #sessions .frame > .mac { height: 100%; aspect-ratio: 1920 / 1270; max-width: 100%; }
-  .mac__film { flex: 1; min-height: 0; overflow: hidden; }
-  .mac__film > video { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center bottom; }
-
-  .menu-card .panel { --p-h: 200px; }
-  #features .panel { --p-h: 396px; }
-  section#agents .panel { --p-h: 510px; }
-  section#agents .panel > .mac { width: calc(100% - 32px); height: calc(100% - 32px); max-height: none; }
-  section#agents .panel > .mac > img { flex: 1 1 0; min-height: 0; height: 0; object-fit: cover; object-position: left top; }
-  section#agents .agents { gap: var(--s-4); }
-  section#agents .agents .ic-tile { margin-bottom: 0; }
-  #agents .panel, #shortcuts .panel, #palette .panel { --p-h: 420px; border-radius: var(--r-lg); }
-  .hero--centred .hero__lead { color: var(--ink); }
-  #workers .panel { --p-h: 260px; background: var(--surface); }
-
-  /* agents: icon, name and maker in each card; the table under them */
-  .agents { display: grid; gap: var(--s-5); }
-  .agents li { display: grid; gap: var(--s-2); align-content: start; }
-  .agents .ic-tile { margin-bottom: var(--s-2); }
-  .agents h3 { font: 500 var(--t-lead)/1.4 var(--font-text); letter-spacing: 0; }
-  .matrix { display: grid; }
-  .matrix [role=row] { display: grid; grid-template-columns: minmax(0, 6fr) repeat(3, minmax(0, 2fr)); column-gap: var(--s-5); align-items: center; min-height: 48px; border-bottom: 1px solid var(--line); }
-  .matrix [role=columnheader] { font-weight: 500; }
-  .matrix :is([role=cell], [role=columnheader]):not(:first-child) { text-align: center; }
-  .matrix .yes::before { content: "\2713"; font-weight: 500; }
-  .matrix .no::before { content: "\2014"; color: var(--muted); }
-
-  /* the comparison: three columns of short text, Studio's the marked one */
-  .matrix--text [role=row] { grid-template-columns: minmax(0, 3fr) repeat(3, minmax(0, 4fr)); align-items: stretch; padding-block: var(--s-4); }
-  #compare .frame { padding: var(--s-6); align-items: center; justify-items: center; background: #17181b; border: 0; }
-  #compare .frame > img { display: block; height: 100%; width: auto; max-width: 100%; object-fit: contain; border-radius: 10px; }
-  .matrix--text :is([role=cell], [role=columnheader]):not(:first-child) { text-align: left; }
-  .matrix--text [role=rowheader] { font-weight: 500; }
-  .matrix--text [role=row] > :last-child { font-weight: 500; }
-  .matrix--text [role=columnheader]:last-child { color: var(--accent); }
-  @media (max-width: 639px) {
-    .matrix--text [role=row] { grid-template-columns: minmax(0, 1fr); row-gap: var(--s-1); }
-    .matrix--text [role=row]:first-child { display: none; }
-    .matrix--text [role=cell]::before { content: attr(data-col); display: block; color: var(--muted); font-weight: 400; font-size: var(--t-small); }
-    #compare .frame { padding: var(--s-4); }
-  }
-
-  /* sandboxes: the diagram's panel and the provider rows */
-  #sandboxes .panel { --p-h: 600px; border-radius: var(--r-lg); background: var(--surface); }
-  .providers { display: grid; gap: var(--s-4); }
-  .providers li { display: grid; gap: var(--s-2); justify-items: start; }
-  .providers img { height: 28px; width: auto; }
-
-  /* workers: a terminal in each step's panel, cut by the panel's foot */
-  .term { position: absolute; inset: var(--s-5) var(--s-5) 0; padding: var(--s-4) var(--s-5); border-radius: 12px 12px 0 0; background: #1d2230; color: #e6e9ef; font: 400 14px/1.7 var(--font-mono); overflow: hidden; }
-  .term b { font-weight: 400; color: #8f98a8; }
-  .term i { font-style: normal; color: #f3a57f; }
-  .term span { display: block; overflow-wrap: anywhere; }
-
-  /* the command palette, drawn as it sits over a window: the field, then rows with their group on the right */
-  #palette .panel { --p-h: 560px; }
-  #palette .panel > .mac { height: calc(100% - 64px); max-height: none; }
-  .mac__body { position: relative; flex: 1; background: #1d2230; }
-  .pal { position: absolute; top: 28px; left: 50%; width: min(440px, calc(100% - 32px)); translate: -50% 0; border-radius: 10px; background: #262c3d; color: #e6e9ef; box-shadow: 0 0 0 1px rgb(255 255 255 / .1), 0 24px 50px -12px rgb(0 0 0 / .6); font: 400 13px/1.3 var(--font-text); overflow: hidden; }
-  .pal__field { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border-bottom: 1px solid rgb(255 255 255 / .08); font-size: 14px; }
-  .pal__field::after { content: ""; width: 1px; height: 16px; background: #f08a5d; }
-  .pal__row { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 14px; white-space: nowrap; }
-  .pal__row.is-on { background: rgb(74 158 255 / .22); }
-  .pal__row b { font-weight: 400; overflow: hidden; text-overflow: clip; }
-  .pal__row em { font-style: normal; color: #8f98a8; overflow: hidden; }
-  .pal__row small { margin-left: auto; padding-left: 12px; font-size: 13px; color: #8f98a8; }
-  .pal__dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #5a6274; }
-  .pal__dot--blue { background: #4a9eff; } .pal__dot--red { background: #ff5f57; }
-  .rows kbd { font-size: 14px; display: inline-block; min-width: 44px; text-align: center; }
-  /* the themes: one Mac window, the same capture in each theme, a tab for each */
-  #themes .section-head--grid { margin-bottom: var(--s-5); }
-  #themes .tabs { margin-bottom: var(--s-5); }
-  #themes .frame { padding: var(--s-6); align-items: center; }
-  #themes .frame > .mac { height: 100%; aspect-ratio: 1600 / 1028; max-width: 100%; }
-  #themes .mac [role=tabpanel] { flex: 1; min-height: 0; overflow: hidden; }
-  #themes .mac [role=tabpanel] > img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: left top; }
-
-  @media (max-width: 1023px) {
-    .matrix:not(.matrix--text) [role=row] { grid-template-columns: minmax(0, 5fr) repeat(3, minmax(0, 2fr)); column-gap: var(--s-3); }
-    #sandboxes .panel { --p-h: 320px; }
-    #workers .panel { --p-h: 200px; }
-  }
-  @media (max-width: 639px) {
-    #features .panel { --p-h: 190px; }
-    #workers .panel { --p-h: 150px; }
-    .term { inset: var(--s-4) var(--s-4) 0; font-size: 13px; }
-    .matrix:not(.matrix--text) [role=row] { grid-template-columns: minmax(0, 1fr) repeat(3, 44px); }
-    .matrix [role=columnheader] { font-size: var(--t-label); }
-    #agents .panel, #shortcuts .panel { --p-h: 220px; }
-    section#agents .panel { --p-h: 250px; }
-    /* a phone holds a section in two screens at most: the six parts keep their titles and pictures, the
-       comparison its three main rows and a tall crop of the window */
-    #features .card > p { display: none; }
-    #features .panel { --p-h: 118px; }
-    #compare .section-head > p, #compare .matrix--text [role=row]:nth-child(n+5) { display: none; }
-    #compare .frame.fill { flex: 0 0 auto; }
-    #compare .frame > img { height: 440px; width: 100%; object-fit: cover; object-position: left top; }
-    #workers .panel { --p-h: 125px; }
-    #palette .panel { --p-h: 330px; }
-    .pal__row em, .pal__row small { display: none; }
-    #sandboxes .panel { --p-h: 260px; }
-  }
-</style>
-<!-- PostHog: anonymous page views and download clicks. No cookies or local storage (memory only), no person profiles -->
-<script>
-  !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
-  posthog.init('phc_q7FYZeELCWZVJo9u5m98p7dqdWnsSHru3i3ZqdSDxVzw', {
-    api_host: 'https://us.i.posthog.com',
-    persistence: 'memory',
-    person_profiles: 'identified_only',
-    autocapture: false,
-    capture_pageview: true,
-    disable_session_recording: true
-  });
-  // every download button: which one (where on the page) was clicked
-  document.addEventListener('click', function (e) {
-    var a = e.target.closest && e.target.closest('a[href$="/Studio.dmg"]');
-    if (a) posthog.capture('download_clicked', { location: a.dataset.track || 'unknown', label: a.textContent.trim() });
-  });
-</script>
 </head>
 <body>
-<!-- type: software
-     deal: hero centred (chosen for the brief over the dealt split), nav nav-cards,
-           close close-type, footer footer-dark, rhythm dark-band (sandboxes), buttons solid, mark the client's own icon,
-           type geist, palette the app's own navy and orange (start.mjs brand), grounds one flat soft black
-     moments: word-highlight (the queue statement, its own screen) -->
 
-<header class="nav">
-  <div class="wrap nav__bar">
-    <a class="skip-link" href="#top">Skip to content</a>
-    <a class="nav__logo" href="#top"><img src="assets/icon.svg" alt="" width="28" height="28">Studio</a>
-    <nav class="nav__links" aria-label="Main">
-      <div class="nav__item">
-        <a class="nav__link" href="#sessions">Sessions <svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-        <div class="nav__menu">
-          <div class="wrap grid">
-            <a class="menu-card span-4" href="#sessions">
-              <div class="panel"><div class="mac"><div class="mac__bar" aria-hidden="true"><i></i><i></i><i></i><span>aicode — ~/code/aicode</span></div><img src="assets/shots/session.webp" width="1000" height="600" alt="A Claude Code session in a Studio tab" loading="lazy"></div></div>
-              <span class="t-card">Agent sessions</span>
-              <span class="t-small muted">Claude Code, Codex and Antigravity in tabs and splits</span>
-            </a>
-            <a class="menu-card span-4" href="#features">
-              <div class="panel"><div class="mac"><div class="mac__bar" aria-hidden="true"><i></i><i></i><i></i><span>aicode — ~/code/aicode</span></div><img src="assets/shots/web.webp" width="1000" height="600" alt="A web panel showing a documentation page" loading="lazy"></div></div>
-              <span class="t-card">Web panels</span>
-              <span class="t-small muted">A dev server, a pull request or the docs in a pane</span>
-            </a>
-            <a class="menu-card span-4" href="#features">
-              <div class="panel"><div class="mac"><div class="mac__bar" aria-hidden="true"><i></i><i></i><i></i><span>aicode — ~/code/aicode</span></div><img src="assets/shots/terminal.webp" width="1000" height="600" alt="A terminal pane showing a git log" loading="lazy"></div></div>
-              <span class="t-card">Terminals</span>
-              <span class="t-small muted">Plain shells in the same tabs as your agents</span>
-            </a>
-          </div>
-        </div>
-      </div>
-      <div class="nav__item"><a class="nav__link" href="#agents">Agents</a></div>
-      <div class="nav__item"><a class="nav__link" href="#sandboxes">Sandboxes</a></div>
-      <div class="nav__item"><a class="nav__link" href="#workers">Workers</a></div>
-      <div class="nav__item"><a class="nav__link" href="#shortcuts">Shortcuts</a></div>
-      <div class="nav__item"><a class="nav__link" href="#questions">Questions</a></div>
-    </nav>
-    <div class="nav__actions">
-      <a class="nav__link nav__gh" href="https://github.com/fiberevm/studio"><img class="ic ic-20 ic-ink" src="assets/icons/github.svg" alt="" width="20" height="20">GitHub</a>
-      <a data-track="nav" class="btn btn--primary" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg">Download for macOS</a>
-    </div>
-    <a class="nav__gh nav__gh--icon" href="https://github.com/fiberevm/studio" aria-label="Studio on GitHub"><img class="ic ic-24 ic-ink" src="assets/icons/github.svg" alt="" width="24" height="24"></a>
-    <button class="nav__toggle" type="button" aria-expanded="false" aria-label="Menu">
-      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 5h14M2 13h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-    </button>
-  </div>
+<header class="top">
+  <a class="brand" href="#top"><img src="assets/icon.svg" alt="" width="26" height="26">Studio</a>
+  <nav class="top__steps" id="dots" aria-label="Tour steps"></nav>
+  <a class="top__gh" href="https://github.com/fiberevm/studio"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.360-3.87-1.36-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.260.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg><span>GitHub</span></a>
+  <a class="dl" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.3 1.88-3.4 1.97-3.46-1.07-1.57-2.74-1.78-3.33-1.8-1.42-.15-2.77.83-3.49.83-.72 0-1.830-.81-3.01-.79-1.55.02-2.98.9-3.78 2.29-1.61 2.8-.41 6.94 1.16 9.21.77 1.11 1.68 2.36 2.88 2.31 1.16-.05 1.6-.75 3-.75s1.79.75 3.01.72c1.25-.02 2.04-1.13 2.8-2.25.88-1.29 1.24-2.54 1.26-2.6-.03-.01-2.42-.93-2.47-3.71ZM14.1 5.86c.64-.78 1.07-1.85.95-2.92-.92.04-2.03.61-2.69 1.38-.59.68-1.11 1.77-.97 2.82 1.03.08 2.07-.52 2.71-1.28Z"/></svg><span class="full">Download for macOS</span><span class="short">Download</span></a>
 </header>
 
 <main id="top">
-  <!-- HERO: centred -->
-  <section class="hero hero--centred" data-enter aria-labelledby="hero-h">
-    <div class="wrap"><div class="hero-text">
-      <div class="hero__c">
-        <a class="pill" href="https://github.com/fiberevm/studio"><span>Free and open source</span><span class="muted">See the code on GitHub</span></a>
-        <h1 id="hero-h">The Mac workspace for coding agents</h1>
-        <p class="hero__lead">Studio runs Claude Code, Codex and Antigravity in tabs and split panes, and marks the session that is waiting for you. Free and MIT licensed, for macOS 14 or later.</p>
-        <div class="btn-row"><a data-track="hero" class="btn btn--primary" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg">Download for macOS</a><a class="btn btn--secondary" href="#sessions">Watch the recording</a></div>
-      </div>
-      <div class="hero__window">
-        <div class="ly-piece mac"><div class="mac__bar" aria-hidden="true"><i></i><i></i><i></i><span>aicode — ~/code/aicode</span></div><img src="assets/shots/hero-2x.webp" width="2800" height="1744" fetchpriority="high" alt="Studio with a Claude Code session on the left, a web panel showing documentation on the right and a terminal under it"></div>
-      </div>
-    </div></div>
+  <section class="stage" id="stage" aria-label="A guided tour of Studio">
+    <div class="stage__lede">
+      <h1>Take the tour of Studio</h1>
+      <p>The Mac workspace for Claude Code, Codex and Antigravity. This is the real layout, drawn in HTML: click around, or use the keys it asks for.</p>
+    </div>
+    <div class="frame" id="frame"><div class="win" id="win" role="img" aria-label="A Studio window"></div></div>
+    <div class="coach" id="coach" role="dialog" aria-live="polite" aria-label="Tour step"></div>
+    <div class="ring" id="ring" aria-hidden="true"></div>
   </section>
 
-  <!-- SESSIONS: the product whole, as the recording of the real app -->
-  <section class="section" id="sessions" aria-labelledby="sessions-h">
-    <div class="wrap">
-      <div class="grid section-head--grid">
-        <h2 class="span-5" id="sessions-h">Every session in one window</h2>
-        <p class="span-6 start-7 t-lead">Every pane is a live agent session, a shell or a web page. Drag a tab onto an edge to split it. Each project gets a window with its own layout.</p>
-      </div>
-      <div class="frame fill" data-ui-pause-host>
-        <div class="mac"><div class="mac__bar" aria-hidden="true"><i></i><i></i><i></i><span>aicode — ~/code/aicode</span></div><div class="mac__film"><video id="demo-video" src="assets/demo.mp4" poster="assets/demo-poster.webp" width="1920" height="1234" autoplay muted loop playsinline preload="metadata" aria-label="Recording of Studio: a Claude Code session, a second session in a split, a GitHub web panel and a terminal"></video></div></div>
-        <button class="loop-pause" type="button" aria-label="Pause the recording" aria-pressed="false" data-video-pause="demo-video"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 2h3v10H3zM8 2h3v10H8z"/></svg></button>
-      </div>
+  <section class="more" id="install">
+    <div>
+      <h3>Download</h3>
+      <p>Free and MIT licensed. Signed and notarized by Apple. Needs macOS 14 or later and Claude Code installed and signed in; Codex and Antigravity are optional.</p>
+      <a class="dl dl--big" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg">Download Studio.dmg</a>
+    </div>
+    <div>
+      <h3>Build from source</h3>
+      <p>Needs Xcode 16 or the Swift 6 toolchain.</p>
+      <pre>git clone https://github.com/fiberevm/studio.git
+cd studio && ./build-app.sh --open</pre>
+    </div>
+    <div>
+      <h3>Is it the real CLI?</h3>
+      <p>Yes. Each tab runs the agent's own CLI in a real terminal, signed in with your account, so slash commands, hooks, MCP servers and settings work as before. Sessions run in hidden tmux sessions and survive a restart.</p>
     </div>
   </section>
-
-  <!-- THE QUEUE: the word-highlight moment, one statement on its own screen -->
-  <section class="section statement" id="queue" data-moment="word-highlight" aria-label="The queue">
-    <div class="wrap">
-      <p class="t-label">The queue</p>
-      <p class="mo-wh__text">Studio watches every session for you. A red dot on a tab means its agent is blocked on a question, a blue dot means it finished, and one key takes you to <strong>the one that has waited longest</strong>.</p>
-    </div>
-  </section>
-
-  <!-- FEATURES: 2x2, two screens, each panel a capture of the real app -->
-  <section class="section g2" id="features" aria-labelledby="features-h" style="--hm: 2">
-    <div class="wrap">
-      <div class="group">
-        <div class="section-head">
-          <h2 id="features-h">Six parts of one Studio window. <span class="muted">Each a key away.</span></h2>
-        </div>
-        <div class="grid">
-          <article class="card card--row card--open span-4">
-            <h3>Reads every session's state</h3>
-            <p>Each tab shows whether its agent is working, finished or blocked on a permission prompt. <kbd>⌘J</kbd> jumps to the longest wait.</p>
-            <div class="panel"><div class="mac"><div class="mac__bar" aria-hidden="true"><i></i><i></i><i></i><span>aicode — ~/code/aicode</span></div><img src="assets/shots/session.webp" width="1000" height="600" alt="A Claude Code session in a tab marked with a blue dot" loading="lazy"></div></div>
-          </article>
-          <article class="card card--row card--open span-4">
-            <h3>Opens web pages beside agents</h3>
-            <p>Put a dev server, a pull request or the docs in a pane. Agents can open, read and click those pages too.</p>
-            <div class="panel"><div class="mac"><div class="mac__bar" aria-hidden="true"><i></i><i></i><i></i><span>aicode — ~/code/aicode</span></div><img src="assets/shots/web.webp" width="1000" height="600" alt="A web panel with an address bar, showing a quickstart page" loading="lazy"></div></div>
-          </article>
-          <article class="card card--row card--open span-4">
-            <h3>Shows a project's files beside the session</h3>
-            <p>A file tab has the tree on its left and switches between the project and each session's worktree. Markdown opens rendered, and images in a viewer. <kbd>⇧⌘E</kbd> opens one.</p>
-            <div class="panel"><div class="mac"><div class="mac__bar" aria-hidden="true"><i></i><i></i><i></i><span>aicode — ~/code/aicode</span></div><img src="assets/shots/files.webp" width="1000" height="600" alt="A file tab with the project's file tree on the left and the README rendered on the right" loading="lazy"></div></div>
-          </article>
-        </div>
-      </div>
-      <div class="grid">
-        <article class="card card--row card--open span-4">
-          <h3>Lets agents drive the editor</h3>
-          <p>Through the built-in Studio MCP an agent opens splits, starts helper sessions and runs commands in a terminal beside it.</p>
-          <div class="panel"><div class="mac"><div class="mac__bar" aria-hidden="true"><i></i><i></i><i></i><span>aicode — ~/code/aicode</span></div><img src="assets/shots/tools.webp" width="1000" height="600" alt="A session listing Studio's MCP tools in a table" loading="lazy"></div></div>
-        </article>
-        <article class="card card--row card--open span-4">
-          <h3>Keeps a shell next to each session</h3>
-          <p>Plain terminals open with <kbd>⌃`</kbd> and sit in the same tabs and splits. Drop a file on a pane to paste its path.</p>
-          <div class="panel"><div class="mac"><div class="mac__bar" aria-hidden="true"><i></i><i></i><i></i><span>aicode — ~/code/aicode</span></div><img src="assets/shots/terminal.webp" width="1000" height="600" alt="A terminal tab showing a git log" loading="lazy"></div></div>
-        </article>
-        <article class="card card--row card--open span-4">
-          <h3>Keeps keys out of the session transcript</h3>
-          <p>An agent asks for a key by name and you type it into this panel. Commands get it as an environment variable, and Studio scrubs it from their output. Each key can expire.</p>
-          <div class="panel"><div class="mac"><div class="mac__bar" aria-hidden="true"><i></i><i></i><i></i><span>aicode — ~/code/aicode</span></div><img src="assets/shots/secret.webp" width="1000" height="600" alt="A panel over a session asking for STRIPE_API_KEY, with a field for the value and expiry choices from one hour to ninety days" loading="lazy"></div></div>
-        </article>
-      </div>
-    </div>
-  </section>
-
-  <!-- AGENTS: the three CLIs by their real icons, then what each gets -->
-  <section class="section" id="agents" aria-labelledby="agents-h">
-    <div class="wrap">
-      <div class="section-head">
-        <h2 id="agents-h">Runs the agent CLI you already use</h2>
-        <p>Studio starts each agent's own CLI in a real terminal, signed in with your account. Mix all three in one window.</p>
-      </div>
-      <div class="grid grid--top">
-        <div class="span-5 stack-4">
-          <ul class="agents">
-            <li><span class="ic-tile ic-tile--48"><img class="ic ic-32" src="assets/icons/claude.svg" alt="" width="32" height="32"></span><h3>Claude Code</h3><p>From Anthropic. Your slash commands, hooks, MCP servers and settings work unchanged.</p></li>
-            <li><span class="ic-tile ic-tile--48"><img class="ic ic-32 ic-ink" src="assets/icons/openai.svg" alt="" width="32" height="32"></span><h3>Codex CLI</h3><p>From OpenAI. Titles, live status and approvals come from Codex's own session logs.</p></li>
-            <li><span class="ic-tile ic-tile--48"><img class="ic ic-32" src="assets/icons/google-icon.svg" alt="" width="31" height="32"></span><h3>Antigravity CLI</h3><p>From Google. The Studio tools arrive as a plugin you install once.</p></li>
-          </ul>
-          <p class="muted">Tabs, live status, <kbd>⇧⌘K</kbd> messages, sessions that survive a restart, workers and the Studio MCP work with all 3 agents. Forking a conversation with <kbd>⌘E</kbd> works with Claude Code and Codex.</p>
-        </div>
-        <div class="panel span-6 start-7"><div class="mac"><div class="mac__bar" aria-hidden="true"><i></i><i></i><i></i><span>aicode — ~/code/aicode</span></div><img src="assets/shots/keepalive.webp" width="960" height="600" loading="lazy" alt="A Claude Code session explaining how Studio keeps sessions alive in tmux"></div></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- COMPARE: Studio beside the two usual ways to run coding agents -->
-  <section class="section g2" id="compare" aria-labelledby="compare-h" style="--hm: 2">
-    <div class="wrap">
-      <div class="group">
-      <div class="section-head">
-        <h2 id="compare-h">Studio beside an AI editor and a terminal</h2>
-        <p>Pick Studio when you already work in agent CLIs and run several at once. It keeps the CLIs and accounts you have and adds the window around them.</p>
-      </div>
-      <div class="matrix matrix--text" role="table" aria-label="Studio compared with an AI code editor and with a terminal running tmux">
-        <div role="row"><span role="columnheader">&nbsp;</span><span role="columnheader">AI code editor</span><span role="columnheader">Terminal and tmux</span><span role="columnheader">Studio</span></div>
-        <div role="row"><span role="rowheader">Built around</span><span role="cell" data-col="AI code editor">A code editor, with an agent in a side panel</span><span role="cell" data-col="Terminal and tmux">Shell panes you arrange by hand</span><span role="cell" data-col="Studio">Agent sessions, each in a tab or a split</span></div>
-        <div role="row"><span role="rowheader">Agent</span><span role="cell" data-col="AI code editor">The editor’s own agent</span><span role="cell" data-col="Terminal and tmux">Any CLI you start</span><span role="cell" data-col="Studio">Claude Code, Codex and Antigravity, on your own accounts</span></div>
-        <div role="row"><span role="rowheader">Waiting sessions</span><span role="cell" data-col="AI code editor">Shown for its own agent</span><span role="cell" data-col="Terminal and tmux">You check each pane yourself</span><span role="cell" data-col="Studio">A dot on every tab, and <kbd>⌘J</kbd> to the longest wait</span></div>
-        <div role="row"><span role="rowheader">Pages and machines</span><span role="cell" data-col="AI code editor">Varies by editor</span><span role="cell" data-col="Terminal and tmux">None built in</span><span role="cell" data-col="Studio">Web panels, remote sandboxes and workers</span></div>
-        <div role="row"><span role="rowheader">Price</span><span role="cell" data-col="AI code editor">Usually a subscription</span><span role="cell" data-col="Terminal and tmux">Free</span><span role="cell" data-col="Studio">Free and MIT licensed</span></div>
-      </div>
-      </div>
-      <div class="frame fill"><img src="assets/splits.webp" width="2000" height="1286" loading="lazy" alt="One Studio window in three panes: a Claude Code session, a second session listing the Studio tools, and a terminal with a git log"></div>
-    </div>
-</section>
-
-  <!-- PALETTE: the command palette over a window, drawn from the app's own layout -->
-  <section class="section" id="palette" aria-labelledby="palette-h">
-    <div class="wrap">
-      <div class="grid grid--top">
-        <div class="span-5 stack-5">
-          <h2 id="palette-h">One palette for every session and command</h2>
-          <p class="t-lead"><kbd>⌘P</kbd> searches running and past sessions in every project. Pick one in another project and its window opens.</p>
-          <p>Type <code>&gt;</code> for commands: change the theme, open a URL in a web panel or start a session on a worker.</p>
-        </div>
-        <div class="panel span-6 start-7">
-          <div class="mac"><div class="mac__bar" aria-hidden="true"><i></i><i></i><i></i><span>aicode — ~/code/aicode</span></div>
-            <div class="mac__body" role="img" aria-label="Studio's command palette open over a window, listing four running sessions, two recent ones and three commands">
-              <div class="pal">
-                <div class="pal__field">session</div>
-                <div class="pal__row is-on"><span class="pal__dot pal__dot--red"></span><b>SessionStore next-up queue</b><em>~/code/aicode</em><small>running</small></div>
-                <div class="pal__row"><span class="pal__dot pal__dot--blue"></span><b>Studio MCP tools table</b><em>~/code/aicode</em></div>
-                <div class="pal__row"><span class="pal__dot pal__dot--blue"></span><b>Studio session keep-alive</b><em>~/code/aicode</em></div>
-                <div class="pal__row"><span class="pal__dot"></span><b>README summary for Studio</b><em>~/code/aicode</em></div>
-                <div class="pal__row"><span class="pal__dot"></span><b>Checkout refactor</b><em>~/code/web</em><small>recent</small></div>
-                <div class="pal__row"><span class="pal__dot"></span><b>Fix flaky auth spec</b><em>~/code/api</em></div>
-                <div class="pal__row"><span class="pal__dot"></span><b>Change Theme…</b><small>Clear Dark</small></div>
-                <div class="pal__row"><span class="pal__dot"></span><b>Web: Open URL…</b></div>
-                <div class="pal__row"><span class="pal__dot"></span><b>Worker: New Session on devbox</b></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- THEMES: the settings window -->
-  <section class="section" id="themes" aria-labelledby="themes-h">
-    <div class="wrap">
-      <div class="grid section-head--grid">
-        <h2 class="span-5" id="themes-h">Nine Studio themes and a text size you set</h2>
-        <p class="span-6 start-7 t-lead">The session, the file tree and the editor all take the theme. Pick one in Settings (<kbd>⌘,</kbd>) or with Change Theme in the palette, which previews each as you move through the list.</p>
-      </div>
-      <div class="tabs" role="tablist" aria-label="Themes"><button class="tab" type="button" role="tab" id="tab-clear-dark" aria-controls="theme-clear-dark" aria-selected="true">Clear Dark</button><button class="tab" type="button" role="tab" id="tab-dark-modern" aria-controls="theme-dark-modern" aria-selected="false">Dark Modern</button><button class="tab" type="button" role="tab" id="tab-dark-plus" aria-controls="theme-dark-plus" aria-selected="false">Dark+</button><button class="tab" type="button" role="tab" id="tab-light-plus" aria-controls="theme-light-plus" aria-selected="false">Light+</button><button class="tab" type="button" role="tab" id="tab-monokai" aria-controls="theme-monokai" aria-selected="false">Monokai</button><button class="tab" type="button" role="tab" id="tab-solarized-dark" aria-controls="theme-solarized-dark" aria-selected="false">Solarized Dark</button><button class="tab" type="button" role="tab" id="tab-one-dark-pro" aria-controls="theme-one-dark-pro" aria-selected="false">One Dark Pro</button><button class="tab" type="button" role="tab" id="tab-github-dark" aria-controls="theme-github-dark" aria-selected="false">GitHub Dark</button><button class="tab" type="button" role="tab" id="tab-dracula" aria-controls="theme-dracula" aria-selected="false">Dracula</button></div>
-      <div class="frame fill">
-        <div class="mac"><div class="mac__bar" aria-hidden="true"><i></i><i></i><i></i><span>aicode — ~/code/aicode</span></div><div role="tabpanel" id="theme-clear-dark" aria-labelledby="tab-clear-dark"><img src="assets/shots/themes/clear-dark.webp" width="1600" height="996" loading="lazy" alt="Studio in the Clear Dark theme: a Claude Code session on the left, the file tree and a Swift file on the right"></div><div role="tabpanel" id="theme-dark-modern" aria-labelledby="tab-dark-modern" hidden><img src="assets/shots/themes/dark-modern.webp" width="1600" height="996" loading="lazy" alt="Studio in the Dark Modern theme: a Claude Code session on the left, the file tree and a Swift file on the right"></div><div role="tabpanel" id="theme-dark-plus" aria-labelledby="tab-dark-plus" hidden><img src="assets/shots/themes/dark-plus.webp" width="1600" height="996" loading="lazy" alt="Studio in the Dark+ theme: a Claude Code session on the left, the file tree and a Swift file on the right"></div><div role="tabpanel" id="theme-light-plus" aria-labelledby="tab-light-plus" hidden><img src="assets/shots/themes/light-plus.webp" width="1600" height="996" loading="lazy" alt="Studio in the Light+ theme: a Claude Code session on the left, the file tree and a Swift file on the right"></div><div role="tabpanel" id="theme-monokai" aria-labelledby="tab-monokai" hidden><img src="assets/shots/themes/monokai.webp" width="1600" height="996" loading="lazy" alt="Studio in the Monokai theme: a Claude Code session on the left, the file tree and a Swift file on the right"></div><div role="tabpanel" id="theme-solarized-dark" aria-labelledby="tab-solarized-dark" hidden><img src="assets/shots/themes/solarized-dark.webp" width="1600" height="996" loading="lazy" alt="Studio in the Solarized Dark theme: a Claude Code session on the left, the file tree and a Swift file on the right"></div><div role="tabpanel" id="theme-one-dark-pro" aria-labelledby="tab-one-dark-pro" hidden><img src="assets/shots/themes/one-dark-pro.webp" width="1600" height="996" loading="lazy" alt="Studio in the One Dark Pro theme: a Claude Code session on the left, the file tree and a Swift file on the right"></div><div role="tabpanel" id="theme-github-dark" aria-labelledby="tab-github-dark" hidden><img src="assets/shots/themes/github-dark.webp" width="1600" height="996" loading="lazy" alt="Studio in the GitHub Dark theme: a Claude Code session on the left, the file tree and a Swift file on the right"></div><div role="tabpanel" id="theme-dracula" aria-labelledby="tab-dracula" hidden><img src="assets/shots/themes/dracula.webp" width="1600" height="996" loading="lazy" alt="Studio in the Dracula theme: a Claude Code session on the left, the file tree and a Swift file on the right"></div></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- SANDBOXES: the dark band, the diagram of one session on three machines -->
-  <section class="section ground-inverse" id="sandboxes" aria-labelledby="sandboxes-h">
-    <div class="wrap">
-      <div class="grid grid--top">
-        <div class="span-5 stack-5">
-          <h2 id="sandboxes-h">A remote Linux machine for every agent</h2>
-          <p class="t-lead">A session brings up a sandbox with your project pushed in, runs commands and servers there, and hands you an HTTPS link to a port.</p>
-          <ul class="providers">
-            <li><img src="assets/boat-dark.svg" alt="Boat" width="96" height="28"><span>boat.dev: Linux VMs from 2 to 16 vCPU, with snapshots and fork.</span></li>
-            <li><img src="assets/aws-lambda.svg" alt="" width="28" height="28"><span>AWS Lambda: MicroVMs in your own AWS account, for up to 8 hours.</span></li>
-          </ul>
-        </div>
-        <div class="panel span-6 start-7"><div class="dg" data-diagram data-dg-still><script type="application/json">{"layout":"lanes","alt":"One agent session uses Studio's sandbox tools to run tests, a migration dry run and a load test on three separate machines.","curve":"curve","input":{"label":"Session","icon":"claude","meta":"your Mac"},"core":{"label":"Sandbox tools","icon":"ui:terminal"},"lanes":[{"label":"Tests","icon":"ui:flask-conical","meta":"VM 1","done":true},{"label":"Migration dry run","icon":"ui:database","meta":"VM 2","done":true},{"label":"Load test","icon":"ui:gauge","meta":"VM 3","done":true}]}</script></div></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- WORKERS: three real steps, each with its terminal -->
-  <section class="section" id="workers" aria-labelledby="workers-h">
-    <div class="wrap">
-      <div class="section-head">
-        <h2 id="workers-h">Set up a worker in 3 steps</h2>
-        <p>A worker is an always-on Linux box or Mac of yours. Sessions run there in tmux and show in tabs like local ones.</p>
-      </div>
-      <div class="grid">
-        <article class="card card--row card--open span-4">
-          <span class="step-num">1</span>
-          <h3>Install the Studio worker</h3>
-          <p>On the machine itself. It needs tmux and an agent CLI you are signed in to.</p>
-          <div class="panel"><div class="term" role="img" aria-label="A terminal running the worker install script"><span><b>$</b> curl -fsSL https://raw.githubusercontent.com/fiberevm/studio/main/install-worker.sh | sh</span></div></div>
-        </article>
-        <article class="card card--row card--open span-4">
-          <span class="step-num">2</span>
-          <h3>Start the service</h3>
-          <p>It runs under systemd, so it survives reboots, and prints a pairing link.</p>
-          <div class="panel"><div class="term" role="img" aria-label="A terminal starting the worker service, which prints a pairing link"><span><b>$</b> studio-worker install-service</span><span><i>studio://worker?…</i></span></div></div>
-        </article>
-        <article class="card card--row card--open span-4">
-          <span class="step-num">3</span>
-          <h3>Paste the link in Studio</h3>
-          <p>In Settings, under Workers. Studio talks to it directly over Tailscale, Cloudflare Zero Trust or your LAN.</p>
-          <div class="panel"><div class="term" role="img" aria-label="A terminal printing the worker's pairing link again"><span><b>$</b> studio-worker pair</span><span><i>studio://worker?…</i></span></div></div>
-        </article>
-      </div>
-    </div>
-  </section>
-
-  <!-- SHORTCUTS: the one list -->
-  <section class="section" id="shortcuts" aria-labelledby="shortcuts-h">
-    <div class="wrap">
-      <div class="section-head">
-        <h2 id="shortcuts-h">Seven shortcuts for the whole Studio app</h2>
-        <p>Every other command is in the palette, which also searches past sessions in every project.</p>
-      </div>
-      <div class="grid grid--top">
-        <ul class="rows span-5">
-          <li><span class="rows__name">Go to the next session waiting for you</span><span class="rows__value"><kbd>⌘J</kbd></span></li>
-          <li><span class="rows__name">Switch to an open session</span><span class="rows__value"><kbd>⌘K</kbd></span></li>
-          <li><span class="rows__name">Message one session or several</span><span class="rows__value"><kbd>⇧⌘K</kbd></span></li>
-          <li><span class="rows__name">Go to any session or command</span><span class="rows__value"><kbd>⌘P</kbd></span></li>
-          <li><span class="rows__name">Fork the session into a split</span><span class="rows__value"><kbd>⌘E</kbd></span></li>
-          <li><span class="rows__name">Open a new session tab</span><span class="rows__value"><kbd>⌘T</kbd></span></li>
-          <li><span class="rows__name">Open a new terminal tab</span><span class="rows__value"><kbd>⌃`</kbd></span></li>
-        </ul>
-        <div class="panel span-6 start-7"><div class="mac"><div class="mac__bar" aria-hidden="true"><i></i><i></i><i></i><span>aicode — ~/code/aicode</span></div><img src="assets/shots/statusbar.webp" width="1000" height="600" loading="lazy" alt="The prompt line of a session with its status bar: branch, model and token counts"></div></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- QUESTIONS -->
-  <section class="section" id="questions" aria-labelledby="questions-h">
-    <div class="wrap">
-      <div class="grid grid--top">
-        <div class="span-5 stack-5">
-          <h2 id="questions-h">Questions</h2>
-          <p class="t-lead">Studio is free. You pay only for the agent accounts and sandbox providers you already use.</p>
-          <a class="link" href="https://github.com/fiberevm/studio/issues">Ask on GitHub</a>
-          <img src="assets/icon.svg" alt="" width="96" height="96">
-        </div>
-        <div class="faq span-6 start-7">
-          <div class="faq__item"><h3>What do I need to run Studio?</h3><p>macOS 14 or later, and Claude Code installed and signed in. Codex and Antigravity are optional.</p></div>
-          <div class="faq__item"><h3>Does it change how Claude Code works?</h3><p>No. It is the real CLI in a real terminal, so your slash commands, hooks, MCP servers and settings work as before.</p></div>
-          <div class="faq__item"><h3>What happens to sessions when I quit?</h3><p>They keep running. Each tab runs in a hidden tmux session, and Studio reattaches to it on the next launch.</p></div>
-          <div class="faq__item"><h3>Is Studio made by Anthropic?</h3><p>No. It is an independent open-source project, not affiliated with or endorsed by Anthropic.</p></div>
-          <div class="faq__item"><h3>Can I build Studio from source?</h3><p>Yes. Clone the repository and run <code>./build-app.sh --open</code>. It needs Xcode 16 or the Swift 6 toolchain.</p></div>
-        </div>
-      </div>
-    </div>
-  </section>
+  <footer class="foot">
+    <span>Studio is an independent open-source project, not affiliated with or endorsed by Anthropic.</span>
+    <span><a href="https://github.com/fiberevm/studio">GitHub</a> · <a href="https://github.com/fiberevm/studio/blob/main/LICENSE">MIT License</a></span>
+  </footer>
 </main>
 
-<footer class="footer closing footer--dark ground-inverse" id="contact" aria-labelledby="close-h">
-  <div class="wrap">
-    <div class="closing__cta close--type">
-      <div class="section-head">
-        <h2 id="close-h">Download Studio for your Mac</h2>
-        <p>Signed and notarized by Apple. Needs macOS 14 or later.</p>
-      </div>
-      <a data-track="closing" class="btn btn--primary btn--xl" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg">Download for macOS</a>
-    </div>
-    <div class="closing__links">
-      <div class="grid">
-        <div class="span-4 stack-4">
-          <a class="nav__logo" href="#top"><img src="assets/icon.svg" alt="" width="28" height="28">Studio</a>
-          <p class="footer__lede">A Mac workspace for coding agents.</p>
-        </div>
-        <div class="span-2 footer__col"><h3>Sessions</h3><ul><li><a href="#sessions">The recording</a></li><li><a href="#queue">The queue</a></li><li><a href="#features">Files and secrets</a></li><li><a href="#palette">The palette</a></li></ul></div>
-        <div class="span-2 footer__col"><h3>Agents</h3><ul><li><a href="#agents">Supported CLIs</a></li><li><a href="#compare">Comparison</a></li><li><a href="#sandboxes">Sandboxes</a></li><li><a href="#workers">Workers</a></li></ul></div>
-        <div class="span-2 footer__col"><h3>Shortcuts</h3><ul><li><a href="#shortcuts">All seven keys</a></li><li><a href="#themes">Themes</a></li><li><a href="#questions">Questions</a></li></ul></div>
-        <div class="span-2 footer__col"><h3>Project</h3><ul><li><a href="https://github.com/fiberevm/studio">GitHub</a></li><li><a href="https://github.com/fiberevm/studio/releases">All releases</a></li><li><a href="https://github.com/fiberevm/studio/blob/main/LICENSE">MIT License</a></li></ul></div>
-      </div>
-      <div class="footer__legal">
-        <span>&copy; 2026 Studio contributors. An independent open-source project, not affiliated with or endorsed by Anthropic. Product names and logos are trademarks of their owners.</span>
-        <div class="socials"></div>
-      </div>
-    </div>
-  </div>
-</footer>
-
-<nav class="actionbar" aria-label="Quick actions">
-  <a data-track="mobile-bar" class="btn btn--primary" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg">Download for macOS</a>
-</nav>
-
-<script type="module" src="assets/system.js"></script>
-<script type="module" src="assets/motion/motion.js"></script>
-<script type="module" src="assets/layout/layout.js"></script>
-<script type="module" src="assets/diagrams/mount.js"></script>
 <script>
-// the recording's pause button; under reduced motion the poster stands
 (() => {
-  const btn = document.querySelector('[data-video-pause]'); if (!btn) return;
-  const v = document.getElementById(btn.dataset.videoPause);
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { v.removeAttribute('autoplay'); v.pause(); }
-  btn.addEventListener('click', () => {
-    const paused = v.paused; paused ? v.play() : v.pause();
-    btn.setAttribute('aria-pressed', String(!paused));
-    btn.setAttribute('aria-label', paused ? 'Pause the recording' : 'Play the recording');
+/* ================================================================ themes, as Themes.swift defines them */
+const T = {
+  'clear-dark':     { name: 'Clear Dark (Terminal.app)', light: 0, bg: '#212734', chrome: '#191D27', fg: '#E6E6E6', sel: '#334E5E', border: 'rgba(255,255,255,.08)', accent: '#4A9EFF', cursor: '#D97857', ansi: ['#35424B','#B4564A','#6CAA71','#C4AC62','#6D96B4','#BD7BCD','#7CCBCD','#DDE5EB','#465D6C','#DF6C5A','#79BD7D','#E5C872','#67B5ED','#D389E5','#84DDE0','#E6EEF5'] },
+  'dark-modern':    { name: 'Dark Modern', light: 0, bg: '#1F1F1F', chrome: '#181818', fg: '#CCCCCC', sel: '#37373D', border: '#2B2B2B', accent: '#0078D4', cursor: '#AEAFAD', ansi: 'vs' },
+  'dark-plus':      { name: 'Dark+', light: 0, bg: '#1E1E1E', chrome: '#252526', fg: '#CCCCCC', sel: '#37373D', border: '#3C3C3C', accent: '#007ACC', cursor: '#AEAFAD', ansi: 'vs' },
+  'light-plus':     { name: 'Light+', light: 1, bg: '#FFFFFF', chrome: '#F3F3F3', fg: '#333333', sel: '#E4E6F1', border: '#E5E5E5', accent: '#005FB8', cursor: '#000000', ansi: ['#000000','#CD3131','#00BC00','#949800','#0451A5','#BC05BC','#0598BC','#555555','#666666','#CD3131','#14CE14','#B5BA00','#0451A5','#BC05BC','#0598BC','#A5A5A5'] },
+  'monokai':        { name: 'Monokai', light: 0, bg: '#272822', chrome: '#1E1F1C', fg: '#F8F8F2', sel: '#414339', border: '#414339', accent: '#F92672', cursor: '#F8F8F0', ansi: ['#333333','#C4265E','#86B42B','#B3B42B','#6A7EC8','#8C6BC8','#56ADBC','#E3E3DD','#666666','#F92672','#A6E22E','#E2E22E','#819AFF','#AE81FF','#66D9EF','#F8F8F2'] },
+  'solarized-dark': { name: 'Solarized Dark', light: 0, bg: '#002B36', chrome: '#00212B', fg: '#93A1A1', sel: '#005A6F', border: '#073642', accent: '#268BD2', cursor: '#D30102', ansi: ['#073642','#DC322F','#859900','#B58900','#268BD2','#D33682','#2AA198','#EEE8D5','#586E75','#CB4B16','#586E75','#657B83','#839496','#6C71C4','#93A1A1','#FDF6E3'] },
+  'one-dark-pro':   { name: 'One Dark Pro', light: 0, bg: '#282C34', chrome: '#21252B', fg: '#ABB2BF', sel: '#2C313A', border: '#181A1F', accent: '#528BFF', cursor: '#528BFF', ansi: ['#3F4451','#E05561','#8CC265','#D18F52','#4AA5F0','#C162DE','#42B3C2','#D7DAE0','#4F5666','#FF616E','#A5E075','#F0A45D','#4DC4FF','#DE73FF','#4CD1E0','#E6E6E6'] },
+  'github-dark':    { name: 'GitHub Dark', light: 0, bg: '#0D1117', chrome: '#010409', fg: '#E6EDF3', sel: '#21262D', border: '#30363D', accent: '#F78166', cursor: '#2F81F7', ansi: ['#484F58','#FF7B72','#3FB950','#D29922','#58A6FF','#BC8CFF','#39C5CF','#B1BAC4','#6E7681','#FFA198','#56D364','#E3B341','#79C0FF','#D2A8FF','#56D4DD','#FFFFFF'] },
+  'dracula':        { name: 'Dracula', light: 0, bg: '#282A36', chrome: '#21222C', fg: '#F8F8F2', sel: '#44475A', border: '#191A21', accent: '#BD93F9', cursor: '#F8F8F2', ansi: ['#21222C','#FF5555','#50FA7B','#F1FA8C','#BD93F9','#FF79C6','#8BE9FD','#F8F8F2','#6272A4','#FF6E6E','#69FF94','#FFFFA5','#D6ACFF','#FF92DF','#A4FFFF','#FFFFFF'] },
+};
+const VS = ['#000000','#CD3131','#0DBC79','#E5E510','#2472C8','#BC3FBC','#11A8CD','#E5E5E5','#666666','#F14C4C','#23D18B','#F5F543','#3B8EEA','#D670D6','#29B8DB','#E5E5E5'];
+const THEME_IDS = Object.keys(T);
+
+/* ================================================================ icons (SF Symbols, redrawn at their sizes) */
+const S = (w, body, extra = '') => `<svg width="${w}" height="${w}" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" ${extra}>${body}</svg>`;
+const I = {
+  x: S(9, '<path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke-width="1.6"/>'),
+  plus: S(13, '<path d="M6 1.5v9M1.5 6h9"/>'),
+  globe: S(11, '<circle cx="6" cy="6" r="4.8"/><ellipse cx="6" cy="6" rx="2" ry="4.8"/><path d="M1.2 6h9.6M2 3.6h8M2 8.4h8"/>', 'stroke-width="1"'),
+  term: S(11, '<rect x="1" y="1.8" width="10" height="8.4" rx="1.6"/><path d="M3.2 4.6l1.6 1.4-1.6 1.4M6 7.6h2.6"/>', 'stroke-width="1"'),
+  code: S(10, '<path d="M4 3L1.5 6 4 9M8 3l2.5 3L8 9"/>'),
+  folder: S(10, '<path d="M1.2 3.2a1 1 0 0 1 1-1h2.4l1 1.2h4.2a1 1 0 0 1 1 1v4.6a1 1 0 0 1-1 1H2.2a1 1 0 0 1-1-1z"/>'),
+  branch: S(10, '<circle cx="3" cy="2.5" r="1.2"/><circle cx="9" cy="2.5" r="1.2"/><path d="M3 3.7c0 2.4 6 1.4 6 4M9 3.7v.6M6 6.6v4"/>'),
+  cpu: S(10, '<rect x="2.5" y="2.5" width="7" height="7" rx="1"/><rect x="4.5" y="4.5" width="3" height="3"/><path d="M4.5 1v1.5M7.5 1v1.5M4.5 9.5V11M7.5 9.5V11M1 4.5h1.5M1 7.5h1.5M9.5 4.5H11M9.5 7.5H11"/>', 'stroke-width="1"'),
+  up: S(10, '<path d="M6 10.5V1.5M2.5 5L6 1.5 9.5 5"/>'),
+  down: S(10, '<path d="M6 1.5v9M2.5 7L6 10.5 9.5 7"/>'),
+  left: S(12, '<path d="M7.5 2L3.5 6l4 4"/>', 'stroke-width="1.4"'),
+  right: S(12, '<path d="M4.5 2l4 4-4 4"/>', 'stroke-width="1.4"'),
+  reload: S(12, '<path d="M10 6a4 4 0 1 1-1.2-2.85M10 1.8v2.4H7.6"/>'),
+  compass: S(12, '<circle cx="6" cy="6" r="4.8"/><path d="M7.8 4.2L6.7 6.7 4.2 7.8l1.1-2.5z" fill="currentColor"/>', 'stroke-width="1"'),
+  check: S(11, '<path d="M2 6.4l2.6 2.6L10 3.4" stroke-width="1.8"/>'),
+  tick: S(9, '<path d="M2 6.4l2.6 2.6L10 3.4" stroke-width="2.2"/>'),
+  boat: S(10, '<path d="M6 1v7.2M6 1.8l3.4 5.4H6M5 2.6L2.4 7.2H5M1 9h10l-1.2 1.6H2.2z"/>', 'stroke-width="1"'),
+  pull: S(10, '<circle cx="3" cy="2.6" r="1.3"/><circle cx="3" cy="9.4" r="1.3"/><circle cx="9" cy="9.4" r="1.3"/><path d="M3 3.9v4.2M9 8.1V5a2 2 0 0 0-2-2H5.4M6.6 1.8L5.4 3l1.2 1.2"/>'),
+  okcirc: `<svg width="10" height="10" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5.5" fill="#34c759"/><path d="M3.4 6.2l1.8 1.8 3.6-3.8" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  hand: `<svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor"><rect x="2" y="3.2" width="1.7" height="5" rx=".85"/><rect x="4" y="1" width="1.7" height="6.4" rx=".85"/><rect x="6" y="1.3" width="1.7" height="6.2" rx=".85"/><rect x="8" y="3" width="1.7" height="5" rx=".85"/><path d="M2 6.6h7.7v1.8A3.4 3.4 0 0 1 6.3 11.8h-.9A3.4 3.4 0 0 1 2 8.4z"/></svg>`,
+  sparkles: `<svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor"><path d="M5 .8l1.2 3.4 3.4 1.2-3.4 1.2L5 10 3.8 6.6.4 5.4l3.4-1.2z"/><path d="M9.6 7.4l.5 1.4 1.4.5-1.4.5-.5 1.4-.5-1.4-1.4-.5 1.4-.5z"/></svg>`,
+};
+const ORANGE = 'rgb(232,135,84)', RED = 'rgb(242,77,77)';
+const spinner = '<span class="spin"><i></i><i></i><i></i><i></i></span>';
+function mark(status) {
+  if (status === 'working') return `<span class="mark pulse" style="color:${ORANGE}">${I.sparkles}</span>`;
+  if (status === 'waiting') return `<span class="mark pulse" style="color:${RED}">${I.hand}</span>`;
+  if (status === 'done') return `<span class="mark" style="color:var(--accent)">${I.check}</span>`;
+  if (status === 'starting') return `<span class="mark">${spinner}</span>`;
+  return '';
+}
+
+/* ================================================================ what each terminal shows */
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const L = (...parts) => `<div class="ln">${parts.map(p => typeof p === 'string' ? esc(p) : `<span class="${p[0]}">${esc(p[1])}</span>`).join('')}</div>`;
+const W = (cls, text) => `<div class="ln wrap ${cls}">${esc(text)}</div>`;
+const blank = '<div class="ln"></div>';
+const logo = `<div class="logo"><svg viewBox="0 0 130 74" aria-hidden="true"><rect x="16" y="0" width="98" height="60" fill="#d77757"/><rect x="0" y="30" width="130" height="14" fill="#d77757"/><rect x="18" y="60" width="22" height="14" fill="#d77757"/><rect x="90" y="60" width="22" height="14" fill="#d77757"/><rect x="30" y="14" width="8" height="14" fill="var(--bg)"/><rect x="92" y="14" width="8" height="14" fill="var(--bg)"/></svg>
+  <div>${L(['b', 'Claude Code'], ' ', ['d', 'v2.4.12'])}${L(['d', 'Opus 5.5 · Claude Max'])}${L(['d', '~/code/shop'])}</div></div>`;
+const you = text => `<div class="ln wrap band">${esc('❯ ' + text)}</div>`;
+const tool = (name, arg, result, ok = true) => L([ok ? 'g' : 'd', '● '], ['b', name], '(' + arg + ')') + L('  ', ['d', '⎿  ' + result]);
+const say = text => W('', '● ' + text);
+const STARS = '·✢✳✶✻✽';
+const working = (verb, secs, tok) => L(['star', '✻'], ' ', ['or', verb + '…'], ' ', ['d', `(${secs}s · ↑ ${tok} tokens · esc to interrupt)`]);
+const input = (focused, mode = 'auto mode on') => `<div class="term__in"><div class="rule"></div>${L('❯ ', ['cur' + (focused ? '' : ' hollow'), ''])}<div class="rule"></div>${L('  ', ['y', '⏵⏵ ' + mode], ' ', ['d', '(shift+tab to cycle)'])}</div>`;
+
+const SCREENS = {
+  co: (f) => [logo, you('Move the cart total into one function and update the three callers. Run the checkout tests when you are done.'), blank,
+    tool('Read', 'src/checkout/cart.ts', 'Read 214 lines'), blank,
+    tool('Search', 'pattern: "calcTotal", path: "src"', 'Found 3 files'), blank,
+    tool('Update', 'src/checkout/cart.ts', 'Updated src/checkout/cart.ts with 18 additions and 31 removals'), blank,
+    working('Refactoring', 47, '3.1k')].join('') + '</div>' + input(f),
+  auRun: (f) => [logo, you('The auth spec fails about one run in five. Find out why and fix it.'), blank,
+    say('I will run the spec ten times to catch the failure.'), blank,
+    tool('Bash', 'npm test -- auth.spec.ts --repeat 10', '8 passed, 2 failed: "session expires mid-test"'), blank,
+    say('The token is issued with a 1 second lifetime in the test fixture, so a slow run expires it. Raising it to 60 seconds and freezing the clock.'), blank,
+    working('Fixing', 12, '1.4k')].join('') + '</div>' + input(f),
+  au: (f) => [logo, you('The auth spec fails about one run in five. Find out why and fix it.'), blank,
+    say('I will run the spec ten times to catch the failure.'), blank,
+    L(['d', '● '], ['b', 'Bash'], '(npm test -- auth.spec.ts --repeat 10)'), L('  ', ['d', '⎿  Running…']), blank,
+    '<div class="rule perm"></div>', L(' ', ['b', 'Bash command']), blank,
+    L('   npm test -- auth.spec.ts --repeat 10'), L('   ', ['d', 'Run the auth spec ten times to catch the flaky failure']), blank,
+    L(' Do you want to proceed?'),
+    `<div class="ln popt on" data-perm="1">${esc(' ❯ 1. Yes')}</div>`,
+    `<div class="ln popt" data-perm="2">${esc('   2. Yes, and don\'t ask again for npm test commands in ~/code/shop')}</div>`,
+    `<div class="ln popt" data-perm="3">${esc('   3. No, and tell Claude what to do differently ')}<span class="d">(esc)</span></div>`].join('') + '</div>',
+  biRun: (f) => [logo, you('Write the migration that splits invoices into invoices and invoice_lines.'), blank,
+    tool('Read', 'db/schema.sql', 'Read 388 lines'), blank,
+    working('Drafting', 38, '2.2k')].join('') + '</div>' + input(f),
+  bi: (f) => [logo, you('Write the migration that splits invoices into invoices and invoice_lines.'), blank,
+    tool('Read', 'db/schema.sql', 'Read 388 lines'), blank,
+    tool('Write', 'db/migrations/0042_invoice_lines.sql', 'Wrote 38 lines'), blank,
+    tool('Bash', 'npm run db:migrate -- --dry-run', '2 tables changed, 0 errors'), blank,
+    say('Done. Line items move into invoice_lines, and a view named invoices_v1 keeps the old shape for reports. The dry run passes.'), blank,
+    L(['d', '✻ Worked for 2m 14s'])].join('') + '</div>' + input(f),
+  sh: (f) => [L('shop % npm run dev'), blank, L('> shop@0.4.0 dev'), L('> vite'), blank,
+    L('  ', ['g', 'VITE v6.0.3'], '  ', ['d', 'ready in 412 ms']), blank,
+    L('  ', ['g', '➜'], '  ', ['b', 'Local:'], '   ', ['bl', 'http://localhost:5173/']), L('  ', ['g', '➜'], '  ', ['d', 'Network: use --host to expose']),
+    L('  ', ['d', '9:41:07'], ' ', ['bl', '[vite]'], ' hmr update ', ['d', '/src/checkout/cart.ts']),
+    L('shop % ', ['cur' + (f ? '' : ' hollow'), ''])].join('') + '</div>',
+};
+const PEEK = {
+  bi: { reply: 'Done. Line items move into invoice_lines, and a view named invoices_v1 keeps the old shape for reports. The dry run passes.', you: 'Write the migration that splits invoices into invoices and invoice_lines.', status: 'Finished · 1 min ago' },
+  co: { reply: 'Updating the three callers of calcTotal to use the new cartTotal function.', you: 'Move the cart total into one function and update the three callers.', status: 'Working · Update' },
+  au: { reply: 'I will run the spec ten times to catch the failure.', you: 'The auth spec fails about one run in five. Find out why and fix it.', status: 'Needs you · Bash' },
+};
+
+/* ================================================================ the state, and drawing it */
+let userTheme = 'clear-dark';
+function fresh() {
+  return {
+    theme: userTheme, sidebar: false, chips: false,
+    layout: { g: 'g1' }, active: 'g1',
+    groups: { g1: { tabs: ['co', 'au', 'bi'], sel: 'co' } },
+    tabs: {
+      co: { kind: 'claude', title: 'Checkout refactor', status: 'working', screen: 'co' },
+      au: { kind: 'claude', title: 'Fix flaky auth spec', status: 'working', screen: 'auRun' },
+      bi: { kind: 'claude', title: 'Migrate billing tables', status: 'working', screen: 'biRun' },
+    },
+    overlay: null, peek: null, drop: null, ghost: null, toast: null,
+  };
+}
+let s = fresh();
+const win = document.getElementById('win'), frame = document.getElementById('frame');
+
+function applyTheme(id) {
+  const t = T[id], a = t.ansi === 'vs' ? VS : t.ansi;
+  const st = win.style;
+  st.setProperty('--bg', t.bg); st.setProperty('--chrome', t.chrome); st.setProperty('--fg', t.fg); st.setProperty('--sel', t.sel);
+  st.setProperty('--border', t.border); st.setProperty('--accent', t.accent); st.setProperty('--cursor', t.cursor);
+  st.setProperty('--divider', `color-mix(in srgb, ${t.bg} 80%, ${t.fg})`);
+  st.setProperty('--band', t.light ? `color-mix(in srgb, ${t.fg} 10%, ${t.bg})` : a[8]);
+  a.forEach((c, i) => st.setProperty('--a' + i, c));
+  win.classList.toggle('light', !!t.light);
+}
+
+function tabHTML(id, g) {
+  const t = s.tabs[id], gr = s.groups[g], sel = gr.sel === id, act = s.active === g;
+  const ico = t.kind === 'web' ? `<span class="ico">${I.globe}</span>` : t.kind === 'shell' ? `<span class="ico">${I.term}</span>`
+    : t.kind === 'codex' ? `<span class="ico">${I.code}</span>` : mark(t.status);
+  return `<div class="tab${sel ? ' sel' : ''}${act ? ' act' : ''}" data-tab="${id}" data-g="${g}">${ico}<span>${esc(t.title)}</span><span class="x">${I.x}</span></div><div class="vhair"></div>`;
+}
+function paneHTML(id, g) {
+  const t = s.tabs[id], focused = s.active === g;
+  if (t.kind === 'web') return `<div class="webbar"><span class="btn">${I.left}</span><span class="btn">${I.right}</span><span class="btn">${I.reload}</span><span class="addr">${esc(t.url)}</span><span class="btn">${I.compass}</span></div><div class="hair"></div>
+    <div class="webview"><div class="shop"><div class="shop__nav"><b>Shop</b><span>Catalogue</span><span>Orders</span><span>Cart (3)</span></div>
+    <div class="shop__main"><h3>Checkout</h3><div><div class="line"><span>Linen shirt · M</span><span>€ 49.00</span></div><div class="line"><span>Canvas tote</span><span>€ 18.00</span></div><div class="line"><span>Shipping</span><span>€ 4.90</span></div><div class="line total"><span>Total</span><span>€ 71.90</span></div></div><span class="shop__pay">Pay € 71.90</span></div></div></div>`;
+  return `<div class="term"><div class="term__out">${SCREENS[t.screen](focused)}</div>`;
+}
+function statusHTML(id) {
+  const t = s.tabs[id];
+  if (t.kind === 'web') return `<div class="statusbar"><span class="stat">${I.globe}${esc(t.host)}</span></div>`;
+  if (t.kind === 'shell') return `<div class="statusbar"><span class="stat">${I.folder}~/code/shop</span><span class="stat">${I.branch}main</span></div>`;
+  const b = { co: 'checkout-total', au: 'fix-auth-flake', bi: 'invoice-lines' }[id] || 'main';
+  const tok = { co: ['148k', '2.1k'], au: ['96k', '1.4k'], bi: ['211k', '3.8k'] }[id] || ['12k', '400'];
+  const extra = s.chips && id === 'co' ? `<span class="chip" data-chip="pr">${I.pull}#482 ${I.okcirc}</span><span class="chip" data-chip="sbx">${I.boat}sbx-checkout<i></i></span>` : '';
+  return `<div class="statusbar" data-status="${id}"><span class="stat">${I.branch}${b}</span><span class="stat">${I.cpu}Opus 5.5</span><span class="stat">${I.up}${tok[0]}</span><span class="stat">${I.down}${tok[1]}</span>${extra}</div>`;
+}
+function groupHTML(g) {
+  const gr = s.groups[g];
+  return `<div class="group" data-group="${g}" style="flex:1 1 0">
+    <div class="tabstrip">${gr.tabs.map(id => tabHTML(id, g)).join('')}<span class="newtab">${I.plus}</span></div>
+    <div class="hair"></div>
+    <div class="pane">${paneHTML(gr.sel, g)}</div>
+    ${statusHTML(gr.sel)}</div>`;
+}
+function nodeHTML(n) {
+  if (n.g) return groupHTML(n.g);
+  return `<div class="split${n.dir === 'v' ? ' v' : ''}">${n.kids.map((k, i) => `${i ? '<div class="pdiv"></div>' : ''}<div style="flex:${n.fr[i]} 1 0;min-width:0;min-height:0;display:flex">${nodeHTML(k)}</div>`).join('')}</div>`;
+}
+function sidebarHTML() {
+  const ids = Object.keys(s.tabs).filter(id => s.tabs[id].kind === 'claude');
+  const busy = ids.filter(id => s.tabs[id].status === 'working'), rest = ids.filter(id => s.tabs[id].status !== 'working');
+  const row = id => `<div class="srow${s.tabs[id].status === 'done' ? ' att' : ''}${s.groups[s.active] && s.groups[s.active].sel === id ? ' sel' : ''}" data-row="${id}"><span>${esc(s.tabs[id].title)}</span>${mark(s.tabs[id].status)}</div>`;
+  return `<aside class="sidebar"><div class="sb__head">SHOP<span class="plus">${I.plus}</span></div>
+    <div class="sb__sec">WAITING FOR YOU <span class="count">${rest.length + 1}</span></div>
+    <div class="sb__rows">${rest.map(row).join('')}<div class="srow"><span>Onboarding emails</span></div></div>
+    <div class="hair"></div><div class="sb__busy">${S(9, '<path d="M2.5 7.5L6 4l3.5 3.5"/>', 'stroke-width="1.6"')} BUSY <span class="count">${busy.length}</span>${busy.length ? spinner : ''}</div></aside><div class="vhair"></div>`;
+}
+
+/* the palette's rows, by mode */
+const PAL_MAIN = [
+  { id: 'co', st: 'working', t: 'Checkout refactor', sub: '~/code/shop', r: 'running' },
+  { id: 'au', st: 'waiting', t: 'Fix flaky auth spec', sub: '~/code/shop' },
+  { id: 'bi', st: 'done', t: 'Migrate billing tables', sub: '~/code/shop' },
+  { id: '-', t: 'Onboarding emails', sub: '~/code/api', r: 'recent' },
+  { id: '-', t: 'Sandbox guide', sub: '~/code/docs' },
+  { id: 'theme', icon: I.compass, t: 'Change Theme…', r: '' },
+  { id: '-', icon: I.code, t: 'New Codex Session' },
+  { id: '-', icon: I.code, t: 'New Antigravity Session' },
+  { id: '-', icon: I.globe, t: 'Web: Open URL…' },
+];
+function overlayHTML() {
+  const o = s.overlay; if (!o) return '';
+  if (o.kind === 'palette') {
+    const ph = o.mode === 'themes' ? 'Select Color Theme  ·  ↑↓ preview  ·  ⏎ keep  ·  esc back' : 'Search sessions by name or project, or type > for commands';
+    let rows;
+    if (o.mode === 'themes') rows = THEME_IDS.map((id, i) => `<div class="prow${i === o.index ? ' on' : ''}" data-theme="${id}"><span class="lead"></span><span class="t">${esc(T[id].name)}</span>${id === userTheme ? '<span class="r">current</span>' : ''}</div>`);
+    else {
+      const q = o.query.toLowerCase();
+      rows = PAL_MAIN.filter(r => !q || (r.t + ' ' + (r.sub || '')).toLowerCase().includes(q)).map((r, i) =>
+        `<div class="prow${i === o.index ? ' on' : ''}" data-pal="${r.id}"><span class="lead">${r.st ? mark(r.st) : (r.icon || '')}</span><span class="t">${esc(r.t)}</span>${r.sub ? `<span class="s">${esc(r.sub)}</span>` : ''}<span class="r">${r.id === 'theme' ? esc(T[s.theme].name) : (r.r || '')}</span></div>`);
+    }
+    return `<div class="overlay" data-overlay="palette"><div class="field">${o.query ? esc(o.query) : `<span class="ph">${ph}</span>`}${o.query ? '<span class="caret"></span>' : ''}</div>${rows.join('')}</div>`;
+  }
+  if (o.kind === 'quick') {
+    const targets = [['co', 'Checkout refactor', '⌘1'], ['au', 'Fix flaky auth spec', '⌘2'], ['bi', 'Migrate billing tables', '⌘3']];
+    return `<div class="overlay" data-overlay="quick"><div class="field">${o.text ? esc(o.text) + '<span class="caret"></span>' : '<span class="ph">Message a session, or ⇥ to pick several</span>'}</div>
+      <div class="qsec">SESSIONS</div>${targets.map(([id, t, k], i) => `<div class="prow${i === o.index ? ' on' : ''}" data-q="${id}"><span class="lead"><span class="tick${o.ticked.includes(id) ? ' on' : ''}">${o.ticked.includes(id) ? I.tick : ''}</span></span><span class="t">${t}</span><span class="r">${k}</span></div>`).join('')}
+      <div class="prow" data-q="new"><span class="lead">${I.plus}</span><span class="t">New session with this message</span><span class="r">⌘N</span></div>
+      <div class="qfoot">↵ send or open   ⇥ add to broadcast   ⌘↵ new session   esc close</div></div>`;
+  }
+  return '';
+}
+function peekHTML() {
+  if (!s.peek) return '';
+  const p = PEEK[s.peek], t = s.tabs[s.peek];
+  return `<div class="peek" data-peek="${s.peek}"><div class="peek__t">${mark(t.status)}${esc(t.title)}</div><div class="peek__s">${p.status}</div><div class="peek__r">${esc(p.reply)}</div><div class="peek__you"><b>You</b>${esc(p.you)}</div></div>`;
+}
+
+let starI = 0;
+function render() {
+  applyTheme(s.theme);
+  win.innerHTML = `<div class="titlebar"><div class="lights"><i></i><i></i><i></i></div><b>shop</b><span class="dash">—</span><span>~/code/shop</span></div><div class="hair"></div>
+    <div class="wbody">${s.sidebar ? sidebarHTML() : ''}<div class="layout">${nodeHTML(s.layout)}</div></div>
+    ${overlayHTML()}${peekHTML()}${s.drop ? `<div class="drop" style="${s.drop}"></div>` : ''}${s.ghost ? `<div class="ghost" style="${s.ghost.style}">${mark('done')}${esc(s.ghost.title)}</div>` : ''}${s.toast ? `<div class="toast">${esc(s.toast)}</div>` : ''}`;
+  if (s.peek) placePeek();
+  win.querySelectorAll('.star').forEach(el => { el.textContent = STARS[starI % STARS.length]; });
+  requestAnimationFrame(position);
+}
+// the working star turns like Claude Code's
+setInterval(() => { starI++; win.querySelectorAll('.star').forEach(el => { el.textContent = STARS[starI % STARS.length]; }); }, 160);
+
+function rel(el) { // an element's box in the window's own (unscaled) points
+  const w = win.getBoundingClientRect(), r = el.getBoundingClientRect(), k = scale;
+  return { x: (r.left - w.left) / k, y: (r.top - w.top) / k, w: r.width / k, h: r.height / k };
+}
+function placePeek() {
+  const tab = win.querySelector(`.tab[data-tab="${s.peek}"]`), card = win.querySelector('.peek');
+  if (!tab || !card) return;
+  const r = rel(tab), Wd = win.offsetWidth;
+  card.style.left = Math.max(0, Math.min(r.x, Wd - 400)) + 'px'; card.style.top = (r.y + r.h + 4) + 'px';
+}
+
+/* ================================================================ fitting the window to the screen */
+let scale = 1;
+function fit() {
+  const narrow = innerWidth < 900;
+  const availW = Math.min(innerWidth - (narrow ? 28 : 64), 1400);
+  const availH = narrow ? 99999 : innerHeight - 56 - 150;
+  const Wd = Math.max(780, Math.min(availW, 1240)), Hd = narrow ? 560 : Math.max(540, Math.min(availH, 780));
+  scale = Math.min(1, availW / Wd, availH / Hd);
+  win.style.width = Wd + 'px'; win.style.height = Hd + 'px'; win.style.transform = `scale(${scale})`;
+  frame.style.width = Wd * scale + 'px'; frame.style.height = Hd * scale + 'px';
+  if (s.peek) placePeek();
+  position();
+}
+addEventListener('resize', fit);
+
+/* ================================================================ the tour */
+const kbd = k => `<kbd>${k}</kbd>`;
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let timers = [];
+const later = (fn, ms) => timers.push(setTimeout(fn, reduced ? 0 : ms));
+function typeInto(set, text, every, done) {
+  let i = 0;
+  const tick = () => { i++; set(text.slice(0, i)); render(); if (i < text.length) later(tick, every); else if (done) done(); };
+  if (reduced) { set(text); render(); if (done) done(); } else later(tick, every);
+}
+
+const steps = [
+  { title: 'Every tab is a live agent session',
+    body: `<p>Each tab runs the agent's own CLI in a real terminal: Claude Code here, and Codex or Antigravity from the same menu. Your slash commands, hooks, MCP servers and settings work as before.</p><p>This window is the project <b>shop</b>, with three sessions open.</p>`,
+    target: () => '.tabstrip' },
+  { title: 'Each tab says what its agent is doing',
+    body: `<ul><li><span style="color:${ORANGE}">${I.sparkles}</span>Working, with an icon for what: thinking, editing, running a command.</li><li><span style="color:${RED}">${I.hand}</span>Blocked on you: a permission prompt or a question.</li><li><span style="color:var(--ring)">${I.check}</span>Finished while you were looking at something else.</li></ul><p>Watch two of them change.</p>`,
+    target: () => '.tabstrip',
+    apply: st => { st.tabs.au.status = 'waiting'; st.tabs.au.screen = 'au'; st.tabs.bi.status = 'done'; st.tabs.bi.screen = 'bi'; },
+    play: () => { later(() => { s.tabs.au.status = 'waiting'; s.tabs.au.screen = 'au'; render(); }, 1100); later(() => { s.tabs.bi.status = 'done'; s.tabs.bi.screen = 'bi'; render(); }, 2300); } },
+  { title: 'Jump to whoever needs you',
+    body: () => s.groups.g1.sel === 'au' && s.tabs.au.status === 'waiting'
+      ? `<p>Here is the prompt it was waiting on. Approve it: click <b>Yes</b> or press ${kbd('1')}.</p><p>${kbd('⌘J')} always goes to the session that has waited longest, across every project window. Press it again for the next one.</p>`
+      : s.tabs.au.status === 'working' ? `<p>Approved. The agent carries on, and its mark turns back to working.</p><p>When nothing is waiting, ${kbd('⌘J')} takes you to the oldest finished session you haven't read.</p>`
+      : `<p>${kbd('⌘J')} goes to the session that has waited longest, in any project window.</p>`,
+    key: { label: '⌘J', test: e => e.metaKey && e.key.toLowerCase() === 'j', run: () => { s.groups.g1.sel = 'au'; render(); refresh(); } },
+    target: () => s.groups.g1.sel === 'au' && s.tabs.au.status === 'waiting' ? '.popt.on' : '.tab[data-tab="au"]',
+    apply: st => { st.groups.g1.sel = 'au'; st.tabs.au.status = 'working'; st.tabs.au.screen = 'auRun'; } },
+  { title: 'Peek without switching',
+    body: `<p>Rest the pointer on a tab to read its last message and your last prompt, without leaving the session you are in.</p><p>Try it on any tab in the window.</p>`,
+    target: () => '.peek',
+    play: () => { later(() => { s.peek = 'bi'; render(); }, 450); } },
+  { title: 'Split by dragging a tab to an edge',
+    body: `<p>Drag a tab onto any edge of a pane to split it, or onto the middle to move it there. Every pane keeps its own tabs.</p><p>${kbd('⌘E')} forks a conversation into a split beside it, so you can try another direction while the first keeps going.</p>`,
+    target: () => s.groups.g2 ? '.group[data-group="g2"]' : '.tab[data-tab="bi"]',
+    apply: st => { st.layout = { dir: 'h', kids: [{ g: 'g1' }, { g: 'g2' }], fr: [.56, .44] }; st.groups.g1 = { tabs: ['co', 'au'], sel: 'au' }; st.groups.g2 = { tabs: ['bi'], sel: 'bi' }; st.active = 'g2'; },
+    play: () => {
+      later(() => {
+        const tab = win.querySelector('.tab[data-tab="bi"]'); if (!tab) return;
+        const r = rel(tab), Wd = win.offsetWidth, Hd = win.offsetHeight;
+        s.ghost = { title: s.tabs.bi.title, style: `left:${r.x}px;top:${r.y}px` }; render();
+        later(() => { s.ghost.style = `left:${Wd * .64}px;top:${Hd * .42}px`; s.drop = `left:${Wd * .56}px;top:64px;width:${Wd * .44}px;height:${Hd - 64}px`; render(); }, 60);
+        later(() => { s.ghost = null; s.drop = null; steps[4].apply(s); render(); refresh(); }, 1300);
+      }, 600);
+    } },
+  { title: 'Keep a terminal next to your agents',
+    body: `<p>${kbd('⌃`')} opens a plain shell in the same tabs and splits. Drop a file or a screenshot on any pane to paste its path.</p>`,
+    key: { label: '⌃`', test: e => e.ctrlKey && (e.key === '`' || e.code === 'Backquote'), run: () => { if (!s.groups.g3) { steps[5].apply(s); render(); refresh(); } } },
+    target: () => s.groups.g3 ? '.group[data-group="g3"]' : '.group[data-group="g2"]',
+    apply: st => { st.layout.kids[1] = { dir: 'v', kids: [{ g: 'g2' }, { g: 'g3' }], fr: [.52, .48] }; st.groups.g3 = { tabs: ['sh'], sel: 'sh' }; st.tabs.sh = { kind: 'shell', title: 'zsh — shop', screen: 'sh' }; st.active = 'g3'; } },
+  { title: 'Open your app in a web panel',
+    body: `<p>Put the dev server, a pull request or the docs in a pane beside your sessions. Agents can open these panels too, and read, click and type in them to check their own work.</p>`,
+    target: () => '.group[data-group="g2"] .pane',
+    apply: st => { st.groups.g2.tabs.push('wb'); st.groups.g2.sel = 'wb'; st.tabs.wb = { kind: 'web', title: 'Shop — Checkout', url: 'http://localhost:5173/checkout', host: 'localhost' }; st.active = 'g2'; },
+    play: () => { s.groups.g2.tabs.push('wb'); s.tabs.wb = { kind: 'web', title: 'New tab', url: '', host: 'localhost' }; s.groups.g2.sel = 'wb'; s.active = 'g2'; render();
+      typeInto(v => { s.tabs.wb.url = v; }, 'http://localhost:5173/checkout', 35, () => later(() => { s.tabs.wb.title = 'Shop — Checkout'; render(); }, 250)); } },
+  { title: 'Find any session with ⌘P',
+    body: `<p>${kbd('⌘P')} searches every running and past session in every project, including ones started in other terminals. Pick one in another project and its window opens.</p><p>Type ${kbd('&gt;')} for commands: a new Codex or Antigravity session, a web panel, a theme.</p>`,
+    key: { label: '⌘P', test: e => e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'p', run: () => openPalette() },
+    target: () => s.overlay ? '.overlay' : '.titlebar' },
+  { title: 'Message several sessions at once',
+    body: () => s.overlay ? `<p>${kbd('⇧⌘K')} sends a message to any session without switching to it. ${kbd('⇥')} ticks more sessions to broadcast to, and ${kbd('#')} brings up saved snippets like <code>#tests</code>.</p>`
+      : `<p>${kbd('⇧⌘K')} sends a message to any session without switching to it, or to several at once.</p>`,
+    key: { label: '⇧⌘K', test: e => e.metaKey && e.shiftKey && e.key.toLowerCase() === 'k', run: () => openQuick() },
+    action: () => s.overlay && s.overlay.kind === 'quick' && s.overlay.ticked.length > 1 ? { label: 'Send to 2 sessions', run: sendQuick } : null,
+    target: () => s.overlay ? '.overlay' : '.titlebar',
+    apply: st => { st.tabs.co.status = 'working'; st.tabs.au.status = 'working'; } },
+  { title: 'Nine themes, previewed live',
+    body: `<p>Move through the list and the whole window, terminals included, takes each theme as you go. Click one to keep it. The same list is in Settings, with the text size.</p>`,
+    target: () => '.overlay',
+    play: () => { s.overlay = { kind: 'palette', mode: 'themes', query: '', index: THEME_IDS.indexOf(userTheme) }; render(); cycleThemes(); } },
+  { title: 'A sidebar of who is waiting',
+    body: `<p>${kbd('⌘B')} shows every session in the project: the ones waiting for you on top, the busy ones in a drawer at the bottom. Bold means it finished and you haven't looked yet.</p>`,
+    key: { label: '⌘B', test: e => e.metaKey && e.key.toLowerCase() === 'b', run: () => { s.sidebar = true; render(); refresh(); } },
+    target: () => s.sidebar ? '.sidebar' : '.titlebar',
+    apply: st => { st.sidebar = true; } },
+  { title: 'The status bar knows the rest',
+    body: `<p>Under each session: its git branch, model and tokens, the pull request it opened with CI and review state, and any remote sandbox it started.</p><p>Sessions can bring up Linux sandboxes on boat.dev or AWS Lambda MicroVMs, or run on your other machines as workers.</p>`,
+    target: () => '.statusbar[data-status="co"]',
+    apply: st => { st.chips = true; st.groups.g1.sel = 'co'; st.active = 'g1'; },
+    play: () => { steps[11].apply(s); render(); refresh(); } },
+  { title: 'That is Studio',
+    body: `<p>Free, open source and native on macOS 14 or later. It runs the agent CLIs you already use, with your own accounts.</p><div class="coach__end"><a class="dl" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg">Download for macOS</a><a class="dl" style="background:none;color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)" href="https://github.com/fiberevm/studio">See it on GitHub</a></div>`,
+    target: () => null },
+];
+
+function openPalette() {
+  if (s.overlay) return;
+  s.overlay = { kind: 'palette', mode: 'main', query: '', index: 0 }; render(); refresh();
+  later(() => typeInto(v => { if (s.overlay) { s.overlay.query = v; s.overlay.index = 0; } }, 'bill', 120), 900);
+}
+function openQuick() {
+  if (s.overlay) return;
+  s.overlay = { kind: 'quick', text: '', ticked: ['co'], index: 0 }; render(); refresh();
+  typeInto(v => { if (s.overlay) s.overlay.text = v; }, 'rebase on main and rerun the tests', 45, () => {
+    later(() => { if (!s.overlay) return; s.overlay.index = 1; s.overlay.ticked = ['co', 'au']; render(); refresh(); }, 400);
   });
+}
+function sendQuick() {
+  if (!s.overlay || s.overlay.kind !== 'quick') return;
+  const n = s.overlay.ticked.length;
+  s.overlay.ticked.forEach(id => { s.tabs[id].status = 'working'; if (id === 'au') s.tabs.au.screen = 'auRun'; });
+  s.overlay = null; s.toast = `Sent to ${n} session${n > 1 ? 's' : ''}`; render(); refresh();
+  later(() => { s.toast = null; render(); }, 1800);
+}
+let cycling = false;
+function cycleThemes() {
+  cycling = true;
+  const next = () => {
+    if (!cycling || !s.overlay || s.overlay.mode !== 'themes') return;
+    s.overlay.index = (s.overlay.index + 1) % THEME_IDS.length; s.theme = THEME_IDS[s.overlay.index]; render();
+    later(next, 1100);
+  };
+  later(next, 900);
+}
+
+let cur = 0;
+const coach = document.getElementById('coach'), ring = document.getElementById('ring'), dots = document.getElementById('dots');
+dots.innerHTML = steps.map((st, i) => `<button type="button" aria-label="Step ${i + 1}: ${st.title}"></button>`).join('');
+dots.addEventListener('click', e => { const b = e.target.closest('button'); if (b) go([...dots.children].indexOf(b)); });
+
+function go(i) {
+  timers.forEach(clearTimeout); timers = []; cycling = false;
+  cur = Math.max(0, Math.min(steps.length - 1, i));
+  s = fresh();
+  for (let j = 0; j < cur; j++) if (steps[j].apply) steps[j].apply(s);
+  render(); refresh();
+  if (steps[cur].play) steps[cur].play();
+  [...dots.children].forEach((b, j) => { b.className = j === cur ? 'on' : j < cur ? 'done' : ''; });
+  history.replaceState(null, '', cur ? '#step-' + (cur + 1) : location.pathname);
+}
+function refresh() {
+  const st = steps[cur];
+  const body = typeof st.body === 'function' ? st.body() : st.body;
+  const act = st.action && st.action();
+  const doBtn = act ? `<button class="coach__do" type="button" data-act>${act.label} ${kbd('↵')}</button>`
+    : st.key ? `<button class="coach__do" type="button" data-key>Press ${kbd(st.key.label)} or click here</button>` : '';
+  coach.innerHTML = `<span class="coach__arrow"></span><div class="coach__n">${String(cur + 1).padStart(2, '0')} / ${steps.length}</div><h2>${st.title}</h2>${body}${doBtn}
+    <div class="coach__nav">${cur ? '<button type="button" data-back>Back</button>' : ''}<span class="coach__hint">${cur < steps.length - 1 ? '← → to move' : ''}</span>${cur < steps.length - 1 ? '<button type="button" class="next" data-next>Next</button>' : '<button type="button" class="next" data-restart>Start over</button>'}</div>`;
+  position(); requestAnimationFrame(position);
+}
+coach.addEventListener('click', e => {
+  if (e.target.closest('[data-next]')) go(cur + 1);
+  else if (e.target.closest('[data-back]')) go(cur - 1);
+  else if (e.target.closest('[data-restart]')) go(0);
+  else if (e.target.closest('[data-key]')) steps[cur].key.run();
+  else if (e.target.closest('[data-act]')) steps[cur].action().run();
+});
+
+function position() {
+  const st = steps[cur], sel = st.target && st.target();
+  const el = sel && win.querySelector(sel);
+  const narrow = innerWidth < 900;
+  const arrow = coach.querySelector('.coach__arrow');
+  if (!el) {
+    ring.style.opacity = 0;
+    if (!narrow) { const f = frame.getBoundingClientRect(); coach.style.left = (f.left + f.width / 2 - coach.offsetWidth / 2) + 'px'; coach.style.top = Math.max(68, f.top + f.height / 2 - coach.offsetHeight / 2) + 'px'; }
+    if (arrow) arrow.style.display = 'none';
+    return;
+  }
+  const r = el.getBoundingClientRect();
+  ring.style.opacity = 1;
+  Object.assign(ring.style, { left: r.left - 3 + 'px', top: r.top - 3 + 'px', width: r.width + 6 + 'px', height: r.height + 6 + 'px' });
+  if (narrow || !arrow) return;
+  const cw = coach.offsetWidth, ch = coach.offsetHeight, gap = 16, m = 12, top = 68;
+  const fits = (x, y) => x >= m && y >= top && x + cw <= innerWidth - m && y + ch <= innerHeight - m;
+  // a wide target (a tab strip, a pane) gets the card at its right end, where the terminal has no text
+  const ax0 = r.width > cw * 2 ? r.right - cw - 32 : r.left + Math.min(40, Math.max(0, r.width / 2 - 20));
+  const cand = [['below', ax0, r.bottom + gap], ['right', r.right + gap, r.top], ['left', r.left - cw - gap, r.top], ['above', ax0, r.top - ch - gap]];
+  let pick = cand.find(([, x, y]) => fits(x, y));
+  if (!pick) pick = ['in', Math.min(r.right - cw - 24, innerWidth - cw - m), Math.min(r.bottom - ch - 24, innerHeight - ch - m)];
+  let [side, x, y] = pick;
+  x = Math.max(m, Math.min(x, innerWidth - cw - m)); y = Math.max(top, Math.min(y, innerHeight - ch - m));
+  coach.style.left = x + 'px'; coach.style.top = y + 'px';
+  arrow.style.display = side === 'in' ? 'none' : 'block';
+  arrow.style.left = arrow.style.top = arrow.style.right = arrow.style.bottom = '';
+  const ax = Math.max(16, Math.min((r.width > cw * 2 ? x + cw - 60 : r.left + Math.min(r.width / 2, 60)) - x - 6, cw - 28)), ay = Math.max(16, Math.min(r.top + Math.min(r.height / 2, 40) - y - 6, ch - 28));
+  if (side === 'below') { arrow.style.left = ax + 'px'; arrow.style.top = '-7px'; arrow.style.clipPath = 'polygon(0 0, 100% 0, 0 100%)'; }
+  if (side === 'above') { arrow.style.left = ax + 'px'; arrow.style.bottom = '-7px'; arrow.style.clipPath = 'polygon(100% 0, 100% 100%, 0 100%)'; }
+  if (side === 'right') { arrow.style.left = '-7px'; arrow.style.top = ay + 'px'; arrow.style.clipPath = 'polygon(0 0, 0 100%, 100% 100%)'; }
+  if (side === 'left') { arrow.style.right = '-7px'; arrow.style.top = ay + 'px'; arrow.style.clipPath = 'polygon(0 0, 100% 0, 100% 100%)'; }
+}
+addEventListener('scroll', position, { passive: true });
+
+/* ================================================================ clicking around in the window */
+function selectTab(id, g) {
+  g = g || Object.keys(s.groups).find(k => s.groups[k].tabs.includes(id));
+  if (!g) return;
+  s.groups[g].sel = id; s.active = g; s.peek = null;
+  if (s.tabs[id].status === 'done') s.tabs[id].status = 'idle';   // reading it clears the unread mark, like the app
+}
+function approve() { s.tabs.au.status = 'working'; s.tabs.au.screen = 'auRun'; render(); refresh(); }
+function closeOverlay() { if (s.overlay && s.overlay.mode === 'themes') s.theme = userTheme; s.overlay = null; cycling = false; render(); refresh(); }
+let hoverT;
+win.addEventListener('click', e => {
+  const tab = e.target.closest('.tab'), perm = e.target.closest('.popt'), row = e.target.closest('.prow'), srow = e.target.closest('.srow[data-row]');
+  if (perm && s.tabs.au.status === 'waiting') { if (perm.dataset.perm !== '3') approve(); return; }
+  if (row && s.overlay) {
+    if (row.dataset.theme) { cycling = false; userTheme = s.theme = row.dataset.theme; s.overlay = null; render(); refresh(); return; }
+    if (row.dataset.q) { const id = row.dataset.q, o = s.overlay; if (id !== 'new') { o.ticked = o.ticked.includes(id) ? o.ticked.filter(x => x !== id) : [...o.ticked, id]; render(); refresh(); } return; }
+    const id = row.dataset.pal;
+    if (id === 'theme') { s.overlay = { kind: 'palette', mode: 'themes', query: '', index: THEME_IDS.indexOf(s.theme) }; render(); return; }
+    if (s.tabs[id]) selectTab(id);
+    s.overlay = null; render(); refresh(); return;
+  }
+  if (tab) { selectTab(tab.dataset.tab, tab.dataset.g); render(); refresh(); return; }
+  if (srow) { selectTab(srow.dataset.row); render(); return; }
+  if (s.overlay && !e.target.closest('.overlay')) closeOverlay();
+});
+win.addEventListener('mouseover', e => {
+  const tab = e.target.closest('.tab'), row = e.target.closest('.prow[data-theme]');
+  if (row && s.overlay && s.overlay.mode === 'themes') { const id = row.dataset.theme; if (s.theme !== id) { cycling = false; s.overlay.index = THEME_IDS.indexOf(id); s.theme = id; render(); } return; }
+  if (!tab || !s.tabs[tab.dataset.tab] || s.tabs[tab.dataset.tab].kind !== 'claude' || s.peek === tab.dataset.tab) return;
+  clearTimeout(hoverT);
+  const id = tab.dataset.tab;
+  hoverT = setTimeout(() => { if (win.querySelector(`.tab[data-tab="${id}"]:hover`)) { s.peek = id; render(); } }, 450);
+});
+win.addEventListener('mouseout', e => {
+  const tab = e.target.closest('.tab');
+  if (tab && !tab.contains(e.relatedTarget)) { clearTimeout(hoverT); if (s.peek && cur !== 3) { s.peek = null; render(); } }
+});
+
+/* ================================================================ keys */
+addEventListener('keydown', e => {
+  const st = steps[cur];
+  if (st.key && st.key.test(e)) { e.preventDefault(); st.key.run(); return; }
+  if (e.key === '1' && s.tabs.au.status === 'waiting' && s.groups.g1 && s.groups.g1.sel === 'au') { approve(); return; }
+  if (e.key === 'Enter' && st.action && st.action()) { e.preventDefault(); st.action().run(); return; }
+  if (e.key === 'Escape' && s.overlay) { closeOverlay(); return; }
+  if (s.overlay && s.overlay.mode === 'themes') {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); cycling = false; const o = s.overlay; o.index = (o.index + (e.key === 'ArrowDown' ? 1 : THEME_IDS.length - 1)) % THEME_IDS.length; s.theme = THEME_IDS[o.index]; render(); return; }
+    if (e.key === 'Enter') { userTheme = s.theme; s.overlay = null; cycling = false; render(); refresh(); return; }
+  }
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === 'ArrowRight') go(cur + 1);
+  if (e.key === 'ArrowLeft') go(cur - 1);
+});
+
+fit(); go((+(location.hash.match(/step-(\d+)/) || [])[1] || 1) - 1);
+if (document.fonts) document.fonts.ready.then(fit);
+setTimeout(() => { coach.classList.add('live'); ring.classList.add('live'); }, 400);
 })();
 </script>
 </body>
