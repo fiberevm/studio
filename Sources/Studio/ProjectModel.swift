@@ -384,7 +384,7 @@ final class ProjectModel: ObservableObject {
     /// Close the tab only; a Claude session keeps running (find it with ⌘P). A terminal ends.
     func closeKeepingRunning(_ t: TerminalSession) {
         guard let g = group(containing: t.id) else { return }
-        detach(t.id, from: g)   // an emptied pane stays, showing its empty state
+        detach(t.id, from: g)   // an emptied pane closes (Settings → Sessions), else it shows its empty state
         if !t.isAgent { store.close(t) }   // terminals and web panels have nowhere else to live
         changed()
     }
@@ -768,6 +768,14 @@ final class ProjectModel: ObservableObject {
         g.tabIds.removeAll { $0 == id }
         if g.selection == "t:\(id)" {
             g.selection = g.tabIds.isEmpty ? nil : "t:\(g.tabIds[min(idx, g.tabIds.count - 1)])"
+        }
+        // A pane left with no tabs closes by itself (Settings → Sessions, on by default) and the pane beside it
+        // becomes the active one. The window's last pane always stays.
+        if g.tabIds.isEmpty, groups.count > 1, Pref.bool(Pref.autoCloseEmptyPanes, default: true) {
+            let near = siblingGroup(of: g)
+            let wasActive = activeGroupId == g.id
+            remove(g)
+            if wasActive, let near { activeGroupId = near.id }
         }
     }
 

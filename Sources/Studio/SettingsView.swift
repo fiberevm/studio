@@ -11,6 +11,7 @@ enum Pref {
     static let sandboxEnvironment = "sandbox.boat.environment"      // "" = account default
     static let sandboxPolicy = "sandbox.policy"                     // "auto" (default) | "ask"
     static let defaultAgent = "defaultAgent"                        // Agent raw value, default "claude"
+    static let autoCloseEmptyPanes = "autoCloseEmptyPanes"          // Bool, default true
 
     static func bool(_ k: String, default d: Bool) -> Bool { UserDefaults.standard.object(forKey: k) as? Bool ?? d }
     static func string(_ k: String) -> String? {
@@ -55,7 +56,7 @@ struct SettingsView: View {
     }()
 
     enum Section: String, CaseIterable, Identifiable {
-        case appearance = "Appearance", agents = "Agents", workers = "Workers", sessions = "Sessions", sandboxes = "Sandboxes", secrets = "Secrets", snippets = "Snippets", about = "About"
+        case appearance = "Appearance", agents = "Agents", workers = "Workers", sessions = "Sessions", worktrees = "Worktrees", sandboxes = "Sandboxes", secrets = "Secrets", snippets = "Snippets", about = "About"
         var id: String { rawValue }
         var icon: String {
             switch self {
@@ -64,6 +65,7 @@ struct SettingsView: View {
             case .workers: return "server.rack"
             case .sessions: return "rectangle.stack"
             case .sandboxes: return "sailboat"
+            case .worktrees: return "arrow.triangle.branch"
             case .secrets: return "key"
             case .snippets: return "text.quote"
             case .about: return "info.circle"
@@ -95,6 +97,7 @@ struct SettingsView: View {
                         case .workers: WorkerSettings()
                         case .sessions: SessionSettings()
                         case .sandboxes: SandboxSettings(registry: store.sandboxes)
+                        case .worktrees: WorktreeSettings()
                         case .secrets: SecretSettings()
                         case .snippets: SnippetSettings()
                         case .about: AboutSettings()
@@ -484,6 +487,7 @@ private struct SessionSettings: View {
     @AppStorage(Pref.keepSessionsAlive) private var keepAlive = true
     @AppStorage(Pref.nativePermissionMode) private var nativeMode = ""
     @AppStorage(Worktrees.pref) private var worktrees = true
+    @AppStorage(Pref.autoCloseEmptyPanes) private var autoClosePanes = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -495,6 +499,10 @@ private struct SessionSettings: View {
             Row(title: "Closing a tab ends its session",
                 detail: "Off: the session keeps running in the background (reopen it from ⌘P). Right-click a tab for the other behavior either way.") {
                 Toggle("", isOn: $closeEnds).labelsHidden().toggleStyle(.switch)
+            }
+            Row(title: "Close a pane when its last tab closes",
+                detail: "The split closes and its neighbours take the room. Off: the empty pane stays, with shortcuts for a new session, terminal or browser.") {
+                Toggle("", isOn: $autoClosePanes).labelsHidden().toggleStyle(.switch)
             }
             Row(title: "Keep sessions running when Studio quits",
                 detail: SessionHost.tmux == nil

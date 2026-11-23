@@ -25,6 +25,7 @@ enum Worktrees {
         var bases = UserDefaults.standard.dictionary(forKey: basesKey) as? [String: String] ?? [:]
         bases[path] = head
         UserDefaults.standard.set(bases, forKey: basesKey)
+        remember(repo: top)
         let rel = folder.count > top.count ? String(folder.dropFirst(top.count)) : ""
         let dir = path + rel
         return FileManager.default.fileExists(atPath: dir) ? dir : path
@@ -66,6 +67,97 @@ enum Worktrees {
     static func branches(_ repo: String) -> [String] {
         (git(["for-each-ref", "--sort=-committerdate", "--format=%(refname:short)", "refs/heads"], in: repo) ?? "")
             .split(separator: "\n").map(String.init).filter { !$0.hasPrefix("studio/") }
+    }
+
+    // MARK: Every worktree, for Settings → Worktrees
+
+    /// A linked worktree of a repo Studio knows: where it is, what is in it, and how much disk it takes.
+    struct Info: Identifiable, Equatable {
+        let path: String
+        let repo: String
+        let branch: String?
+        /// Studio made it for a session (as opposed to `git worktree add` or `claude --worktree` by hand).
+        let byStudio: Bool
+        /// Files changed or untracked right now.
+        let dirty: Bool
+        /// Commits on it that its start point (or the repo's default branch) doesn't have.
+        let ahead: Int
+        let modified: Date?
+        var id: String { path }
+        var name: String { (path as NSString).lastPathComponent }
+        /// Nothing in it would be lost by deleting it.
+        var untouched: Bool { !dirty && ahead == 0 }
+    }
+
+    private static let reposKey = "worktreeRepos"     // repo roots Studio has made worktrees in
+
+    private static func remember(repo: String) {
+        var l = UserDefaults.standard.stringArray(forKey: reposKey) ?? []
+        if !l.contains(repo) { l.append(repo); UserDefaults.standard.set(l, forKey: reposKey) }
+    }
+
+    /// The repos to look in: every one Studio made a worktree in, plus the recent projects.
+    static func knownRepos() -> [String] {
+        let bases = UserDefaults.standard.dictionary(forKey: basesKey) as? [String: String] ?? [:]
+        var roots = UserDefaults.standard.stringArray(forKey: reposKey) ?? []
+        roots += bases.keys.map(projectRoot)
+        roots += RecentProjects.list().map(projectRoot)
+        var seen: Set<String> = [], out: [String] = []
+        for r in roots where FileManager.default.fileExists(atPath: r) {
+            let top = repoRoot(r) ?? r
+            if seen.insert(top).inserted, FileManager.default.fileExists(atPath: top + "/.git") { out.append(top) }
+        }
+        return out
+    }
+
+    /// Every linked worktree of the known repos (not their main checkouts). Runs git: call off the main thread.
+    static func all() -> [Info] {
+        let bases = UserDefaults.standard.dictionary(forKey: basesKey) as? [String: String] ?? [:]
+        var out: [Info] = []
+        for repo in knownRepos() {
+            let main = defaultBranch(repo)
+            for c in checkouts(of: repo).dropFirst() {
+                let dirty = !(git(["status", "--porcelain"], in: c.path) ?? "").isEmpty
+                let from = bases[c.path] ?? main
+                let ahead = from.flatMap { Int(git(["rev-list", "--count", "\($0)..HEAD"], in: c.path) ?? "") } ?? 0
+                let modified = (try? FileManager.default.attributesOfItem(atPath: c.path))?[.modificationDate] as? Date
+                out.append(Info(path: c.path, repo: repo, branch: c.branch, byStudio: bases[c.path] != nil,
+                                dirty: dirty, ahead: ahead, modified: modified))
+            }
+        }
+        return out
+    }
+
+    /// Disk space a folder takes, in bytes (`du`). Slow on big trees: call off the main thread.
+    static func size(of path: String) -> Int64? {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/du")
+        p.arguments = ["-sk", path]
+        let out = Pipe()
+        p.standardOutput = out; p.standardError = FileHandle.nullDevice
+        do { try p.run() } catch { return nil }
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+        guard let kb = Int64(String(decoding: data, as: UTF8.self).split(separator: "\t").first ?? "") else { return nil }
+        return kb * 1024
+    }
+
+    /// Remove a worktree and its folder, changes included, and its `studio/` branch. Returns git's message on failure.
+    static func delete(_ w: Info) -> String? {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        p.arguments = ["-C", w.repo, "worktree", "remove", "--force", w.path]
+        let err = Pipe()
+        p.standardOutput = FileHandle.nullDevice; p.standardError = err
+        do { try p.run() } catch { return error.localizedDescription }
+        let msg = String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        p.waitUntilExit()
+        guard p.terminationStatus == 0 else { return msg.isEmpty ? "git worktree remove failed" : msg }
+        if let b = w.branch, b.hasPrefix("studio/") { _ = git(["branch", "-D", b], in: w.repo) }
+        var bases = UserDefaults.standard.dictionary(forKey: basesKey) as? [String: String] ?? [:]
+        bases[w.path] = nil
+        UserDefaults.standard.set(bases, forKey: basesKey)
+        return nil
     }
 
     /// One checkout of a repo: the main one or a linked worktree.
