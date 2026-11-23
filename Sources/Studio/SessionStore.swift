@@ -417,9 +417,12 @@ final class SessionStore: ObservableObject {
         return seen
     }
 
-    /// The window a saved tab reopens in: the one whose saved layout lists it, else its project root.
+    /// The window a saved tab reopens in: the one whose saved layout lists it, if that window is still open
+    /// (a closed window's old layout must not hold sessions back from their project's window), else its project.
     private func home(of e: [String: String], cwd: String) -> String {
-        e["sid"].flatMap(SavedLayout.owner(of:)) ?? projectRoot(cwd)
+        let open = OpenWindows.list
+        if let owner = e["sid"].flatMap(SavedLayout.owner(of:)), open?.contains(owner) ?? true { return owner }
+        return projectRoot(cwd)
     }
 
     private func savedTerminals() -> [[String: String]] {

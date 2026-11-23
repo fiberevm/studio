@@ -734,7 +734,8 @@ final class ProjectModel: ObservableObject {
                         let cwd = String(sid.dropFirst(6))
                         t = store.newShell(in: FileManager.default.fileExists(atPath: cwd) ? cwd : folder)
                     } else {
-                        t = mine.first { $0.sessionId == sid && !used.contains($0.id) }
+                        // never a session another window already shows: a tab lives in one window
+                        t = mine.first { $0.sessionId == sid && !used.contains($0.id) && !StudioControl.shared.isOpen($0.id, elsewhereThan: self) }
                     }
                     if let t, sid == sel, selected == nil { selected = t }
                     return t
@@ -757,8 +758,12 @@ final class ProjectModel: ObservableObject {
 
         guard let node = build(saved) else { return false }
         root = node
-        // sessions that were restored but missing from the saved layout go into the first group
-        let leftovers = store.terminals(in: folder).filter { !used.contains($0.id) && $0.sessionId != nil && $0.isAgent }
+        // this project's sessions that were restored but missing from the saved layout go into the first group
+        // (only this project's: a window on ~ must not take every project's sessions, nor another window's tabs)
+        let leftovers = store.terminals(in: folder).filter {
+            !used.contains($0.id) && $0.sessionId != nil && $0.isAgent && projectRoot($0.cwd) == folder
+                && !StudioControl.shared.isOpen($0.id, elsewhereThan: self)
+        }
         if let g = root.groups.first { g.tabIds += leftovers.map(\.id) }
         activeGroupId = active ?? root.groups.first?.id ?? activeGroupId
         return true

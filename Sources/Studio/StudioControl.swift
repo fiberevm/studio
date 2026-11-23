@@ -129,6 +129,11 @@ final class StudioControl {
     }
     private var models: [ProjectModel] { windows.values.compactMap(\.model) }
 
+    /// Whether a tab is open in a project window other than `model` (a session shows in one window only).
+    func isOpen(_ id: UUID, elsewhereThan model: ProjectModel) -> Bool {
+        models.contains { $0 !== model && $0.groups.contains { $0.tabIds.contains(id) } }
+    }
+
     // MARK: Connection handling
 
     private nonisolated func accept(_ conn: NWConnection) {
