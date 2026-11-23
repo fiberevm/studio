@@ -52,6 +52,9 @@ if [[ -n "${SPARKLE_PUBLIC_KEY:-}" ]]; then
   <key>SUEnableAutomaticChecks</key><true/>
   <key>SUAutomaticallyUpdate</key><true/>"
 fi
+# The Markdown preview's renderer (marked, MIT)
+rm -rf "$APP/Contents/Resources/.Preview.new" && cp -R Resources/Preview "$APP/Contents/Resources/.Preview.new" \
+  && rm -rf "$APP/Contents/Resources/Preview" && mv "$APP/Contents/Resources/.Preview.new" "$APP/Contents/Resources/Preview"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/.AppIcon.new" && mv -f "$APP/Contents/Resources/.AppIcon.new" "$APP/Contents/Resources/AppIcon.icns"
 cat > "$APP/Contents/.Info.plist.new" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

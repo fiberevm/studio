@@ -269,7 +269,32 @@ final class ProjectModel: ObservableObject {
     }
 
     /// The tree of this project's files that file tabs show on their left (built the first time a file is opened).
-    lazy var fileTree = FileTree(root: folder)
+    private var fileTrees: [String: FileTree] = [:]
+    func fileTree(root: String) -> FileTree {
+        if let t = fileTrees[root] { return t }
+        let t = FileTree(root: root)
+        fileTrees[root] = t
+        return t
+    }
+
+    /// The folder a file tab's tree is rooted at: the checkout the user switched it to, else the worktree its
+    /// file lives in, else the project folder.
+    func explorerRoot(for tab: TerminalSession) -> String {
+        if let r = tab.explorerRoot, FileManager.default.fileExists(atPath: r) { return r }
+        let marker = folder + "/.claude/worktrees/"
+        if let p = tab.filePath, p.hasPrefix(marker), let name = p.dropFirst(marker.count).split(separator: "/").first {
+            return marker + name
+        }
+        return folder
+    }
+
+    /// Switch a file tab's tree to another checkout (the worktree menu above the tree).
+    func setExplorerRoot(_ root: String, for tab: TerminalSession) {
+        tab.explorerRoot = root
+        tab.objectWillChange.send()
+        objectWillChange.send()
+        saveLayout()
+    }
 
     /// Files opened in this window, newest first (⌘K shows them before you type).
     @Published var recentFiles: [String] = []
@@ -622,7 +647,7 @@ final class ProjectModel: ObservableObject {
                 func token(_ t: TerminalSession?) -> String? {
                     guard let t else { return nil }
                     if t.isWeb { return "web:" + (t.url?.absoluteString ?? "about:blank") }
-                    if t.isFile { return t.filePath.map { "file:" + $0 } ?? "files:" }
+                    if t.isFile { return t.filePath.map { "file:" + $0 } ?? "files:" + (t.explorerRoot ?? "") }
                     if t.isWorker, let r = t.remote { return "worker:\(r.worker)|\(r.session)|\(t.cwd)" }
                     if t.isAgent, !t.isClaude, let sid = t.sessionId { return sid }   // restored like a Claude tab, by session id
                     if t.isAgy { return "agy:" + t.cwd }   // not prompted yet: a fresh agy there
@@ -674,8 +699,10 @@ final class ProjectModel: ObservableObject {
                     let t: TerminalSession?
                     if sid.hasPrefix("web:") {
                         t = store.newWeb(URL(string: String(sid.dropFirst(4))), cwd: folder)
-                    } else if sid == "files:" {
+                    } else if sid.hasPrefix("files:") {
                         t = store.newFiles(cwd: folder)
+                        let root = String(sid.dropFirst(6))
+                        if !root.isEmpty { t?.explorerRoot = root }
                     } else if sid.hasPrefix("file:") {
                         let p = String(sid.dropFirst(5))
                         t = FileManager.default.fileExists(atPath: p) ? store.newFile(p, cwd: folder) : nil

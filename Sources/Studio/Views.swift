@@ -1074,6 +1074,10 @@ struct SessionStatusBar: View {
                 .help(explorerShown ? "Hide the file tree" : "Show the file tree")
                 stat("doc.text", relativePath(p, to: model.folder), help: p)
                 if let d = terminal.fileDoc, d.content == .text { FileCaretStats(doc: d, caret: d.caret) }
+                if let d = terminal.fileDoc, d.content == .image {
+                    if let px = d.imagePixels { stat("photo", "\(Int(px.width)) × \(Int(px.height))", help: "Size in pixels") }
+                    stat("internaldrive", ByteCountFormatter.string(fromByteCount: Int64(d.fileSize), countStyle: .file), help: "Size on disk")
+                }
             }
             else if terminal.isFile { stat("folder", abbreviatePath(model.folder), help: "Files in this project") }
             else if terminal.isWeb { stat("globe", terminal.url?.host ?? "", help: terminal.url?.absoluteString ?? "") }
@@ -1278,12 +1282,15 @@ struct TerminalPane: View {
                 // the project's file tree, to the left of the file (like VS Code's Explorer); a Files tab with
                 // nothing open yet always shows it
                 if explorerShown || terminal.filePath == nil {
-                    FileExplorer(tree: model.fileTree, active: terminal.filePath) { [weak terminal] p in
-                        if let terminal { model.openFile(p, from: terminal) }
-                    }
+                    let root = model.explorerRoot(for: terminal)
+                    FileExplorer(tree: model.fileTree(root: root), root: root, active: terminal.filePath,
+                                 onRoot: { [weak terminal] r in if let terminal { model.setExplorerRoot(r, for: terminal) } },
+                                 onOpen: { [weak terminal] p in if let terminal { model.openFile(p, from: terminal) } })
                 }
                 if let doc = terminal.fileDoc {
-                    FilePane(doc: doc, fontSize: model.store.fontSize) { [weak terminal] tv in terminal?.fileTextView = tv }
+                    FilePane(doc: doc, fontSize: model.store.fontSize,
+                             register: { [weak terminal] tv in terminal?.fileTextView = tv },
+                             openFile: { model.openFile($0) })
                         .id(doc.path)
                 } else {
                     Text("Pick a file to open it here").font(.system(size: 13)).foregroundStyle(.secondary)

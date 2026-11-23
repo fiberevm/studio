@@ -79,12 +79,19 @@ final class FileTree: ObservableObject {
 struct FileExplorer: View {
     @EnvironmentObject var model: ProjectModel
     @ObservedObject var tree: FileTree
+    /// The checkout the tree shows (the project folder or one of its worktrees).
+    let root: String
     /// The file shown in this tab.
     let active: String?
+    /// Another checkout was picked in the menu above the tree.
+    let onRoot: (String) -> Void
     /// A file was clicked.
     let onOpen: (String) -> Void
     @AppStorage(FileExplorer.widthKey) private var width = 220.0
     @State private var dragStart: Double?
+    /// The repo's checkouts (main folder and worktrees), for the menu; empty outside git.
+    @State private var checkouts: [Worktrees.Checkout] = []
+    @State private var ticks = 0
     private let tick = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
     static let widthKey = "explorerWidth"
     /// Whether file tabs show the Explorer (the sidebar button in a file tab's status bar).
@@ -93,14 +100,7 @@ struct FileExplorer: View {
     var body: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 4) {
-                    Text(model.name.uppercased()).font(.system(size: 11, weight: .bold)).lineLimit(1)
-                    Spacer()
-                }
-                .foregroundStyle(.secondary)
-                .padding(.leading, 12).padding(.trailing, 8)
-                .frame(height: 26)
-                .help("Explorer: \(abbreviatePath(model.folder))")
+                header
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 0) {
@@ -134,7 +134,54 @@ struct FileExplorer: View {
                 )
                 .zIndex(1)
         }
-        .onReceive(tick) { _ in tree.reload() }
+        .onReceive(tick) { _ in
+            tree.reload()
+            ticks += 1
+            if ticks % 5 == 0 { loadCheckouts() }
+        }
+        .onAppear { loadCheckouts() }
+    }
+
+    /// Which checkout the tree shows: its branch (or the folder's name outside git), with a menu to switch to
+    /// the project folder or any of its worktrees.
+    private var header: some View {
+        let current = checkouts.first { $0.path == root }
+        let title = current.map { $0.branch ?? "detached" } ?? (root == model.folder ? model.name : (root as NSString).lastPathComponent)
+        return Menu {
+            ForEach(checkouts) { c in
+                Button { onRoot(c.path) } label: {
+                    Text((c.path == root ? "✓ " : "    ") + (c.branch ?? "detached") + "  —  " + place(c.path))
+                }
+            }
+            if !checkouts.isEmpty { Divider() }
+            Button("Reveal in Finder") { NSWorkspace.shared.open(URL(fileURLWithPath: root)) }
+            Button("Copy Path") { copy(root) }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: checkouts.isEmpty ? "folder" : "arrow.triangle.branch").font(.system(size: 10, weight: .semibold))
+                // a borderless menu draws only its label's first icon and text, so the "there's a menu" mark is text
+                Text(title + (checkouts.count > 1 ? "  ▾" : "")).font(.system(size: 11, weight: .bold)).lineLimit(1).truncationMode(.middle)
+            }
+            .foregroundStyle(.secondary)
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden)
+        .padding(.leading, 10).padding(.trailing, 8)
+        .frame(height: 26)
+        .help((checkouts.count > 1 ? "Files of \(title): click to switch worktree\n" : "") + abbreviatePath(root))
+    }
+
+    /// Where a checkout is, for the menu: "project folder" or its path inside the project.
+    private func place(_ path: String) -> String {
+        path == model.folder ? "project folder" : relativePath(path, to: model.folder)
+    }
+
+    private func loadCheckouts() {
+        let folder = model.folder
+        DispatchQueue.global(qos: .utility).async {
+            let list = Worktrees.checkouts(of: folder)
+            DispatchQueue.main.async { if list != checkouts { checkouts = list } }
+        }
     }
 
     private func show(_ path: String?, _ proxy: ScrollViewProxy) {

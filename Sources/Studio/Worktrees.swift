@@ -68,6 +68,34 @@ enum Worktrees {
             .split(separator: "\n").map(String.init).filter { !$0.hasPrefix("studio/") }
     }
 
+    /// One checkout of a repo: the main one or a linked worktree.
+    struct Checkout: Identifiable, Equatable {
+        let path: String
+        /// The branch checked out there; nil when HEAD is detached.
+        let branch: String?
+        var id: String { path }
+    }
+
+    /// Every checkout of the repo `folder` is in (`git worktree list`), the main one first. Paths under `folder`
+    /// are spelled like `folder` (git prints them with symlinks resolved). Empty outside a git repo.
+    static func checkouts(of folder: String) -> [Checkout] {
+        guard let out = git(["worktree", "list", "--porcelain"], in: folder) else { return [] }
+        let real = URL(fileURLWithPath: folder).resolvingSymlinksInPath().path
+        var list: [Checkout] = []
+        for block in out.components(separatedBy: "\n\n") {
+            var path: String?, branch: String?, skip = false
+            for line in block.split(separator: "\n") {
+                if line.hasPrefix("worktree ") { path = String(line.dropFirst(9)) }
+                else if line.hasPrefix("branch refs/heads/") { branch = String(line.dropFirst(18)) }
+                else if line == "bare" || line.hasPrefix("prunable") { skip = true }
+            }
+            guard var p = path, !skip, FileManager.default.fileExists(atPath: p) else { continue }
+            if p == real { p = folder } else if p.hasPrefix(real + "/") { p = folder + p.dropFirst(real.count) }
+            list.append(Checkout(path: p, branch: branch))
+        }
+        return list
+    }
+
     /// The git repo root for `folder`, if it is in one.
     static func repoRoot(_ folder: String) -> String? { git(["rev-parse", "--show-toplevel"], in: folder) }
 

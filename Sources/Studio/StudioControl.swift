@@ -605,6 +605,8 @@ final class StudioControl {
             guard FileManager.default.fileExists(atPath: path) else { throw ControlError(message: "no such file: \(path)") }
             model.openFile(path)
             let t = model.selectedTerminal
+            // "preview": show a Markdown file rendered (true) or as source (false)
+            if let preview = p["preview"] as? Bool, let d = t?.fileDoc, d.isMarkdown { d.preview = preview }
             if let line = (p["line"] as? NSNumber)?.intValue, line > 0, let t {
                 // the editor view appears on the next layout pass
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { (t.fileTextView as? CodeTextView)?.goTo(line: line) }

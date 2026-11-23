@@ -20,6 +20,12 @@ final class FileDoc: ObservableObject {
     @Published private(set) var revision = 0
 
     private(set) var text = ""
+    /// A Markdown file's tab is showing the rendered preview instead of the editor.
+    @Published var preview = false
+    var isMarkdown: Bool { ["md", "markdown", "mdx"].contains(ext) }
+    /// For an image: its size in pixels and on disk.
+    private(set) var imagePixels: CGSize?
+    private(set) var fileSize = 0
     private var diskStamp: Date?
     private var watcher: DispatchSourceFileSystemObject?
     private var watchedFD: Int32 = -1
@@ -43,8 +49,15 @@ final class FileDoc: ObservableObject {
         guard fm.fileExists(atPath: path) else { content = .missing; return }
         let attrs = try? fm.attributesOfItem(atPath: path)
         diskStamp = attrs?[.modificationDate] as? Date
-        if Self.imageTypes.contains(ext) { content = .image; revision += 1; return }
         let size = (attrs?[.size] as? NSNumber)?.intValue ?? 0
+        fileSize = size
+        if Self.imageTypes.contains(ext) {
+            if let img = NSImage(contentsOfFile: path) {
+                let rep = img.representations.first
+                imagePixels = (rep?.pixelsWide ?? 0) > 0 ? CGSize(width: rep!.pixelsWide, height: rep!.pixelsHigh) : img.size
+            }
+            content = .image; revision += 1; return
+        }
         guard size <= Self.maxEditable else { content = .tooLarge; return }
         guard let data = fm.contents(atPath: path) else { content = .missing; return }
         // a NUL in the first 8 KB: not text
@@ -112,6 +125,8 @@ struct FilePane: View {
     @ObservedObject var doc: FileDoc
     let fontSize: CGFloat
     var register: (NSTextView) -> Void = { _ in }
+    /// A link to another file was clicked in the Markdown preview.
+    var openFile: (String) -> Void = { _ in }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -128,15 +143,14 @@ struct FilePane: View {
             }
             switch doc.content {
             case .text:
-                CodeEditor(doc: doc, fontSize: fontSize, register: register)
+                Group {
+                    if doc.isMarkdown && doc.preview { MarkdownPreview(doc: doc, openFile: openFile) }
+                    else { CodeEditor(doc: doc, fontSize: fontSize, register: register) }
+                }
+                .overlay(alignment: .topTrailing) { if doc.isMarkdown { previewButton } }
             case .image:
                 if let img = NSImage(contentsOfFile: doc.path) {
-                    ScrollView([.horizontal, .vertical]) {
-                        Image(nsImage: img).resizable().aspectRatio(contentMode: .fit)
-                            .frame(maxWidth: min(img.size.width, 1600), maxHeight: min(img.size.height, 1600))
-                            .padding(24)
-                    }
-                    .id(doc.revision)
+                    ImageViewer(image: img, pixels: doc.imagePixels ?? img.size).id(doc.revision)
                 } else { notice("Can't display this image") }
             case .binary: notice("Binary file")
             case .tooLarge: notice("Too large to edit here (over 8 MB)")
@@ -144,6 +158,24 @@ struct FilePane: View {
             }
         }
         .background(SwiftUI.Color(nsColor: Theme.background))
+    }
+
+    /// Markdown tabs: switch between the source and the rendered page.
+    private var previewButton: some View {
+        Button { doc.preview.toggle() } label: {
+            HStack(spacing: 5) {
+                Image(systemName: doc.preview ? "chevron.left.forwardslash.chevron.right" : "eye").font(.system(size: 10))
+                Text(doc.preview ? "Source" : "Preview").font(.system(size: 11))
+            }
+            .padding(.horizontal, 9).frame(height: 24)
+            .foregroundStyle(.secondary)
+            .background(SwiftUI.Color(nsColor: Theme.chrome))
+            .overlay(Rectangle().stroke(SwiftUI.Color(nsColor: Theme.border), lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 8).padding(.trailing, 18)
+        .help(doc.preview ? "Back to the Markdown source" : "Show this Markdown file rendered")
     }
 
     private func notice(_ s: String) -> some View {

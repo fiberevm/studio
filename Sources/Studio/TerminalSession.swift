@@ -47,6 +47,8 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     /// A file open in the editor (from ⌘K); no process.
     var isFile: Bool { kind == .file }
     var filePath: String?
+    /// The checkout this file tab's tree shows, when the user picked one (else the one its file is in).
+    var explorerRoot: String?
     @MainActor lazy var fileDoc: FileDoc? = filePath.map { FileDoc(path: $0) }
     /// The editor's text view once it's on screen (for focus).
     weak var fileTextView: NSTextView?
