@@ -32,31 +32,20 @@ body { background: var(--page); color: var(--ink); font: 15px/1.5 var(--ui); -we
 a { color: inherit; }
 kbd { font: 500 .86em/1 var(--ui); padding: .2em .45em; border-radius: 5px; border: 1px solid var(--line); background: var(--page-2); white-space: nowrap; }
 
-.top { position: fixed; inset: 0 0 auto; z-index: 50; height: 56px; display: flex; align-items: center; gap: 20px; padding: 0 20px;
-       background: color-mix(in srgb, var(--page) 88%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
-.brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 16px; text-decoration: none; }
-.brand img { width: 26px; height: 26px; }
-.top__steps { display: flex; gap: 5px; margin: 0 auto; }
-.top__steps button { width: 22px; height: 22px; padding: 0; border: 0; background: none; cursor: pointer; display: grid; place-items: center; }
-.top__steps button::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--line); transition: background .2s, transform .2s; }
-.top__steps button.done::before { background: var(--ink-2); }
-.top__steps button.on::before { background: var(--orange); transform: scale(1.35); }
-.top__gh { display: flex; align-items: center; gap: 7px; text-decoration: none; font-size: 14px; color: var(--ink-2); }
-.top__gh:hover { color: var(--ink); }
-.top__gh svg { width: 18px; height: 18px; }
 .dl { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 16px; border-radius: 8px; background: var(--orange); color: var(--orange-ink);
       font-weight: 600; font-size: 14px; text-decoration: none; white-space: nowrap; transition: filter .15s, transform .15s; }
 .dl:hover { filter: brightness(1.06); }
 .dl:active { transform: translateY(1px); }
 .dl svg { width: 15px; height: 15px; }
-.dl--big { height: 48px; padding: 0 22px; font-size: 16px; border-radius: 10px; }
-
-.stage { position: relative; min-height: 100svh; padding: 80px 24px 28px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; overflow: hidden;
-         background: radial-gradient(1200px 600px at 50% 10%, color-mix(in srgb, var(--orange) 9%, transparent), transparent 70%), var(--page); }
-.stage__lede { text-align: center; max-width: 720px; }
-.stage__lede h1 { margin: 0; font-size: 30px; line-height: 1.15; letter-spacing: -.02em; font-weight: 650; }
-.stage__lede p { margin: 6px 0 0; color: var(--ink-2); }
-.frame { position: relative; flex: none; }
+html, body { height: 100%; overflow: hidden; }
+body { background: #191d27; }
+.frame { position: fixed; inset: 0; }
+.dots { display: flex; gap: 2px; margin-left: auto; }
+.dots button { width: 14px; height: 14px; padding: 0; border: 0; background: none; cursor: pointer; display: grid; place-items: center; }
+.dots button::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+.dots button.done::before { background: var(--ink-2); }
+.dots button.on::before { background: var(--orange); }
+.coach__top { display: flex; align-items: center; }
 
 /* the coach card and the ring around what it points at */
 .ring { position: fixed; z-index: 40; pointer-events: none; border-radius: 7px; box-shadow: 0 0 0 2px var(--ring), 0 0 0 6px color-mix(in srgb, var(--ring) 28%, transparent);
@@ -86,40 +75,27 @@ kbd { font: 500 .86em/1 var(--ui); padding: .2em .45em; border-radius: 5px; bord
 .coach__end { display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0 12px; }
 .coach__end .dl { height: 40px; }
 
-/* below the tour */
-.more { max-width: 1040px; margin: 0 auto; padding: 72px 24px 40px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; border-top: 1px solid var(--line); }
-.more > div { min-width: 0; }
-.more h3 { margin: 0 0 8px; font-size: 16px; }
-.more p { margin: 0 0 10px; color: var(--ink-2); font-size: 14.5px; }
-.more pre { margin: 0; padding: 12px 14px; border-radius: 8px; background: var(--page-2); border: 1px solid var(--line); font: 12.5px/1.6 var(--mono); overflow-x: auto; }
-.foot { max-width: 1040px; margin: 0 auto; padding: 24px 24px 48px; display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; color: var(--ink-2); font-size: 13px; }
-
-@media (max-width: 899px) {
-  .top { gap: 12px; padding: 0 14px; }
-  .top__steps { display: none; }
-  .top__gh span { display: none; }
-  .brand { margin-right: auto; }
-  .stage { justify-content: flex-start; padding: 72px 14px 24px; min-height: 0; }
-  .stage__lede h1 { font-size: 24px; }
-  .coach { position: relative; inset: auto !important; width: 100%; max-width: 560px; }
+@media (max-width: 639px) {
+  .coach { left: 10px !important; right: 10px; top: auto !important; bottom: 10px; width: auto; max-height: 52svh; overflow: auto; }
   .coach__arrow { display: none; }
-  .more { grid-template-columns: 1fr; padding-top: 48px; }
 }
-.dl .short { display: none; }
-@media (max-width: 420px) { .dl .full { display: none; } .dl .short { display: inline; } .dl:not(.dl--big) { padding: 0 12px; } }
 
 /* ------------------------------------------------------------------ the Studio window, at its real point sizes */
 .win { --sec: rgb(255 255 255 / .55); --ter: rgb(255 255 255 / .26); --pri: rgb(255 255 255 / .86); --hover: rgb(255 255 255 / .04);
        position: absolute; left: 0; top: 0; transform-origin: 0 0; display: flex; flex-direction: column; overflow: hidden;
-       border-radius: 12px; background: var(--chrome); color: var(--pri); font: 13px/1.2 var(--ui); cursor: default; user-select: none; -webkit-user-select: none;
-       box-shadow: 0 0 0 .5px rgb(0 0 0 / .7), inset 0 0 0 1px rgb(255 255 255 / .09), 0 32px 80px -20px rgb(0 0 0 / .6); }
-.win.light { --sec: rgb(0 0 0 / .5); --ter: rgb(0 0 0 / .25); --pri: rgb(0 0 0 / .85); --hover: rgb(0 0 0 / .04);
-             box-shadow: 0 0 0 .5px rgb(0 0 0 / .3), 0 32px 80px -20px rgb(0 0 0 / .35); }
+       background: var(--chrome); color: var(--pri); font: 13px/1.2 var(--ui); cursor: default; user-select: none; -webkit-user-select: none; }
+.win.light { --sec: rgb(0 0 0 / .5); --ter: rgb(0 0 0 / .25); --pri: rgb(0 0 0 / .85); --hover: rgb(0 0 0 / .04); }
 .win svg { display: block; flex: none; }
 .titlebar { position: relative; height: 28px; flex: none; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 0 90px; }
 .titlebar b { font-size: 13px; font-weight: 600; }
 .titlebar .dash { color: var(--ter); }
-.titlebar span { font-size: 12px; color: var(--sec); }
+.titlebar > span { font-size: 12px; color: var(--sec); }
+/* the right of the title bar, where the app puts its update pill: the download, in that pill's style */
+.tb-right { position: absolute; right: 10px; top: 0; height: 28px; display: flex; align-items: center; gap: 12px; }
+.tb-gh { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; color: var(--sec); text-decoration: none; }
+.tb-gh:hover { color: var(--pri); }
+.nudge { display: flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 99px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 500; text-decoration: none; }
+.nudge:hover { filter: brightness(1.1); }
 .lights { position: absolute; left: 10px; top: 9px; display: flex; gap: 11px; }
 .lights i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .18); }
 .lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; }
@@ -237,45 +213,10 @@ kbd { font: 500 .86em/1 var(--ui); padding: .2em .45em; border-radius: 5px; bord
 </head>
 <body>
 
-<header class="top">
-  <a class="brand" href="#top"><img src="assets/icon.svg" alt="" width="26" height="26">Studio</a>
-  <nav class="top__steps" id="dots" aria-label="Tour steps"></nav>
-  <a class="top__gh" href="https://github.com/fiberevm/studio"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.360-3.87-1.36-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.260.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg><span>GitHub</span></a>
-  <a class="dl" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.3 1.88-3.4 1.97-3.46-1.07-1.57-2.74-1.78-3.33-1.8-1.42-.15-2.77.83-3.49.83-.72 0-1.830-.81-3.01-.79-1.55.02-2.98.9-3.78 2.29-1.61 2.8-.41 6.94 1.16 9.21.77 1.11 1.68 2.36 2.88 2.31 1.16-.05 1.6-.75 3-.75s1.79.75 3.01.72c1.25-.02 2.04-1.13 2.8-2.25.88-1.29 1.24-2.54 1.26-2.6-.03-.01-2.42-.93-2.47-3.71ZM14.1 5.86c.64-.78 1.07-1.85.95-2.92-.92.04-2.03.61-2.69 1.38-.59.68-1.11 1.77-.97 2.82 1.03.08 2.07-.52 2.71-1.28Z"/></svg><span class="full">Download for macOS</span><span class="short">Download</span></a>
-</header>
-
-<main id="top">
-  <section class="stage" id="stage" aria-label="A guided tour of Studio">
-    <div class="stage__lede">
-      <h1>Take the tour of Studio</h1>
-      <p>The Mac workspace for Claude Code, Codex and Antigravity. This is the real layout, drawn in HTML: click around, or use the keys it asks for.</p>
-    </div>
-    <div class="frame" id="frame"><div class="win" id="win" role="img" aria-label="A Studio window"></div></div>
-    <div class="coach" id="coach" role="dialog" aria-live="polite" aria-label="Tour step"></div>
-    <div class="ring" id="ring" aria-hidden="true"></div>
-  </section>
-
-  <section class="more" id="install">
-    <div>
-      <h3>Download</h3>
-      <p>Free and MIT licensed. Signed and notarized by Apple. Needs macOS 14 or later and Claude Code installed and signed in; Codex and Antigravity are optional.</p>
-      <a class="dl dl--big" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg">Download Studio.dmg</a>
-    </div>
-    <div>
-      <h3>Build from source</h3>
-      <p>Needs Xcode 16 or the Swift 6 toolchain.</p>
-      <pre>git clone https://github.com/fiberevm/studio.git
-cd studio && ./build-app.sh --open</pre>
-    </div>
-    <div>
-      <h3>Is it the real CLI?</h3>
-      <p>Yes. Each tab runs the agent's own CLI in a real terminal, signed in with your account, so slash commands, hooks, MCP servers and settings work as before. Sessions run in hidden tmux sessions and survive a restart.</p>
-    </div>
-  </section>
-  <footer class="foot">
-    <span>Studio is an independent open-source project, not affiliated with or endorsed by Anthropic.</span>
-    <span><a href="https://github.com/fiberevm/studio">GitHub</a> · <a href="https://github.com/fiberevm/studio/blob/main/LICENSE">MIT License</a></span>
-  </footer>
+<main id="top" aria-label="A guided tour of Studio">
+  <div class="frame" id="frame"><div class="win" id="win"></div></div>
+  <div class="coach" id="coach" role="dialog" aria-live="polite" aria-label="Tour step"></div>
+  <div class="ring" id="ring" aria-hidden="true"></div>
 </main>
 
 <script>
@@ -412,6 +353,7 @@ function applyTheme(id) {
   st.setProperty('--band', t.light ? `color-mix(in srgb, ${t.fg} 10%, ${t.bg})` : a[8]);
   a.forEach((c, i) => st.setProperty('--a' + i, c));
   win.classList.toggle('light', !!t.light);
+  document.body.style.background = t.chrome;
 }
 
 function tabHTML(id, g) {
@@ -501,7 +443,7 @@ function peekHTML() {
 let starI = 0;
 function render() {
   applyTheme(s.theme);
-  win.innerHTML = `<div class="titlebar"><div class="lights"><i></i><i></i><i></i></div><b>shop</b><span class="dash">—</span><span>~/code/shop</span></div><div class="hair"></div>
+  win.innerHTML = `<div class="titlebar"><div class="lights"><i></i><i></i><i></i></div><b>shop</b><span class="dash">—</span><span>~/code/shop</span><span class="tb-right"><a class="tb-gh" href="https://github.com/fiberevm/studio">GitHub</a><a class="nudge" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg"><svg width="11" height="11" viewBox="0 0 12 12"><circle cx="6" cy="6" r="6" fill="currentColor" opacity=".9"/><path d="M6 3v5M3.8 6l2.2 2.2L8.2 6" fill="none" stroke="var(--accent)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Download Studio for macOS</a></span></div><div class="hair"></div>
     <div class="wbody">${s.sidebar ? sidebarHTML() : ''}<div class="layout">${nodeHTML(s.layout)}</div></div>
     ${overlayHTML()}${peekHTML()}${s.drop ? `<div class="drop" style="${s.drop}"></div>` : ''}${s.ghost ? `<div class="ghost" style="${s.ghost.style}">${mark('done')}${esc(s.ghost.title)}</div>` : ''}${s.toast ? `<div class="toast">${esc(s.toast)}</div>` : ''}`;
   if (s.peek) placePeek();
@@ -525,13 +467,10 @@ function placePeek() {
 /* ================================================================ fitting the window to the screen */
 let scale = 1;
 function fit() {
-  const narrow = innerWidth < 900;
-  const availW = Math.min(innerWidth - (narrow ? 28 : 64), 1400);
-  const availH = narrow ? 99999 : innerHeight - 56 - 150;
-  const Wd = Math.max(780, Math.min(availW, 1240)), Hd = narrow ? 560 : Math.max(540, Math.min(availH, 780));
-  scale = Math.min(1, availW / Wd, availH / Hd);
+  // the window is the page; below 820 points wide it is drawn smaller, so its layout never squeezes
+  scale = Math.min(1, innerWidth / 820);
+  const Wd = innerWidth / scale, Hd = innerHeight / scale;
   win.style.width = Wd + 'px'; win.style.height = Hd + 'px'; win.style.transform = `scale(${scale})`;
-  frame.style.width = Wd * scale + 'px'; frame.style.height = Hd * scale + 'px';
   if (s.peek) placePeek();
   position();
 }
@@ -619,7 +558,7 @@ const steps = [
     apply: st => { st.chips = true; st.groups.g1.sel = 'co'; st.active = 'g1'; },
     play: () => { steps[11].apply(s); render(); refresh(); } },
   { title: 'That is Studio',
-    body: `<p>Free, open source and native on macOS 14 or later. It runs the agent CLIs you already use, with your own accounts.</p><div class="coach__end"><a class="dl" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg">Download for macOS</a><a class="dl" style="background:none;color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)" href="https://github.com/fiberevm/studio">See it on GitHub</a></div>`,
+    body: `<p>Free, open source and native on macOS 14 or later. It runs the agent CLIs you already use, with your own accounts.</p><div class="coach__end"><a class="dl" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg">Download for macOS</a><a class="dl" style="background:none;color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)" href="https://github.com/fiberevm/studio">See it on GitHub</a></div><p>Needs Claude Code installed and signed in; Codex and Antigravity are optional. To build it yourself: clone the repository and run <code>./build-app.sh --open</code>.</p>`,
     target: () => null },
 ];
 
@@ -654,9 +593,8 @@ function cycleThemes() {
 }
 
 let cur = 0;
-const coach = document.getElementById('coach'), ring = document.getElementById('ring'), dots = document.getElementById('dots');
-dots.innerHTML = steps.map((st, i) => `<button type="button" aria-label="Step ${i + 1}: ${st.title}"></button>`).join('');
-dots.addEventListener('click', e => { const b = e.target.closest('button'); if (b) go([...dots.children].indexOf(b)); });
+const coach = document.getElementById('coach'), ring = document.getElementById('ring');
+const dotsHTML = () => `<nav class="dots" aria-label="Tour steps">${steps.map((st, i) => `<button type="button" data-dot="${i}" class="${i === cur ? 'on' : i < cur ? 'done' : ''}" aria-label="Step ${i + 1}: ${st.title}"></button>`).join('')}</nav>`;
 
 function go(i) {
   timers.forEach(clearTimeout); timers = []; cycling = false;
@@ -665,7 +603,6 @@ function go(i) {
   for (let j = 0; j < cur; j++) if (steps[j].apply) steps[j].apply(s);
   render(); refresh();
   if (steps[cur].play) steps[cur].play();
-  [...dots.children].forEach((b, j) => { b.className = j === cur ? 'on' : j < cur ? 'done' : ''; });
   history.replaceState(null, '', cur ? '#step-' + (cur + 1) : location.pathname);
 }
 function refresh() {
@@ -674,11 +611,12 @@ function refresh() {
   const act = st.action && st.action();
   const doBtn = act ? `<button class="coach__do" type="button" data-act>${act.label} ${kbd('↵')}</button>`
     : st.key ? `<button class="coach__do" type="button" data-key>Press ${kbd(st.key.label)} or click here</button>` : '';
-  coach.innerHTML = `<span class="coach__arrow"></span><div class="coach__n">${String(cur + 1).padStart(2, '0')} / ${steps.length}</div><h2>${st.title}</h2>${body}${doBtn}
+  coach.innerHTML = `<span class="coach__arrow"></span><div class="coach__top"><span class="coach__n">${String(cur + 1).padStart(2, '0')} / ${steps.length}</span>${dotsHTML()}</div><h2>${st.title}</h2>${body}${doBtn}
     <div class="coach__nav">${cur ? '<button type="button" data-back>Back</button>' : ''}<span class="coach__hint">${cur < steps.length - 1 ? '← → to move' : ''}</span>${cur < steps.length - 1 ? '<button type="button" class="next" data-next>Next</button>' : '<button type="button" class="next" data-restart>Start over</button>'}</div>`;
   position(); requestAnimationFrame(position);
 }
 coach.addEventListener('click', e => {
+  const dot = e.target.closest('[data-dot]'); if (dot) { go(+dot.dataset.dot); return; }
   if (e.target.closest('[data-next]')) go(cur + 1);
   else if (e.target.closest('[data-back]')) go(cur - 1);
   else if (e.target.closest('[data-restart]')) go(0);
@@ -689,11 +627,11 @@ coach.addEventListener('click', e => {
 function position() {
   const st = steps[cur], sel = st.target && st.target();
   const el = sel && win.querySelector(sel);
-  const narrow = innerWidth < 900;
+  const narrow = innerWidth < 640;
   const arrow = coach.querySelector('.coach__arrow');
   if (!el) {
     ring.style.opacity = 0;
-    if (!narrow) { const f = frame.getBoundingClientRect(); coach.style.left = (f.left + f.width / 2 - coach.offsetWidth / 2) + 'px'; coach.style.top = Math.max(68, f.top + f.height / 2 - coach.offsetHeight / 2) + 'px'; }
+    if (!narrow) { coach.style.left = (innerWidth / 2 - coach.offsetWidth / 2) + 'px'; coach.style.top = (innerHeight / 2 - coach.offsetHeight / 2) + 'px'; }
     if (arrow) arrow.style.display = 'none';
     return;
   }
@@ -701,7 +639,7 @@ function position() {
   ring.style.opacity = 1;
   Object.assign(ring.style, { left: r.left - 3 + 'px', top: r.top - 3 + 'px', width: r.width + 6 + 'px', height: r.height + 6 + 'px' });
   if (narrow || !arrow) return;
-  const cw = coach.offsetWidth, ch = coach.offsetHeight, gap = 16, m = 12, top = 68;
+  const cw = coach.offsetWidth, ch = coach.offsetHeight, gap = 16, m = 12, top = 12;
   const fits = (x, y) => x >= m && y >= top && x + cw <= innerWidth - m && y + ch <= innerHeight - m;
   // a wide target (a tab strip, a pane) gets the card at its right end, where the terminal has no text
   const ax0 = r.width > cw * 2 ? r.right - cw - 32 : r.left + Math.min(40, Math.max(0, r.width / 2 - 20));
@@ -719,7 +657,6 @@ function position() {
   if (side === 'right') { arrow.style.left = '-7px'; arrow.style.top = ay + 'px'; arrow.style.clipPath = 'polygon(0 0, 0 100%, 100% 100%)'; }
   if (side === 'left') { arrow.style.right = '-7px'; arrow.style.top = ay + 'px'; arrow.style.clipPath = 'polygon(0 0, 100% 0, 100% 100%)'; }
 }
-addEventListener('scroll', position, { passive: true });
 
 /* ================================================================ clicking around in the window */
 function selectTab(id, g) {
