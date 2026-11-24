@@ -477,7 +477,7 @@ private struct ReadyPage: View {
             Spacer(minLength: 0)
         }
         .onAppear {
-            LaunchEnv.refreshIfStale()
+            LaunchEnv.capture()
             for i in 0..<rows.count {
                 withAnimation(.spring(response: 0.45, dampingFraction: 0.7).delay(0.15 + Double(i) * 0.12)) { shown = i + 1 }
             }

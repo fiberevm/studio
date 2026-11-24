@@ -1,23 +1,24 @@
 import Foundation
 
-/// The user's login-shell environment and where each agent CLI lives, captured once in the background
-/// (and refreshed now and then), so new tabs exec the CLI directly instead of starting a login shell
-/// to find it on every launch. Kept in memory only: the environment can hold secrets from shell rc files.
+/// The user's login-shell environment and where each agent CLI lives, captured once in the background when
+/// Studio starts, so new tabs exec the CLI directly instead of starting a login shell to find it on every
+/// launch. Never re-read on a schedule: changes to shell rc files apply after restarting Studio. The one
+/// exception is a CLI that has moved or been uninstalled (its saved path is gone), which triggers a new capture.
+/// Kept in memory only: the environment can hold secrets from shell rc files.
 enum LaunchEnv {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var env: [String: String]?
     nonisolated(unsafe) private static var paths: [String: String] = [:]
-    nonisolated(unsafe) private static var capturedAt = Date.distantPast
     nonisolated(unsafe) private static var capturing = false
 
-    /// Start (or refresh, when older than 10 minutes) the capture.
-    static func refreshIfStale() {
+    /// Capture once: does nothing when there's a capture already, or one running.
+    static func capture() {
         lock.lock()
-        let go = !capturing && Date().timeIntervalSince(capturedAt) > 600
+        let go = env == nil && !capturing
         if go { capturing = true }
         lock.unlock()
         guard go else { return }
-        DispatchQueue.global(qos: .utility).async { capture() }
+        DispatchQueue.global(qos: .utility).async { run() }
     }
 
     /// argv to run `words` directly (absolute binary path), or nil when it isn't known yet / anymore.
@@ -49,21 +50,23 @@ enum LaunchEnv {
         return e
     }
 
+    /// A saved CLI path is gone: drop the capture and take a new one.
     private static func invalidate() {
-        lock.lock(); capturedAt = .distantPast; lock.unlock()
-        refreshIfStale()
+        lock.lock(); env = nil; paths = [:]; lock.unlock()
+        capture()
     }
 
     private static let skip: Set<String> = ["PWD", "OLDPWD", "SHLVL", "_", "TERM", "TERM_PROGRAM", "TERM_PROGRAM_VERSION",
                                             "TERM_SESSION_ID", "COLORTERM", "TMUX", "TMUX_PANE", "STUDIO_TAB", "LINES",
                                             "COLUMNS", "PS1", "PS2", "CLAUDECODE"]
 
-    private static func capture() {
+    private static func run() {
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let cmds = Agent.allCases.map(\.command)
         // markers around the output: interactive rc files may print their own things
         let script = "printf '\\0STUDIO-ENV\\0'; env -0; printf '\\0STUDIO-PATHS\\0'; "
             + cmds.map { "printf '%s=%s\\n' \($0) \"$(command -v \($0))\"" }.joined(separator: "; ")
+            + "; printf '\\0STUDIO-END\\0'"
         let p = Process()
         p.executableURL = URL(fileURLWithPath: shell)
         p.arguments = ["-l", "-i", "-c", script]
@@ -75,14 +78,17 @@ enum LaunchEnv {
         p.environment = penv
         let out = Pipe()
         p.standardOutput = out
-        var data = Data()
-        let done = DispatchSemaphore(value: 0)
-        p.terminationHandler = { _ in done.signal() }
         do { try p.run() } catch { finish(nil, [:]); return }
-        let reader = DispatchQueue.global()
-        reader.async { data = out.fileHandleForReading.readDataToEndOfFile(); done.signal() }
-        if done.wait(timeout: .now() + 20) == .timedOut { p.terminate(); finish(nil, [:]); return }
-        _ = done.wait(timeout: .now() + 2)
+        // Read until the end marker rather than EOF: something the rc files start in the background can keep
+        // the pipe open after the shell exits. No timeout: a shell that never finishes leaves new tabs on the
+        // login-shell path, which behaves exactly as Terminal would.
+        let end = Data("\0STUDIO-END\0".utf8)
+        var data = Data()
+        while data.range(of: end) == nil {
+            let chunk = out.fileHandleForReading.availableData
+            if chunk.isEmpty { break }
+            data.append(chunk)
+        }
 
         let s = String(decoding: data, as: UTF8.self)
         guard let a = s.range(of: "\0STUDIO-ENV\0"), let b = s.range(of: "\0STUDIO-PATHS\0", range: a.upperBound..<s.endIndex) else {
@@ -97,7 +103,8 @@ enum LaunchEnv {
             e[k] = String(entry[entry.index(after: eq)...])
         }
         var found: [String: String] = [:]
-        for line in s[b.upperBound...].split(separator: "\n") {
+        let tail = s.range(of: "\0STUDIO-END\0", range: b.upperBound..<s.endIndex)?.lowerBound ?? s.endIndex
+        for line in s[b.upperBound..<tail].split(separator: "\n") {
             let parts = line.split(separator: "=", maxSplits: 1).map(String.init)
             if parts.count == 2, parts[1].hasPrefix("/") { found[parts[0]] = parts[1] }
         }
@@ -107,8 +114,7 @@ enum LaunchEnv {
     private static func finish(_ e: [String: String]?, _ found: [String: String]) {
         lock.lock()
         capturing = false
-        if let e { env = e; paths = found; capturedAt = Date() }
-        else { capturedAt = Date().addingTimeInterval(-540) }   // failed: try again in a minute
+        if let e { env = e; paths = found }   // failed: the next new tab tries again
         lock.unlock()
         DispatchQueue.main.async { MainActor.assumeIsolated { AgentChecker.shared.launchEnvUpdated() } }
     }

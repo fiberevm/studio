@@ -19,7 +19,7 @@ final class AgentChecker: ObservableObject {
     /// Which CLIs are on PATH (for the + menu): one quick `command -v` at launch, updated by full checks.
     @Published private(set) var installed: [Agent: Bool] = [:]
 
-    private init() { LaunchEnv.refreshIfStale() }
+    private init() { LaunchEnv.capture() }
 
     /// The background environment capture found (or didn't find) each CLI.
     func launchEnvUpdated() {

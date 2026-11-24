@@ -232,7 +232,7 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     private func launchCLI(_ words: [String]) {
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let dir = FileManager.default.fileExists(atPath: cwd) ? cwd : NSHomeDirectory()
-        LaunchEnv.refreshIfStale()
+        LaunchEnv.capture()
         // Fast path: the CLI's path and the shell's environment are already known, so exec it directly.
         if let argv = LaunchEnv.direct(words), let env = LaunchEnv.environment(tab: id) {
             if SessionHost.enabled {

@@ -261,7 +261,7 @@ Each session gets `STUDIO_TAB`, so the agent knows which tab is its own.
   claude --resume … --mcp-config studio.json  ──►  studio-mcp (stdio MCP server) ──┘
 ```
 
-- **No API keys, no proxy.** Studio runs the `claude` binary you already use, in a real PTY, through your login shell.
+- **No API keys, no proxy.** Studio runs the `claude` binary you already use, in a real PTY, with your login shell's environment (read once when Studio starts; restart Studio after changing your shell rc files).
 - **Read-only on Claude's data.** Session status and transcripts are read from `~/.claude`; Studio never writes there.
 - **State** (open tabs, layouts, theme) lives in the app's `UserDefaults`.
 
