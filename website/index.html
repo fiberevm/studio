@@ -66,6 +66,17 @@ body { background: #191d27; }
            font: 600 18px var(--ui); text-decoration: none; transition: transform .15s, box-shadow .15s; box-shadow: 0 10px 30px rgb(0 0 0 / .4); }
 .end__dl:hover { transform: translateY(-1px); box-shadow: 0 14px 36px rgb(0 0 0 / .5); }
 .end__dl svg { width: 20px; height: 20px; }
+.end__dls { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 10px; }
+.end__dls .end__dl { margin-top: 0; }
+.end p.end__hint { font-size: 14px; color: rgb(255 255 255 / .45); }
+/* the title bar's download menu: Apple silicon or Intel */
+.dlmenu { position: fixed; z-index: 64; display: none; min-width: 220px; padding: 5px; border-radius: 10px; background: #fff; color: #111;
+          box-shadow: 0 12px 32px rgb(0 0 0 / .35), 0 0 0 1px rgb(0 0 0 / .06); font: 14px/1.25 var(--ui); }
+.dlmenu.on { display: grid; }
+.dlmenu a { display: grid; gap: 2px; padding: 8px 10px; border-radius: 6px; color: inherit; text-decoration: none; }
+.dlmenu b { font-weight: 600; }
+.dlmenu small { font-size: 12px; color: rgb(0 0 0 / .5); }
+.dlmenu a:hover, .dlmenu a:focus-visible { background: rgb(0 0 0 / .06); outline: none; }
 .end__more { display: flex; gap: 22px; margin-top: 6px; font: 500 14px var(--ui); }
 .end__more a, .end__more button { color: rgb(255 255 255 / .6); text-decoration: none; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
 .end__more a:hover, .end__more button:hover { color: #fff; }
@@ -88,7 +99,8 @@ body { background: #191d27; }
 .tb-right { position: absolute; right: 10px; top: 0; height: 28px; display: flex; align-items: center; gap: 12px; }
 .tb-gh { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; color: var(--sec); text-decoration: none; }
 .tb-gh:hover { color: var(--pri); }
-.nudge { display: flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 99px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 500; text-decoration: none; }
+.nudge { display: flex; align-items: center; gap: 4px; padding: 3px 8px; border: 0; border-radius: 99px; background: var(--accent); color: #fff; font: 500 11px var(--ui); text-decoration: none; cursor: pointer; }
+.nudge .chev { margin-left: 1px; opacity: .85; }
 .nudge:hover { filter: brightness(1.1); }
 .lights { position: absolute; left: 10px; top: 9px; display: flex; gap: 11px; }
 .lights i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .18); }
@@ -211,28 +223,43 @@ body { background: #191d27; }
   <div class="ptr" id="ptr" aria-hidden="true"><svg width="24" height="26" viewBox="0 0 24 26"><path d="M3 2v18.5l4.6-4.4 3 6.8 3.2-1.4-3-6.6h6.4z" fill="#000" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></svg></div>
   <div class="say" id="say" aria-live="polite"><span></span></div>
   <div class="intro" id="intro" aria-live="polite"><b></b><span></span></div>
+  <div class="dlmenu" id="dlmenu" role="menu" aria-label="Download Studio">
+    <a role="menuitem" href="https://github.com/fiberevm/studio/releases/latest/download/Studio-arm64.dmg"><b>Mac with Apple silicon</b><small>M1 and later</small></a>
+    <a role="menuitem" href="https://github.com/fiberevm/studio/releases/latest/download/Studio-x86_64.dmg"><b>Mac with Intel</b><small>Intel Core processors</small></a>
+  </div>
   <div class="end" id="end">
     <img src="assets/icon.svg" alt="" width="88" height="88">
     <h1>Download Studio</h1>
     <p>Free for macOS 14 or later. Runs Claude Code, Codex and Antigravity.</p>
-    <a class="end__dl" href="https://github.com/fiberevm/studio/releases/latest/download/Studio-arm64.dmg"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.3 1.88-3.4 1.97-3.46-1.07-1.57-2.74-1.78-3.33-1.8-1.42-.15-2.77.83-3.49.83-.72 0-1.83-.81-3.01-.79-1.55.02-2.98.9-3.78 2.29-1.61 2.8-.41 6.94 1.16 9.21.77 1.11 1.68 2.36 2.88 2.31 1.16-.05 1.6-.75 3-.75s1.79.75 3.01.72c1.25-.02 2.04-1.13 2.8-2.25.88-1.29 1.24-2.54 1.26-2.6-.03-.01-2.42-.93-2.47-3.71ZM14.1 5.86c.64-.78 1.07-1.85.95-2.92-.92.04-2.03.61-2.69 1.38-.59.68-1.11 1.77-.97 2.82 1.03.08 2.07-.52 2.71-1.28Z"/></svg>Download for macOS</a>
-    <div class="end__more"><button type="button" id="again">Watch again</button><a href="https://github.com/fiberevm/studio/releases/latest/download/Studio-x86_64.dmg">Intel Mac</a><a href="https://github.com/fiberevm/studio">View on GitHub</a></div>
+    <div class="end__dls">
+      <a class="end__dl" href="https://github.com/fiberevm/studio/releases/latest/download/Studio-arm64.dmg"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.3 1.88-3.4 1.97-3.46-1.07-1.57-2.74-1.78-3.33-1.8-1.42-.15-2.77.83-3.49.83-.72 0-1.83-.81-3.01-.79-1.55.02-2.98.9-3.78 2.29-1.61 2.8-.41 6.94 1.16 9.21.77 1.11 1.68 2.36 2.88 2.31 1.16-.05 1.6-.75 3-.75s1.79.75 3.01.72c1.25-.02 2.04-1.13 2.8-2.25.88-1.29 1.24-2.54 1.26-2.6-.03-.01-2.42-.93-2.47-3.71ZM14.1 5.86c.64-.78 1.07-1.85.95-2.92-.92.04-2.03.61-2.69 1.38-.59.68-1.11 1.77-.97 2.82 1.03.08 2.07-.52 2.71-1.28Z"/></svg>Download for Apple silicon</a>
+      <a class="end__dl" href="https://github.com/fiberevm/studio/releases/latest/download/Studio-x86_64.dmg"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.3 1.88-3.4 1.97-3.46-1.07-1.57-2.74-1.78-3.33-1.8-1.42-.15-2.77.83-3.49.83-.72 0-1.83-.81-3.01-.79-1.55.02-2.98.9-3.78 2.29-1.61 2.8-.41 6.94 1.16 9.21.77 1.11 1.68 2.36 2.88 2.31 1.16-.05 1.6-.75 3-.75s1.79.75 3.01.72c1.25-.02 2.04-1.13 2.8-2.25.88-1.29 1.24-2.54 1.26-2.6-.03-.01-2.42-.93-2.47-3.71ZM14.1 5.86c.64-.78 1.07-1.85.95-2.92-.92.04-2.03.61-2.69 1.38-.59.68-1.11 1.77-.97 2.82 1.03.08 2.07-.52 2.71-1.28Z"/></svg>Download for Intel</a>
+    </div>
+    <p class="end__hint">Apple silicon is M1 and later. Not sure? Apple menu → About This Mac → Chip.</p>
+    <div class="end__more"><button type="button" id="again">Watch again</button><a href="https://github.com/fiberevm/studio">View on GitHub</a></div>
   </div>
 </main>
 
 <script>
-// Download links give the Apple silicon build. Chromium browsers say whether the Mac is Intel: there, every one
-// gives the Intel build instead (Safari doesn't tell; the end screen has an Intel Mac link)
+// The title bar's download pill opens a menu with the two builds (Apple silicon, Intel), placed under the pill.
 (() => {
-  const uad = navigator.userAgentData;
-  if (!uad || !uad.getHighEntropyValues) return;
-  uad.getHighEntropyValues(['architecture']).then(v => {
-    if (v.architecture !== 'x86') return;
-    document.addEventListener('click', e => {
-      const a = e.target.closest && e.target.closest('a[href$="/Studio-arm64.dmg"]');
-      if (a) a.href = a.href.replace('Studio-arm64.dmg', 'Studio-x86_64.dmg');
-    }, true);
-  }).catch(() => {});
+  const menu = document.getElementById('dlmenu');
+  let pill = null;
+  const close = () => { menu.classList.remove('on'); pill && pill.setAttribute('aria-expanded', 'false'); pill = null; };
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('.nudge');
+    if (b && b !== pill) {
+      close(); pill = b;
+      menu.classList.add('on');
+      const r = b.getBoundingClientRect(), w = menu.offsetWidth;
+      menu.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.right - w)) + 'px';
+      menu.style.top = (r.bottom + 6) + 'px';
+      b.setAttribute('aria-expanded', 'true');
+      menu.querySelector('a').focus({ preventScroll: true });
+    } else if (!(e.target.closest && e.target.closest('#dlmenu a'))) close();
+  });
+  addEventListener('keydown', e => { if (e.key === 'Escape' && pill) { const b = pill; close(); b.focus(); } });
+  addEventListener('resize', close);
 })();
 </script>
 <script>
@@ -459,7 +486,7 @@ function peekHTML() {
 let starI = 0;
 function render() {
   applyTheme(s.theme);
-  win.innerHTML = `<div class="titlebar"><div class="lights"><i></i><i></i><i></i></div><b>shop</b><span class="dash">—</span><span>~/code/shop</span><span class="tb-right"><a class="tb-gh" href="https://github.com/fiberevm/studio">GitHub</a><a class="nudge" href="https://github.com/fiberevm/studio/releases/latest/download/Studio-arm64.dmg"><svg width="11" height="11" viewBox="0 0 12 12"><circle cx="6" cy="6" r="6" fill="currentColor" opacity=".9"/><path d="M6 3v5M3.8 6l2.2 2.2L8.2 6" fill="none" stroke="var(--accent)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Download Studio for macOS</a></span></div><div class="hair"></div>
+  win.innerHTML = `<div class="titlebar"><div class="lights"><i></i><i></i><i></i></div><b>shop</b><span class="dash">—</span><span>~/code/shop</span><span class="tb-right"><a class="tb-gh" href="https://github.com/fiberevm/studio">GitHub</a><button type="button" class="nudge" aria-haspopup="menu" aria-expanded="false"><svg width="11" height="11" viewBox="0 0 12 12"><circle cx="6" cy="6" r="6" fill="currentColor" opacity=".9"/><path d="M6 3v5M3.8 6l2.2 2.2L8.2 6" fill="none" stroke="var(--accent)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Download Studio for macOS<svg class="chev" width="8" height="8" viewBox="0 0 8 8"><path d="M1.5 3l2.5 2.5L6.5 3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></button></span></div><div class="hair"></div>
     <div class="wbody">${s.sidebar ? sidebarHTML() : ''}<div class="layout">${nodeHTML(s.layout)}</div></div>
     ${overlayHTML()}${peekHTML()}${s.drop ? `<div class="drop" style="${s.drop}"></div>` : ''}${s.toast ? `<div class="toast">${esc(s.toast)}</div>` : ''}`;
   if (s.peek) placePeek();
