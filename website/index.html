@@ -262,7 +262,8 @@ const tool = (name, arg, result, ok = true) => L([ok ? 'g' : 'd', '● '], ['b',
 const say = text => W('', '● ' + text);
 const STARS = '·✢✳✶✻✽';
 const working = (verb, secs, tok) => L(['star', '✻'], ' ', ['or', verb + '…'], ' ', ['d', `(${secs}s · ↑ ${tok} tokens · esc to interrupt)`]);
-const input = (focused, mode = 'auto mode on') => `<div class="term__in"><div class="rule"></div>${L('❯ ', ['cur' + (focused ? '' : ' hollow'), ''])}<div class="rule"></div>${L('  ', ['y', '⏵⏵ ' + mode], ' ', ['d', '(shift+tab to cycle)'])}</div>`;
+let curTyped = '';
+const input = (focused, mode = 'auto mode on') => `<div class="term__in"><div class="rule"></div>${L('❯ ' + (focused ? curTyped : ''), ['cur' + (focused ? '' : ' hollow'), ''])}<div class="rule"></div>${L('  ', ['y', '⏵⏵ ' + mode], ' ', ['d', '(shift+tab to cycle)'])}</div>`;
 
 const SCREENS = {
   co: (f) => [logo, you('Move the cart total into one function and update the three callers. Run the checkout tests when you are done.'), blank,
@@ -346,7 +347,10 @@ function paneHTML(id, g) {
   if (t.kind === 'web') return `<div class="webbar"><span class="btn">${I.left}</span><span class="btn">${I.right}</span><span class="btn">${I.reload}</span><span class="addr">${esc(t.url)}</span><span class="btn">${I.compass}</span></div><div class="hair"></div>
     <div class="webview"><div class="shop"><div class="shop__nav"><b>Shop</b><span>Catalogue</span><span>Orders</span><span>Cart (3)</span></div>
     <div class="shop__main"><h3>Checkout</h3><div><div class="line"><span>Linen shirt · M</span><span>€ 49.00</span></div><div class="line"><span>Canvas tote</span><span>€ 18.00</span></div><div class="line"><span>Shipping</span><span>€ 4.90</span></div><div class="line total"><span>Total</span><span>€ 71.90</span></div></div><span class="shop__pay">Pay € 71.90</span></div></div></div>`;
-  return `<div class="term"><div class="term__out">${SCREENS[t.screen](focused)}</div>`;
+  curTyped = t.typed || '';
+  let html = SCREENS[t.screen](focused);
+  if (t.extra) html = html.replace('</div><div class="term__in">', t.extra.join('') + '</div><div class="term__in">');
+  return `<div class="term" data-term="${id}"><div class="term__out">${html}</div>`;
 }
 function statusHTML(id) {
   const t = s.tabs[id];
@@ -427,6 +431,7 @@ function render() {
     ${overlayHTML()}${peekHTML()}${s.drop ? `<div class="drop" style="${s.drop}"></div>` : ''}${s.toast ? `<div class="toast">${esc(s.toast)}</div>` : ''}`;
   if (s.peek) placePeek();
   win.querySelectorAll('.star').forEach(el => { el.textContent = STARS[starI % STARS.length]; });
+  win.querySelectorAll('.term__out').forEach(el => { el.scrollTop = el.scrollHeight; });
 }
 // the working star turns like Claude Code's
 setInterval(() => { starI++; win.querySelectorAll('.star').forEach(el => { el.textContent = STARS[starI % STARS.length]; }); }, 160);
@@ -520,11 +525,7 @@ async function demo(g) {
     await line(g, '⌘J jumps right to it');
     await wait(g, 700); await click(g);
     selectTab('au'); render();
-    await move(g, '.popt.on', .08, .5, 700);
-    await line(g, 'Approve in one click');
-    await wait(g, 500); await click(g);
-    s.tabs.au.status = 'working'; s.tabs.au.screen = 'auRun'; render();
-    await wait(g, 1100);
+    await wait(g, 1800);
 
     await move(g, '.tab[data-tab="bi"]', .55, .6);
     await line(g, 'Hover to peek');
@@ -572,7 +573,7 @@ async function demo(g) {
     await move(g, '.prow[data-q="au"] .tick', .5, .5, 600); await click(g);
     s.overlay.ticked = ['co', 'au']; s.overlay.index = 1; render();
     await wait(g, 700);
-    s.overlay = null; s.tabs.co.status = 'working'; s.tabs.au.status = 'working'; s.toast = 'Sent to 2 sessions'; render();
+    s.overlay = null; s.tabs.co.status = 'working'; s.tabs.au.status = 'working'; s.tabs.au.screen = 'auRun'; s.toast = 'Sent to 2 sessions'; render();
     await wait(g, 1500); s.toast = null; render();
 
     await move(g, '.titlebar', .45, .6, 600);
@@ -591,13 +592,17 @@ async function demo(g) {
     await move(g, '.nudge', .5, .55);
     await line(g, 'Free. Get it for Mac.');
     const n = win.querySelector('.nudge'); if (n) n.classList.add('hot');
-    await wait(g, 6000);
+    await wait(g, 3500);
+    await move(g, '.group[data-group="g1"] .term__in', .12, .45, 900);
+    s.active = 'g1'; render();
+    await line(g, 'Or ask Claude here');
+    await wait(g, 4500);
   }
 }
 function start() { gen++; demoOn = true; ptr.classList.add('on'); demo(gen).catch(e => { if (!(e instanceof Stop)) console.error(e); }); }
 function pause() {
   gen++; demoOn = false; intro.classList.remove('on'); ptr.classList.remove('on', 'down'); cap.classList.remove('on'); ghost.style.opacity = 0; s.drop = null;
-  clearTimeout(idleT); idleT = setTimeout(start, 12000);
+  clearTimeout(idleT); idleT = setTimeout(start, typed ? 60000 : 12000);
 }
 
 /* ================================================================ your turn: clicks and keys work like the app */
@@ -613,13 +618,34 @@ function sendQuick() {
   const n = o.ticked.length; s.overlay = null; s.toast = `Sent to ${n} session${n > 1 ? 's' : ''}`;
   setTimeout(() => { s.toast = null; render(); }, 1800);
 }
+function typingTarget() {
+  const gr = s.groups[s.active], t = gr && s.tabs[gr.sel];
+  return t && t.kind === 'claude' && t.screen !== 'au' ? t : null;
+}
+function submit(t) {
+  const text = t.typed.trim(); t.typed = '';
+  if (!text) return;
+  t.extra = (t.extra || []).concat([blank, you(text), blank, L(['star', '✻'], ' ', ['or', 'Thinking…'])]);
+  t.status = 'working';
+  setTimeout(() => {
+    t.extra.pop();
+    t.extra.push(W('', '● This is a demo of Studio running in your browser. Download the app (it is free) to run Claude Code here for real:'),
+      `<div class="ln">  <a class="bl" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg" style="text-decoration:underline">↓ Download Studio for macOS</a></div>`);
+    t.status = 'idle'; render();
+  }, 1200);
+}
 function palRows() { const q = s.overlay.query.toLowerCase(); return PAL_MAIN.filter(r => !q || (r.t + ' ' + (r.sub || '')).toLowerCase().includes(q)); }
 function pickPal(id) {
   if (id === 'theme') { s.overlay = { kind: 'palette', mode: 'themes', query: '', index: THEME_IDS.indexOf(s.theme) }; return; }
   if (s.tabs[id]) selectTab(id);
   s.overlay = null;
 }
-let hoverT;
+let hoverT, typed = false;
+addEventListener('paste', e => {
+  const t = !s.overlay && typingTarget(), text = e.clipboardData && e.clipboardData.getData('text');
+  if (!t || !text) return;
+  e.preventDefault(); pause(); typed = true; t.typed = (t.typed || '') + text.replace(/\s+/g, ' '); render();
+});
 win.addEventListener('click', e => {
   if (e.target.closest('a')) return;
   pause();
@@ -631,6 +657,7 @@ win.addEventListener('click', e => {
     else pickPal(row.dataset.pal);
   }
   else if (tab) selectTab(tab.dataset.tab, tab.dataset.g);
+  else if (e.target.closest('.group')) s.active = e.target.closest('.group').dataset.group;
   else if (srow) selectTab(srow.dataset.row);
   else if (s.overlay && !e.target.closest('.overlay')) { if (s.overlay.mode === 'themes') s.theme = userTheme; s.overlay = null; }
   render();
@@ -666,7 +693,12 @@ addEventListener('keydown', e => {
   else if (o && o.kind === 'quick' && k === 'enter') { if (!o.ticked.length) o.ticked = [['co', 'au', 'bi'][o.index]]; sendQuick(); }
   else if (o && o.kind === 'quick' && k === 'backspace') o.text = o.text.slice(0, -1);
   else if (o && o.kind === 'quick' && typing) o.text += e.key;
-  else if (k === '1' && s.tabs.au.status === 'waiting') { s.tabs.au.status = 'working'; s.tabs.au.screen = 'auRun'; }
+  else if (k === '1' && s.tabs.au.status === 'waiting' && s.groups[s.active].sel === 'au') { s.tabs.au.status = 'working'; s.tabs.au.screen = 'auRun'; }
+  else if (!o && typingTarget() && (typing || k === 'backspace' || k === 'enter')) {
+    const t = typingTarget();
+    if (k === 'enter') submit(t); else if (k === 'backspace') t.typed = (t.typed || '').slice(0, -1); else t.typed = (t.typed || '') + e.key;
+    typed = true;
+  }
   else return;
   e.preventDefault(); pause(); render();
 });
