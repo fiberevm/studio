@@ -32,53 +32,25 @@ body { background: var(--page); color: var(--ink); font: 15px/1.5 var(--ui); -we
 a { color: inherit; }
 kbd { font: 500 .86em/1 var(--ui); padding: .2em .45em; border-radius: 5px; border: 1px solid var(--line); background: var(--page-2); white-space: nowrap; }
 
-.dl { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 16px; border-radius: 8px; background: var(--orange); color: var(--orange-ink);
-      font-weight: 600; font-size: 14px; text-decoration: none; white-space: nowrap; transition: filter .15s, transform .15s; }
-.dl:hover { filter: brightness(1.06); }
-.dl:active { transform: translateY(1px); }
-.dl svg { width: 15px; height: 15px; }
 html, body { height: 100%; overflow: hidden; }
 body { background: #191d27; }
 .frame { position: fixed; inset: 0; }
-.dots { display: flex; gap: 2px; margin-left: auto; }
-.dots button { width: 14px; height: 14px; padding: 0; border: 0; background: none; cursor: pointer; display: grid; place-items: center; }
-.dots button::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
-.dots button.done::before { background: var(--ink-2); }
-.dots button.on::before { background: var(--orange); }
-.coach__top { display: flex; align-items: center; }
-
-/* the coach card and the ring around what it points at */
-.ring { position: fixed; z-index: 40; pointer-events: none; border-radius: 7px; box-shadow: 0 0 0 2px var(--ring), 0 0 0 6px color-mix(in srgb, var(--ring) 28%, transparent);
-        transition: left .35s cubic-bezier(.2,.8,.2,1), top .35s cubic-bezier(.2,.8,.2,1), width .35s cubic-bezier(.2,.8,.2,1), height .35s cubic-bezier(.2,.8,.2,1), opacity .2s; animation: ring 2s ease-in-out infinite; }
-@keyframes ring { 50% { box-shadow: 0 0 0 2px var(--ring), 0 0 0 10px color-mix(in srgb, var(--ring) 10%, transparent); } }
-.coach { position: fixed; z-index: 45; width: 340px; padding: 18px 18px 14px; border-radius: 12px; background: var(--card); color: var(--ink); border: 1px solid var(--card-line);
-         box-shadow: 0 18px 50px -12px rgb(0 0 0 / .45); }
-.coach.live { transition: left .35s cubic-bezier(.2,.8,.2,1), top .35s cubic-bezier(.2,.8,.2,1); }
-.ring:not(.live) { transition: none; }
-.coach__n { font: 500 12px/1 var(--mono); color: var(--ink-2); }
-.coach h2 { margin: 8px 0 6px; font-size: 18px; line-height: 1.25; letter-spacing: -.01em; font-weight: 650; }
-.coach p { margin: 0 0 8px; font-size: 14px; line-height: 1.5; color: color-mix(in srgb, var(--ink) 86%, transparent); }
-.coach ul { margin: 0 0 8px; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 14px; line-height: 1.4; }
-.coach li { display: grid; grid-template-columns: 18px 1fr; gap: 8px; align-items: start; }
-.coach li svg { width: 14px; height: 14px; margin-top: 3px; }
-.coach__do { display: inline-flex; align-items: center; gap: 8px; margin: 4px 0 10px; height: 34px; padding: 0 12px; border-radius: 8px; border: 1px dashed var(--ring);
-             background: color-mix(in srgb, var(--ring) 10%, transparent); color: var(--ink); font: 500 13.5px var(--ui); cursor: pointer; }
-.coach__do kbd { background: var(--card); }
-.coach__do[hidden] { display: none; }
-.coach__nav { display: flex; align-items: center; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
-.coach__nav button { height: 32px; padding: 0 12px; border-radius: 7px; border: 1px solid var(--line); background: none; color: var(--ink); font: 500 13.5px var(--ui); cursor: pointer; }
-.coach__nav button:hover { background: var(--page-2); }
-.coach__nav .next { margin-left: auto; background: var(--ink); color: var(--page); border-color: transparent; }
-.coach__nav .next:hover { background: var(--ink); filter: brightness(1.2); }
-.coach__hint { font-size: 12px; color: var(--ink-2); }
-.coach__arrow { position: absolute; width: 12px; height: 12px; background: var(--card); border: 1px solid var(--card-line); transform: rotate(45deg); }
-.coach__end { display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0 12px; }
-.coach__end .dl { height: 40px; }
-
-@media (max-width: 639px) {
-  .coach { left: 10px !important; right: 10px; top: auto !important; bottom: 10px; width: auto; max-height: 52svh; overflow: auto; }
-  .coach__arrow { display: none; }
-}
+/* the demo pointer (the macOS arrow), its click ripple, the line that types itself, a tab being dragged */
+.ptr { position: fixed; z-index: 60; left: 0; top: 0; width: 24px; height: 26px; margin: -2px 0 0 -3px; pointer-events: none; opacity: 0; filter: drop-shadow(0 2px 3px rgb(0 0 0 / .45)); }
+.ptr.on { opacity: 1; }
+.ptr svg { display: block; transition: transform .12s; transform-origin: 3px 2px; }
+.ptr.down svg { transform: scale(.84); }
+.rip { position: fixed; z-index: 59; width: 38px; height: 38px; margin: -19px 0 0 -19px; border-radius: 50%; border: 2px solid #fff; pointer-events: none; animation: rip .55s ease-out forwards; }
+@keyframes rip { from { transform: scale(.2); opacity: .95; } to { transform: scale(1.4); opacity: 0; } }
+.say { position: fixed; z-index: 61; left: 0; top: 0; padding: 9px 14px; border-radius: 10px; background: #fff; color: #111; font: 600 17px/1.2 var(--ui); letter-spacing: -.01em;
+       white-space: nowrap; box-shadow: 0 10px 30px rgb(0 0 0 / .35); pointer-events: none; opacity: 0; }
+.say.on { opacity: 1; }
+.say::after { content: ""; display: inline-block; width: 2px; height: 1em; margin-left: 2px; vertical-align: -2px; background: #e8875a; animation: blink 1s steps(1) infinite; }
+.ghost { position: fixed; z-index: 58; left: 0; top: 0; height: 35px; display: flex; align-items: center; gap: 8px; padding: 0 16px; font: 12px var(--ui); transform-origin: 0 0;
+         box-shadow: 0 6px 18px rgb(0 0 0 / .35); pointer-events: none; opacity: 0; white-space: nowrap; }
+.nudge.hot { animation: hot 1.2s ease-in-out infinite; }
+@keyframes hot { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 35%, transparent); } }
+@media (max-width: 639px) { .say { font-size: 15px; } }
 
 /* ------------------------------------------------------------------ the Studio window, at its real point sizes */
 .win { --sec: rgb(255 255 255 / .55); --ter: rgb(255 255 255 / .26); --pri: rgb(255 255 255 / .86); --hover: rgb(255 255 255 / .04);
@@ -204,19 +176,18 @@ body { background: #191d27; }
 .peek__r { font-size: 12px; line-height: 1.4; color: var(--pri); }
 .peek__you { font-size: 11px; color: var(--sec); } .peek__you b { font-weight: 600; margin-right: 4px; }
 .drop { position: absolute; z-index: 10; background: color-mix(in srgb, var(--accent) 18%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent); transition: all .1s; pointer-events: none; }
-.ghost { position: absolute; z-index: 30; height: 35px; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-size: 12px; background: var(--bg); color: var(--pri); box-shadow: 0 6px 18px rgb(0 0 0 / .35); opacity: .92;
-         transition: left .9s cubic-bezier(.4,0,.2,1), top .9s cubic-bezier(.4,0,.2,1); pointer-events: none; }
 .toast { position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); z-index: 25; padding: 7px 14px; font-size: 12px; border-radius: 6px; background: var(--chrome); color: var(--pri);
          box-shadow: inset 0 0 0 1px var(--border), 0 4px 16px rgb(0 0 0 / .3); white-space: nowrap; }
-@media (prefers-reduced-motion: reduce) { .pulse, .spin i, .ring, .field .caret { animation: none !important; } .ring, .coach, .ghost { transition: none !important; } }
+@media (prefers-reduced-motion: reduce) { .pulse, .spin i, .field .caret, .say::after, .nudge.hot { animation: none !important; } }
 </style>
 </head>
 <body>
 
 <main id="top" aria-label="A guided tour of Studio">
   <div class="frame" id="frame"><div class="win" id="win"></div></div>
-  <div class="coach" id="coach" role="dialog" aria-live="polite" aria-label="Tour step"></div>
-  <div class="ring" id="ring" aria-hidden="true"></div>
+  <div class="ghost" id="ghost" aria-hidden="true"><svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="#4A9EFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6.4l2.6 2.6L10 3.4"/></svg><span></span></div>
+  <div class="ptr" id="ptr" aria-hidden="true"><svg width="24" height="26" viewBox="0 0 24 26"><path d="M3 2v18.5l4.6-4.4 3 6.8 3.2-1.4-3-6.6h6.4z" fill="#000" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></svg></div>
+  <div class="say" id="say" aria-live="polite"><span></span></div>
 </main>
 
 <script>
@@ -445,10 +416,9 @@ function render() {
   applyTheme(s.theme);
   win.innerHTML = `<div class="titlebar"><div class="lights"><i></i><i></i><i></i></div><b>shop</b><span class="dash">—</span><span>~/code/shop</span><span class="tb-right"><a class="tb-gh" href="https://github.com/fiberevm/studio">GitHub</a><a class="nudge" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg"><svg width="11" height="11" viewBox="0 0 12 12"><circle cx="6" cy="6" r="6" fill="currentColor" opacity=".9"/><path d="M6 3v5M3.8 6l2.2 2.2L8.2 6" fill="none" stroke="var(--accent)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Download Studio for macOS</a></span></div><div class="hair"></div>
     <div class="wbody">${s.sidebar ? sidebarHTML() : ''}<div class="layout">${nodeHTML(s.layout)}</div></div>
-    ${overlayHTML()}${peekHTML()}${s.drop ? `<div class="drop" style="${s.drop}"></div>` : ''}${s.ghost ? `<div class="ghost" style="${s.ghost.style}">${mark('done')}${esc(s.ghost.title)}</div>` : ''}${s.toast ? `<div class="toast">${esc(s.toast)}</div>` : ''}`;
+    ${overlayHTML()}${peekHTML()}${s.drop ? `<div class="drop" style="${s.drop}"></div>` : ''}${s.toast ? `<div class="toast">${esc(s.toast)}</div>` : ''}`;
   if (s.peek) placePeek();
   win.querySelectorAll('.star').forEach(el => { el.textContent = STARS[starI % STARS.length]; });
-  requestAnimationFrame(position);
 }
 // the working star turns like Claude Code's
 setInterval(() => { starI++; win.querySelectorAll('.star').forEach(el => { el.textContent = STARS[starI % STARS.length]; }); }, 160);
@@ -472,249 +442,217 @@ function fit() {
   const Wd = innerWidth / scale, Hd = innerHeight / scale;
   win.style.width = Wd + 'px'; win.style.height = Hd + 'px'; win.style.transform = `scale(${scale})`;
   if (s.peek) placePeek();
-  position();
 }
 addEventListener('resize', fit);
 
-/* ================================================================ the tour */
-const kbd = k => `<kbd>${k}</kbd>`;
+/* ================================================================ the demo: a pointer shows where to click, a line types itself */
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-let timers = [];
-const later = (fn, ms) => timers.push(setTimeout(fn, reduced ? 0 : ms));
-function typeInto(set, text, every, done) {
-  let i = 0;
-  const tick = () => { i++; set(text.slice(0, i)); render(); if (i < text.length) later(tick, every); else if (done) done(); };
-  if (reduced) { set(text); render(); if (done) done(); } else later(tick, every);
+const ptr = document.getElementById('ptr'), cap = document.getElementById('say'), capText = cap.querySelector('span'), ghost = document.getElementById('ghost');
+class Stop extends Error {}
+let gen = 0, demoOn = false, idleT, px = innerWidth * .55, py = innerHeight * .6;
+const sleep = ms => new Promise(r => setTimeout(r, reduced ? Math.min(ms, 300) : ms));
+async function wait(g, ms) { await sleep(ms); if (g !== gen) throw new Stop(); }
+function placeCap() {
+  const w = cap.offsetWidth, h = cap.offsetHeight;
+  let x = px + 20, y = py + 28;
+  if (x + w > innerWidth - 12) x = px - w - 16;
+  if (y + h > innerHeight - 12) y = py - h - 16;
+  cap.style.left = Math.max(12, x) + 'px'; cap.style.top = Math.max(12, y) + 'px';
 }
+function ease(el, dur) { el.style.transition = reduced || !dur ? 'opacity .3s' : `left ${dur}ms cubic-bezier(.5,0,.2,1), top ${dur}ms cubic-bezier(.5,0,.2,1), opacity .3s`; }
+function setPtr(x, y, dur) { px = x; py = y; ease(ptr, dur); ease(cap, dur); ptr.style.left = x + 'px'; ptr.style.top = y + 'px'; placeCap(); }
+function at(sel, fx = .5, fy = .5) {
+  const el = win.querySelector(sel); if (!el) return [px, py];
+  const r = el.getBoundingClientRect(); return [r.left + r.width * fx, r.top + r.height * fy];
+}
+const scr = (x, y) => { const w = win.getBoundingClientRect(); return [w.left + x * scale, w.top + y * scale]; };
+async function move(g, sel, fx, fy, dur = 850) { const [x, y] = at(sel, fx, fy); setPtr(x, y, dur); await wait(g, dur + 60); }
+async function click(g) {
+  ptr.classList.add('down');
+  const rip = document.createElement('i'); rip.className = 'rip'; rip.style.left = px + 'px'; rip.style.top = py + 'px';
+  document.body.appendChild(rip); setTimeout(() => rip.remove(), 600);
+  await wait(g, 140); ptr.classList.remove('down'); await wait(g, 120);
+}
+async function line(g, text) {
+  cap.classList.add('on'); capText.textContent = '';
+  for (let i = 1; i <= text.length; i++) { capText.textContent = text.slice(0, i); placeCap(); if (!reduced) await wait(g, 36); }
+}
+async function typeIn(g, set, text, every = 45) { for (let i = 1; i <= text.length; i++) { set(text.slice(0, i)); render(); await wait(g, every); } }
 
-const steps = [
-  { title: 'Every tab is a live agent session',
-    body: `<p>Each tab runs the agent's own CLI in a real terminal: Claude Code here, and Codex or Antigravity from the same menu. Your slash commands, hooks, MCP servers and settings work as before.</p><p>This window is the project <b>shop</b>, with three sessions open.</p>`,
-    target: () => '.tabstrip' },
-  { title: 'Each tab says what its agent is doing',
-    body: `<ul><li><span style="color:${ORANGE}">${I.sparkles}</span>Working, with an icon for what: thinking, editing, running a command.</li><li><span style="color:${RED}">${I.hand}</span>Blocked on you: a permission prompt or a question.</li><li><span style="color:var(--ring)">${I.check}</span>Finished while you were looking at something else.</li></ul><p>Watch two of them change.</p>`,
-    target: () => '.tabstrip',
-    apply: st => { st.tabs.au.status = 'waiting'; st.tabs.au.screen = 'au'; st.tabs.bi.status = 'done'; st.tabs.bi.screen = 'bi'; },
-    play: () => { later(() => { s.tabs.au.status = 'waiting'; s.tabs.au.screen = 'au'; render(); }, 1100); later(() => { s.tabs.bi.status = 'done'; s.tabs.bi.screen = 'bi'; render(); }, 2300); } },
-  { title: 'Jump to whoever needs you',
-    body: () => s.groups.g1.sel === 'au' && s.tabs.au.status === 'waiting'
-      ? `<p>Here is the prompt it was waiting on. Approve it: click <b>Yes</b> or press ${kbd('1')}.</p><p>${kbd('⌘J')} always goes to the session that has waited longest, across every project window. Press it again for the next one.</p>`
-      : s.tabs.au.status === 'working' ? `<p>Approved. The agent carries on, and its mark turns back to working.</p><p>When nothing is waiting, ${kbd('⌘J')} takes you to the oldest finished session you haven't read.</p>`
-      : `<p>${kbd('⌘J')} goes to the session that has waited longest, in any project window.</p>`,
-    key: { label: '⌘J', test: e => e.metaKey && e.key.toLowerCase() === 'j', run: () => { s.groups.g1.sel = 'au'; render(); refresh(); } },
-    target: () => s.groups.g1.sel === 'au' && s.tabs.au.status === 'waiting' ? '.popt.on' : '.tab[data-tab="au"]',
-    apply: st => { st.groups.g1.sel = 'au'; st.tabs.au.status = 'working'; st.tabs.au.screen = 'auRun'; } },
-  { title: 'Peek without switching',
-    body: `<p>Rest the pointer on a tab to read its last message and your last prompt, without leaving the session you are in.</p><p>Try it on any tab in the window.</p>`,
-    target: () => '.peek',
-    play: () => { later(() => { s.peek = 'bi'; render(); }, 450); } },
-  { title: 'Split by dragging a tab to an edge',
-    body: `<p>Drag a tab onto any edge of a pane to split it, or onto the middle to move it there. Every pane keeps its own tabs.</p><p>${kbd('⌘E')} forks a conversation into a split beside it, so you can try another direction while the first keeps going.</p>`,
-    target: () => s.groups.g2 ? '.group[data-group="g2"]' : '.tab[data-tab="bi"]',
-    apply: st => { st.layout = { dir: 'h', kids: [{ g: 'g1' }, { g: 'g2' }], fr: [.56, .44] }; st.groups.g1 = { tabs: ['co', 'au'], sel: 'au' }; st.groups.g2 = { tabs: ['bi'], sel: 'bi' }; st.active = 'g2'; },
-    play: () => {
-      later(() => {
-        const tab = win.querySelector('.tab[data-tab="bi"]'); if (!tab) return;
-        const r = rel(tab), Wd = win.offsetWidth, Hd = win.offsetHeight;
-        s.ghost = { title: s.tabs.bi.title, style: `left:${r.x}px;top:${r.y}px` }; render();
-        later(() => { s.ghost.style = `left:${Wd * .64}px;top:${Hd * .42}px`; s.drop = `left:${Wd * .56}px;top:64px;width:${Wd * .44}px;height:${Hd - 64}px`; render(); }, 60);
-        later(() => { s.ghost = null; s.drop = null; steps[4].apply(s); render(); refresh(); }, 1300);
-      }, 600);
-    } },
-  { title: 'Keep a terminal next to your agents',
-    body: `<p>${kbd('⌃`')} opens a plain shell in the same tabs and splits. Drop a file or a screenshot on any pane to paste its path.</p>`,
-    key: { label: '⌃`', test: e => e.ctrlKey && (e.key === '`' || e.code === 'Backquote'), run: () => { if (!s.groups.g3) { steps[5].apply(s); render(); refresh(); } } },
-    target: () => s.groups.g3 ? '.group[data-group="g3"]' : '.group[data-group="g2"]',
-    apply: st => { st.layout.kids[1] = { dir: 'v', kids: [{ g: 'g2' }, { g: 'g3' }], fr: [.52, .48] }; st.groups.g3 = { tabs: ['sh'], sel: 'sh' }; st.tabs.sh = { kind: 'shell', title: 'zsh — shop', screen: 'sh' }; st.active = 'g3'; } },
-  { title: 'Open your app in a web panel',
-    body: `<p>Put the dev server, a pull request or the docs in a pane beside your sessions. Agents can open these panels too, and read, click and type in them to check their own work.</p>`,
-    target: () => '.group[data-group="g2"] .pane',
-    apply: st => { st.groups.g2.tabs.push('wb'); st.groups.g2.sel = 'wb'; st.tabs.wb = { kind: 'web', title: 'Shop — Checkout', url: 'http://localhost:5173/checkout', host: 'localhost' }; st.active = 'g2'; },
-    play: () => { s.groups.g2.tabs.push('wb'); s.tabs.wb = { kind: 'web', title: 'New tab', url: '', host: 'localhost' }; s.groups.g2.sel = 'wb'; s.active = 'g2'; render();
-      typeInto(v => { s.tabs.wb.url = v; }, 'http://localhost:5173/checkout', 35, () => later(() => { s.tabs.wb.title = 'Shop — Checkout'; render(); }, 250)); } },
-  { title: 'Find any session with ⌘P',
-    body: `<p>${kbd('⌘P')} searches every running and past session in every project, including ones started in other terminals. Pick one in another project and its window opens.</p><p>Type ${kbd('&gt;')} for commands: a new Codex or Antigravity session, a web panel, a theme.</p>`,
-    key: { label: '⌘P', test: e => e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'p', run: () => openPalette() },
-    target: () => s.overlay ? '.overlay' : '.titlebar' },
-  { title: 'Message several sessions at once',
-    body: () => s.overlay ? `<p>${kbd('⇧⌘K')} sends a message to any session without switching to it. ${kbd('⇥')} ticks more sessions to broadcast to, and ${kbd('#')} brings up saved snippets like <code>#tests</code>.</p>`
-      : `<p>${kbd('⇧⌘K')} sends a message to any session without switching to it, or to several at once.</p>`,
-    key: { label: '⇧⌘K', test: e => e.metaKey && e.shiftKey && e.key.toLowerCase() === 'k', run: () => openQuick() },
-    action: () => s.overlay && s.overlay.kind === 'quick' && s.overlay.ticked.length > 1 ? { label: 'Send to 2 sessions', run: sendQuick } : null,
-    target: () => s.overlay ? '.overlay' : '.titlebar',
-    apply: st => { st.tabs.co.status = 'working'; st.tabs.au.status = 'working'; } },
-  { title: 'Nine themes, previewed live',
-    body: `<p>Move through the list and the whole window, terminals included, takes each theme as you go. Click one to keep it. The same list is in Settings, with the text size.</p>`,
-    target: () => '.overlay',
-    play: () => { s.overlay = { kind: 'palette', mode: 'themes', query: '', index: THEME_IDS.indexOf(userTheme) }; render(); cycleThemes(); } },
-  { title: 'A sidebar of who is waiting',
-    body: `<p>${kbd('⌘B')} shows every session in the project: the ones waiting for you on top, the busy ones in a drawer at the bottom. Bold means it finished and you haven't looked yet.</p>`,
-    key: { label: '⌘B', test: e => e.metaKey && e.key.toLowerCase() === 'b', run: () => { s.sidebar = true; render(); refresh(); } },
-    target: () => s.sidebar ? '.sidebar' : '.titlebar',
-    apply: st => { st.sidebar = true; } },
-  { title: 'The status bar knows the rest',
-    body: `<p>Under each session: its git branch, model and tokens, the pull request it opened with CI and review state, and any remote sandbox it started.</p><p>Sessions can bring up Linux sandboxes on boat.dev or AWS Lambda MicroVMs, or run on your other machines as workers.</p>`,
-    target: () => '.statusbar[data-status="co"]',
-    apply: st => { st.chips = true; st.groups.g1.sel = 'co'; st.active = 'g1'; },
-    play: () => { steps[11].apply(s); render(); refresh(); } },
-  { title: 'That is Studio',
-    body: `<p>Free, open source and native on macOS 14 or later. It runs the agent CLIs you already use, with your own accounts.</p><div class="coach__end"><a class="dl" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg">Download for macOS</a><a class="dl" style="background:none;color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)" href="https://github.com/fiberevm/studio">See it on GitHub</a></div><p>Needs Claude Code installed and signed in; Codex and Antigravity are optional. To build it yourself: clone the repository and run <code>./build-app.sh --open</code>.</p>`,
-    target: () => null },
-];
+function split(st) { st.layout = { dir: 'h', kids: [{ g: 'g1' }, { g: 'g2' }], fr: [.56, .44] }; st.groups.g1 = { tabs: ['co', 'au'], sel: st.groups.g1.sel === 'bi' ? 'co' : st.groups.g1.sel }; st.groups.g2 = { tabs: ['bi'], sel: 'bi' }; st.active = 'g2'; }
+function addTerminal(st) { st.layout.kids[1] = { dir: 'v', kids: [{ g: 'g2' }, { g: 'g3' }], fr: [.52, .48] }; st.groups.g3 = { tabs: ['sh'], sel: 'sh' }; st.tabs.sh = { kind: 'shell', title: 'zsh — shop', screen: 'sh' }; st.active = 'g3'; }
 
-function openPalette() {
-  if (s.overlay) return;
-  s.overlay = { kind: 'palette', mode: 'main', query: '', index: 0 }; render(); refresh();
-  later(() => typeInto(v => { if (s.overlay) { s.overlay.query = v; s.overlay.index = 0; } }, 'bill', 120), 900);
-}
-function openQuick() {
-  if (s.overlay) return;
-  s.overlay = { kind: 'quick', text: '', ticked: ['co'], index: 0 }; render(); refresh();
-  typeInto(v => { if (s.overlay) s.overlay.text = v; }, 'rebase on main and rerun the tests', 45, () => {
-    later(() => { if (!s.overlay) return; s.overlay.index = 1; s.overlay.ticked = ['co', 'au']; render(); refresh(); }, 400);
-  });
-}
-function sendQuick() {
-  if (!s.overlay || s.overlay.kind !== 'quick') return;
-  const n = s.overlay.ticked.length;
-  s.overlay.ticked.forEach(id => { s.tabs[id].status = 'working'; if (id === 'au') s.tabs.au.screen = 'auRun'; });
-  s.overlay = null; s.toast = `Sent to ${n} session${n > 1 ? 's' : ''}`; render(); refresh();
-  later(() => { s.toast = null; render(); }, 1800);
-}
-let cycling = false;
-function cycleThemes() {
-  cycling = true;
-  const next = () => {
-    if (!cycling || !s.overlay || s.overlay.mode !== 'themes') return;
-    s.overlay.index = (s.overlay.index + 1) % THEME_IDS.length; s.theme = THEME_IDS[s.overlay.index]; render();
-    later(next, 1100);
-  };
-  later(next, 900);
-}
+async function demo(g) {
+  for (;;) {
+    s = fresh(); render(); cap.classList.remove('on'); ptr.classList.add('on');
+    setPtr(innerWidth * .5, innerHeight * .62, 0);
+    await wait(g, 700);
 
-let cur = 0;
-const coach = document.getElementById('coach'), ring = document.getElementById('ring');
-const dotsHTML = () => `<nav class="dots" aria-label="Tour steps">${steps.map((st, i) => `<button type="button" data-dot="${i}" class="${i === cur ? 'on' : i < cur ? 'done' : ''}" aria-label="Step ${i + 1}: ${st.title}"></button>`).join('')}</nav>`;
+    await move(g, '.tab[data-tab="co"]', .55, .6);
+    await line(g, 'Every tab is an agent');
+    await wait(g, 1500);
 
-function go(i) {
-  timers.forEach(clearTimeout); timers = []; cycling = false;
-  cur = Math.max(0, Math.min(steps.length - 1, i));
-  s = fresh();
-  for (let j = 0; j < cur; j++) if (steps[j].apply) steps[j].apply(s);
-  render(); refresh();
-  if (steps[cur].play) steps[cur].play();
-  history.replaceState(null, '', cur ? '#step-' + (cur + 1) : location.pathname);
-}
-function refresh() {
-  const st = steps[cur];
-  const body = typeof st.body === 'function' ? st.body() : st.body;
-  const act = st.action && st.action();
-  const doBtn = act ? `<button class="coach__do" type="button" data-act>${act.label} ${kbd('↵')}</button>`
-    : st.key ? `<button class="coach__do" type="button" data-key>Press ${kbd(st.key.label)} or click here</button>` : '';
-  coach.innerHTML = `<span class="coach__arrow"></span><div class="coach__top"><span class="coach__n">${String(cur + 1).padStart(2, '0')} / ${steps.length}</span>${dotsHTML()}</div><h2>${st.title}</h2>${body}${doBtn}
-    <div class="coach__nav">${cur ? '<button type="button" data-back>Back</button>' : ''}<span class="coach__hint">${cur < steps.length - 1 ? '← → to move' : ''}</span>${cur < steps.length - 1 ? '<button type="button" class="next" data-next>Next</button>' : '<button type="button" class="next" data-restart>Start over</button>'}</div>`;
-  position(); requestAnimationFrame(position);
-}
-coach.addEventListener('click', e => {
-  const dot = e.target.closest('[data-dot]'); if (dot) { go(+dot.dataset.dot); return; }
-  if (e.target.closest('[data-next]')) go(cur + 1);
-  else if (e.target.closest('[data-back]')) go(cur - 1);
-  else if (e.target.closest('[data-restart]')) go(0);
-  else if (e.target.closest('[data-key]')) steps[cur].key.run();
-  else if (e.target.closest('[data-act]')) steps[cur].action().run();
-});
+    s.tabs.au.status = 'waiting'; s.tabs.au.screen = 'au'; render();
+    await move(g, '.tab[data-tab="au"]', .5, .6, 650);
+    await line(g, 'Red: it needs you');
+    await wait(g, 900);
+    s.tabs.bi.status = 'done'; s.tabs.bi.screen = 'bi'; render();
+    await line(g, '⌘J jumps right to it');
+    await wait(g, 700); await click(g);
+    selectTab('au'); render();
+    await move(g, '.popt.on', .08, .5, 700);
+    await line(g, 'Approve in one click');
+    await wait(g, 500); await click(g);
+    s.tabs.au.status = 'working'; s.tabs.au.screen = 'auRun'; render();
+    await wait(g, 1100);
 
-function position() {
-  const st = steps[cur], sel = st.target && st.target();
-  const el = sel && win.querySelector(sel);
-  const narrow = innerWidth < 640;
-  const arrow = coach.querySelector('.coach__arrow');
-  if (!el) {
-    ring.style.opacity = 0;
-    if (!narrow) { coach.style.left = (innerWidth / 2 - coach.offsetWidth / 2) + 'px'; coach.style.top = (innerHeight / 2 - coach.offsetHeight / 2) + 'px'; }
-    if (arrow) arrow.style.display = 'none';
-    return;
+    await move(g, '.tab[data-tab="bi"]', .55, .6);
+    await line(g, 'Hover to peek');
+    s.peek = 'bi'; render(); await wait(g, 2000); s.peek = null; render();
+
+    // drag the tab to the right half
+    await line(g, 'Drag to split');
+    const t = T[s.theme], tr = rel(win.querySelector('.tab[data-tab="bi"]')), Wd = win.offsetWidth, Hd = win.offsetHeight;
+    const [gx, gy] = scr(tr.x, tr.y);
+    Object.assign(ghost.style, { transition: 'none', left: gx + 'px', top: gy + 'px', transform: `scale(${scale})`, background: t.bg, color: t.fg, opacity: .94 });
+    ghost.querySelector('span').textContent = s.tabs.bi.title;
+    ptr.classList.add('down'); await wait(g, 200);
+    const [ex, ey] = scr(Wd * .7, Hd * .45);
+    ease(ghost, 950); ghost.style.left = ex - 60 * scale + 'px'; ghost.style.top = ey - 17 * scale + 'px';
+    s.drop = `left:${Wd * .56}px;top:64px;width:${Wd * .44}px;height:${Hd - 64}px`; render();
+    setPtr(ex, ey, 950); await wait(g, 1050);
+    ptr.classList.remove('down'); ghost.style.opacity = 0; s.drop = null; split(s); render();
+    await wait(g, 900);
+
+    await move(g, '.group[data-group="g2"] .pane', .5, .72);
+    await line(g, '⌃` opens a terminal');
+    await wait(g, 800); addTerminal(s); render(); await wait(g, 1300);
+
+    await move(g, '.group[data-group="g2"] .newtab', .5, .5);
+    await line(g, 'Open your app beside it'); await click(g);
+    s.groups.g2.tabs.push('wb'); s.tabs.wb = { kind: 'web', title: 'New tab', url: '', host: 'localhost' }; s.groups.g2.sel = 'wb'; s.active = 'g2'; render();
+    await move(g, '.addr', .2, .5, 500);
+    await typeIn(g, v => { s.tabs.wb.url = v; }, 'localhost:5173/checkout', 40);
+    s.tabs.wb.url = 'http://localhost:5173/checkout'; s.tabs.wb.title = 'Shop — Checkout'; render();
+    await wait(g, 1400);
+
+    await move(g, '.titlebar', .45, .6);
+    await line(g, '⌘P finds any session');
+    await wait(g, 400);
+    s.overlay = { kind: 'palette', mode: 'main', query: '', index: 0 }; render();
+    await wait(g, 600);
+    await typeIn(g, v => { s.overlay.query = v; }, 'bill', 110);
+    await move(g, '.prow.on', .3, .5, 600); await click(g);
+    s.overlay = null; selectTab('bi'); render();
+    await wait(g, 900);
+
+    await line(g, '⇧⌘K messages many');
+    s.overlay = { kind: 'quick', text: '', ticked: ['co'], index: 0 }; render();
+    await typeIn(g, v => { s.overlay.text = v; }, 'rebase on main and rerun the tests', 38);
+    await move(g, '.prow[data-q="au"] .tick', .5, .5, 600); await click(g);
+    s.overlay.ticked = ['co', 'au']; s.overlay.index = 1; render();
+    await wait(g, 700);
+    s.overlay = null; s.tabs.co.status = 'working'; s.tabs.au.status = 'working'; s.toast = 'Sent to 2 sessions'; render();
+    await wait(g, 1500); s.toast = null; render();
+
+    await move(g, '.titlebar', .45, .6, 600);
+    await line(g, 'Nine themes, live');
+    s.overlay = { kind: 'palette', mode: 'themes', query: '', index: 0 }; render();
+    for (const id of ['dark-modern', 'monokai', 'light-plus', 'github-dark', 'one-dark-pro']) {
+      await move(g, `.prow[data-theme="${id}"]`, .2, .5, 420);
+      s.overlay.index = THEME_IDS.indexOf(id); s.theme = id; render(); await wait(g, 700);
+    }
+    await click(g); s.overlay = null; render(); await wait(g, 900);
+
+    await line(g, '⌘B: who is waiting');
+    s.sidebar = true; render();
+    await move(g, '.sidebar', .45, .22, 700); await wait(g, 1600);
+
+    await move(g, '.nudge', .5, .55);
+    await line(g, 'Free. Get it for Mac.');
+    const n = win.querySelector('.nudge'); if (n) n.classList.add('hot');
+    await wait(g, 6000);
   }
-  const r = el.getBoundingClientRect();
-  ring.style.opacity = 1;
-  Object.assign(ring.style, { left: r.left - 3 + 'px', top: r.top - 3 + 'px', width: r.width + 6 + 'px', height: r.height + 6 + 'px' });
-  if (narrow || !arrow) return;
-  const cw = coach.offsetWidth, ch = coach.offsetHeight, gap = 16, m = 12, top = 12;
-  const fits = (x, y) => x >= m && y >= top && x + cw <= innerWidth - m && y + ch <= innerHeight - m;
-  // a wide target (a tab strip, a pane) gets the card at its right end, where the terminal has no text
-  const ax0 = r.width > cw * 2 ? r.right - cw - 32 : r.left + Math.min(40, Math.max(0, r.width / 2 - 20));
-  const cand = [['below', ax0, r.bottom + gap], ['right', r.right + gap, r.top], ['left', r.left - cw - gap, r.top], ['above', ax0, r.top - ch - gap]];
-  let pick = cand.find(([, x, y]) => fits(x, y));
-  if (!pick) pick = ['in', Math.min(r.right - cw - 24, innerWidth - cw - m), Math.min(r.bottom - ch - 24, innerHeight - ch - m)];
-  let [side, x, y] = pick;
-  x = Math.max(m, Math.min(x, innerWidth - cw - m)); y = Math.max(top, Math.min(y, innerHeight - ch - m));
-  coach.style.left = x + 'px'; coach.style.top = y + 'px';
-  arrow.style.display = side === 'in' ? 'none' : 'block';
-  arrow.style.left = arrow.style.top = arrow.style.right = arrow.style.bottom = '';
-  const ax = Math.max(16, Math.min((r.width > cw * 2 ? x + cw - 60 : r.left + Math.min(r.width / 2, 60)) - x - 6, cw - 28)), ay = Math.max(16, Math.min(r.top + Math.min(r.height / 2, 40) - y - 6, ch - 28));
-  if (side === 'below') { arrow.style.left = ax + 'px'; arrow.style.top = '-7px'; arrow.style.clipPath = 'polygon(0 0, 100% 0, 0 100%)'; }
-  if (side === 'above') { arrow.style.left = ax + 'px'; arrow.style.bottom = '-7px'; arrow.style.clipPath = 'polygon(100% 0, 100% 100%, 0 100%)'; }
-  if (side === 'right') { arrow.style.left = '-7px'; arrow.style.top = ay + 'px'; arrow.style.clipPath = 'polygon(0 0, 0 100%, 100% 100%)'; }
-  if (side === 'left') { arrow.style.right = '-7px'; arrow.style.top = ay + 'px'; arrow.style.clipPath = 'polygon(0 0, 100% 0, 100% 100%)'; }
+}
+function start() { gen++; demoOn = true; ptr.classList.add('on'); demo(gen).catch(e => { if (!(e instanceof Stop)) console.error(e); }); }
+function pause() {
+  gen++; demoOn = false; ptr.classList.remove('on', 'down'); cap.classList.remove('on'); ghost.style.opacity = 0; s.drop = null;
+  clearTimeout(idleT); idleT = setTimeout(start, 12000);
 }
 
-/* ================================================================ clicking around in the window */
+/* ================================================================ your turn: clicks and keys work like the app */
 function selectTab(id, g) {
   g = g || Object.keys(s.groups).find(k => s.groups[k].tabs.includes(id));
   if (!g) return;
   s.groups[g].sel = id; s.active = g; s.peek = null;
   if (s.tabs[id].status === 'done') s.tabs[id].status = 'idle';   // reading it clears the unread mark, like the app
 }
-function approve() { s.tabs.au.status = 'working'; s.tabs.au.screen = 'auRun'; render(); refresh(); }
-function closeOverlay() { if (s.overlay && s.overlay.mode === 'themes') s.theme = userTheme; s.overlay = null; cycling = false; render(); refresh(); }
+function sendQuick() {
+  const o = s.overlay; if (!o || !o.ticked.length) { s.overlay = null; return; }
+  o.ticked.forEach(id => { s.tabs[id].status = 'working'; if (id === 'au') s.tabs.au.screen = 'auRun'; });
+  const n = o.ticked.length; s.overlay = null; s.toast = `Sent to ${n} session${n > 1 ? 's' : ''}`;
+  setTimeout(() => { s.toast = null; render(); }, 1800);
+}
+function palRows() { const q = s.overlay.query.toLowerCase(); return PAL_MAIN.filter(r => !q || (r.t + ' ' + (r.sub || '')).toLowerCase().includes(q)); }
+function pickPal(id) {
+  if (id === 'theme') { s.overlay = { kind: 'palette', mode: 'themes', query: '', index: THEME_IDS.indexOf(s.theme) }; return; }
+  if (s.tabs[id]) selectTab(id);
+  s.overlay = null;
+}
 let hoverT;
 win.addEventListener('click', e => {
+  if (e.target.closest('a')) return;
+  pause();
   const tab = e.target.closest('.tab'), perm = e.target.closest('.popt'), row = e.target.closest('.prow'), srow = e.target.closest('.srow[data-row]');
-  if (perm && s.tabs.au.status === 'waiting') { if (perm.dataset.perm !== '3') approve(); return; }
-  if (row && s.overlay) {
-    if (row.dataset.theme) { cycling = false; userTheme = s.theme = row.dataset.theme; s.overlay = null; render(); refresh(); return; }
-    if (row.dataset.q) { const id = row.dataset.q, o = s.overlay; if (id !== 'new') { o.ticked = o.ticked.includes(id) ? o.ticked.filter(x => x !== id) : [...o.ticked, id]; render(); refresh(); } return; }
-    const id = row.dataset.pal;
-    if (id === 'theme') { s.overlay = { kind: 'palette', mode: 'themes', query: '', index: THEME_IDS.indexOf(s.theme) }; render(); return; }
-    if (s.tabs[id]) selectTab(id);
-    s.overlay = null; render(); refresh(); return;
+  if (perm && s.tabs.au.status === 'waiting') { if (perm.dataset.perm !== '3') { s.tabs.au.status = 'working'; s.tabs.au.screen = 'auRun'; } }
+  else if (row && s.overlay) {
+    if (row.dataset.theme) { userTheme = s.theme = row.dataset.theme; s.overlay = null; }
+    else if (row.dataset.q) { const id = row.dataset.q, o = s.overlay; if (id === 'new') sendQuick(); else o.ticked = o.ticked.includes(id) ? o.ticked.filter(x => x !== id) : [...o.ticked, id]; }
+    else pickPal(row.dataset.pal);
   }
-  if (tab) { selectTab(tab.dataset.tab, tab.dataset.g); render(); refresh(); return; }
-  if (srow) { selectTab(srow.dataset.row); render(); return; }
-  if (s.overlay && !e.target.closest('.overlay')) closeOverlay();
+  else if (tab) selectTab(tab.dataset.tab, tab.dataset.g);
+  else if (srow) selectTab(srow.dataset.row);
+  else if (s.overlay && !e.target.closest('.overlay')) { if (s.overlay.mode === 'themes') s.theme = userTheme; s.overlay = null; }
+  render();
 });
 win.addEventListener('mouseover', e => {
+  if (demoOn) return;
   const tab = e.target.closest('.tab'), row = e.target.closest('.prow[data-theme]');
-  if (row && s.overlay && s.overlay.mode === 'themes') { const id = row.dataset.theme; if (s.theme !== id) { cycling = false; s.overlay.index = THEME_IDS.indexOf(id); s.theme = id; render(); } return; }
+  if (row && s.overlay && s.overlay.mode === 'themes') { const id = row.dataset.theme; if (s.theme !== id) { s.overlay.index = THEME_IDS.indexOf(id); s.theme = id; render(); } return; }
   if (!tab || !s.tabs[tab.dataset.tab] || s.tabs[tab.dataset.tab].kind !== 'claude' || s.peek === tab.dataset.tab) return;
   clearTimeout(hoverT);
   const id = tab.dataset.tab;
-  hoverT = setTimeout(() => { if (win.querySelector(`.tab[data-tab="${id}"]:hover`)) { s.peek = id; render(); } }, 450);
+  hoverT = setTimeout(() => { if (!demoOn && win.querySelector(`.tab[data-tab="${id}"]:hover`)) { s.peek = id; render(); } }, 450);
 });
 win.addEventListener('mouseout', e => {
   const tab = e.target.closest('.tab');
-  if (tab && !tab.contains(e.relatedTarget)) { clearTimeout(hoverT); if (s.peek && cur !== 3) { s.peek = null; render(); } }
+  if (!demoOn && tab && !tab.contains(e.relatedTarget)) { clearTimeout(hoverT); if (s.peek) { s.peek = null; render(); } }
 });
-
-/* ================================================================ keys */
 addEventListener('keydown', e => {
-  const st = steps[cur];
-  if (st.key && st.key.test(e)) { e.preventDefault(); st.key.run(); return; }
-  if (e.key === '1' && s.tabs.au.status === 'waiting' && s.groups.g1 && s.groups.g1.sel === 'au') { approve(); return; }
-  if (e.key === 'Enter' && st.action && st.action()) { e.preventDefault(); st.action().run(); return; }
-  if (e.key === 'Escape' && s.overlay) { closeOverlay(); return; }
-  if (s.overlay && s.overlay.mode === 'themes') {
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); cycling = false; const o = s.overlay; o.index = (o.index + (e.key === 'ArrowDown' ? 1 : THEME_IDS.length - 1)) % THEME_IDS.length; s.theme = THEME_IDS[o.index]; render(); return; }
-    if (e.key === 'Enter') { userTheme = s.theme; s.overlay = null; cycling = false; render(); refresh(); return; }
-  }
-  if (e.metaKey || e.ctrlKey || e.altKey) return;
-  if (e.key === 'ArrowRight') go(cur + 1);
-  if (e.key === 'ArrowLeft') go(cur - 1);
+  const k = e.key.toLowerCase(), o = s.overlay, typing = !e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1;
+  if (e.metaKey && k === 'j') { const w = Object.keys(s.tabs).find(id => s.tabs[id].status === 'waiting') || Object.keys(s.tabs).find(id => s.tabs[id].status === 'done'); if (w) selectTab(w); }
+  else if (e.metaKey && e.shiftKey && k === 'k') s.overlay = { kind: 'quick', text: '', ticked: [], index: 0 };
+  else if (e.metaKey && k === 'p') s.overlay = { kind: 'palette', mode: 'main', query: '', index: 0 };
+  else if (e.metaKey && k === 'b') s.sidebar = !s.sidebar;
+  else if (e.ctrlKey && e.code === 'Backquote') { if (!s.groups.g3) { if (!s.groups.g2) split(s); addTerminal(s); } }
+  else if (k === 'escape' && o) { if (o.mode === 'themes') s.theme = userTheme; s.overlay = null; }
+  else if (o && o.mode === 'themes' && (k === 'arrowdown' || k === 'arrowup')) { o.index = (o.index + (k === 'arrowdown' ? 1 : THEME_IDS.length - 1)) % THEME_IDS.length; s.theme = THEME_IDS[o.index]; }
+  else if (o && o.mode === 'themes' && k === 'enter') { userTheme = s.theme; s.overlay = null; }
+  else if (o && o.kind === 'palette' && (k === 'arrowdown' || k === 'arrowup')) { o.index = Math.max(0, Math.min(palRows().length - 1, o.index + (k === 'arrowdown' ? 1 : -1))); }
+  else if (o && o.kind === 'palette' && k === 'enter') { const r = palRows()[o.index]; if (r) pickPal(r.id); else s.overlay = null; }
+  else if (o && o.kind === 'palette' && k === 'backspace') { o.query = o.query.slice(0, -1); o.index = 0; }
+  else if (o && o.kind === 'palette' && typing) { o.query += e.key; o.index = 0; }
+  else if (o && o.kind === 'quick' && k === 'tab') { const ids = ['co', 'au', 'bi'], id = ids[o.index % 3]; o.ticked = o.ticked.includes(id) ? o.ticked : [...o.ticked, id]; o.index = (o.index + 1) % 3; }
+  else if (o && o.kind === 'quick' && k === 'enter') { if (!o.ticked.length) o.ticked = [['co', 'au', 'bi'][o.index]]; sendQuick(); }
+  else if (o && o.kind === 'quick' && k === 'backspace') o.text = o.text.slice(0, -1);
+  else if (o && o.kind === 'quick' && typing) o.text += e.key;
+  else if (k === '1' && s.tabs.au.status === 'waiting') { s.tabs.au.status = 'working'; s.tabs.au.screen = 'auRun'; }
+  else return;
+  e.preventDefault(); pause(); render();
 });
 
-fit(); go((+(location.hash.match(/step-(\d+)/) || [])[1] || 1) - 1);
+fit(); start();
 if (document.fonts) document.fonts.ready.then(fit);
-setTimeout(() => { coach.classList.add('live'); ring.classList.add('live'); }, 400);
 })();
 </script>
 </body>
