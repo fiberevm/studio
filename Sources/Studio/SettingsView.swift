@@ -861,7 +861,8 @@ private struct TelemetrySettings: View {
             VStack(alignment: .leading, spacing: 6) {
                 bullet("A random id for this install, made up when Studio first runs")
                 bullet("Studio's version, whether it's a release or built from source, the macOS version and the chip type")
-                bullet("When Studio opens, and when a session starts: which agent (Claude Code, Codex or Antigravity) and whether it got a worktree")
+                bullet("When Studio opens, and when a session opens: which agent (Claude Code, Codex or Antigravity), whether it is new, resumed, forked or reopened, and whether it got a worktree")
+                bullet("How many tokens your sessions sent and received, added up per agent every few minutes (counts only)")
             }
             .padding(.vertical, 10)
             Group_(title: "What is never sent")

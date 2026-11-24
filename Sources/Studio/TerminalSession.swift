@@ -39,6 +39,9 @@ final class TerminalSession: NSObject, ObservableObject, Identifiable, LocalProc
     let remote: (worker: String, session: String)?
     /// A coding agent's session (Claude Code or Codex), as opposed to a plain terminal or web panel.
     var isAgent: Bool { agent != nil }
+    /// A conversation Studio started itself: all its tokens are Studio's (TokenMeter). Resumed ones count from
+    /// when Studio first sees their totals.
+    var countsTokensFromZero = false
     var agent: Agent? {
         switch kind { case .claude: return .claude; case .codex: return .codex; case .agy: return .agy; default: return nil }
     }

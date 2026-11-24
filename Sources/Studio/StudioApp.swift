@@ -18,13 +18,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSWindow.allowsAutomaticWindowTabbing = false
         MainActor.assumeIsolated { _ = Updater.shared }   // starts the background update check (release builds)
         Telemetry.capture("app_opened")
+        MainActor.assumeIsolated { TokenMeter.shared.start() }
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
     /// Quit only once every session has actually exited. Otherwise a quick relaunch sees them still running,
     /// takes them for sessions running elsewhere, and doesn't reopen their tabs.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        MainActor.assumeIsolated { SessionStore.terminating = true }
+        MainActor.assumeIsolated {
+            SessionStore.terminating = true
+            // the tokens processed since the last report, before Studio goes
+            TokenMeter.shared.tick()
+            TokenMeter.shared.flush(wait: true)
+        }
         let pids = MainActor.assumeIsolated { SessionStore.current?.terminals.flatMap(\.livePids) ?? [] }
         guard !pids.isEmpty else { return .terminateNow }
         pids.forEach { kill($0, SIGHUP) }

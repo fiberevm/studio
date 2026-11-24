@@ -316,14 +316,14 @@ final class ProjectModel: ObservableObject {
         let want = agent ?? Agent.preferred
         let has = reg.info[w.id]?.agents[want.rawValue]?.installed ?? true
         let s = try await reg.start(on: w, agent: has ? want : .claude, folder: folder, prompt: prompt)
-        let t = store.newWorkerTab(worker: w.id, session: s.id, cwd: s.cwd)
+        let t = store.newWorkerTab(worker: w.id, session: s.id, cwd: s.cwd, agent: s.agent, origin: .new)
         if let g { place(t, beside: g, zone: zone) } else { select(t) }
         return t
     }
 
     /// Open a tab for a session already running on a worker.
     func openWorkerSession(_ w: Worker, _ s: WorkerSession) {
-        select(store.newWorkerTab(worker: w.id, session: s.id, cwd: s.cwd))
+        select(store.newWorkerTab(worker: w.id, session: s.id, cwd: s.cwd, agent: s.agent, origin: .resume))
     }
 
     /// Open a web panel: in a split beside the active pane (or as a tab with zone .center).
@@ -726,10 +726,10 @@ final class ProjectModel: ObservableObject {
                         t = parts.count == 3 ? store.newWorkerTab(worker: parts[0], session: parts[1], cwd: parts[2]) : nil
                     } else if sid.hasPrefix("agy:") {
                         let cwd = String(sid.dropFirst(4))
-                        t = store.newAgy(in: FileManager.default.fileExists(atPath: cwd) ? cwd : folder)
+                        t = store.newAgy(in: FileManager.default.fileExists(atPath: cwd) ? cwd : folder, origin: .restore)
                     } else if sid.hasPrefix("codex:") {
                         let cwd = String(sid.dropFirst(6))
-                        t = store.newCodex(in: FileManager.default.fileExists(atPath: cwd) ? cwd : folder, resumeLast: true)
+                        t = store.newCodex(in: FileManager.default.fileExists(atPath: cwd) ? cwd : folder, resumeLast: true, origin: .restore)
                     } else if sid.hasPrefix("shell:") {
                         let cwd = String(sid.dropFirst(6))
                         t = store.newShell(in: FileManager.default.fileExists(atPath: cwd) ? cwd : folder)

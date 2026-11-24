@@ -447,8 +447,8 @@ final class SessionStore: ObservableObject {
                 guard host != nil || scanQueue.sync(execute: { agent == .codex ? codexScanner.exists(sid) : agyScanner.exists(sid) })
                 else { forgotten.insert(sid); continue }
                 let native = TerminalSession.nativeSessions.contains(sid)
-                let t = agent == .codex ? newCodex(in: cwd, resume: sid, id: tab, host: native ? nil : host, native: native)
-                                        : newAgy(in: cwd, resume: sid, id: tab, host: native ? nil : host, native: native)
+                let t = agent == .codex ? newCodex(in: cwd, resume: sid, id: tab, host: native ? nil : host, native: native, origin: .restore)
+                                        : newAgy(in: cwd, resume: sid, id: tab, host: native ? nil : host, native: native, origin: .restore)
                 out.append(t)
                 continue
             }
@@ -456,7 +456,7 @@ final class SessionStore: ObservableObject {
             if let h = e["tmux"], SessionHost.enabled, SessionHost.exists(h) {
                 let t = TerminalSession(cwd: cwd, claudeArgs: ["--resume", sid], sessionId: sid, fontSize: fontSize,
                                         id: e["tab"].flatMap(UUID.init(uuidString:)) ?? UUID(), host: h)
-                add(t)
+                add(t, origin: .restore)
                 out.append(t)
                 continue
             }
@@ -464,7 +464,7 @@ final class SessionStore: ObservableObject {
             guard Self.transcriptExists(sid) else { forgotten.insert(sid); continue } // never prompted
             let t = TerminalSession(cwd: Self.resumeDir(sid, fallback: cwd), claudeArgs: ["--resume", sid], sessionId: sid, fontSize: fontSize,
                                     native: TerminalSession.nativeSessions.contains(sid))
-            add(t)
+            add(t, origin: .restore)
             out.append(t)
         }
         return out
@@ -510,7 +510,11 @@ final class SessionStore: ObservableObject {
         return dirs.contains { fm.fileExists(atPath: Paths.projects.appendingPathComponent($0).appendingPathComponent("\(sid).jsonl").path) }
     }
 
-    private func add(_ t: TerminalSession) {
+    private func add(_ t: TerminalSession, origin: SessionOrigin? = nil) {
+        if let origin, let agent = t.agent {
+            t.countsTokensFromZero = origin == .new
+            Telemetry.sessionOpened(agent: agent.rawValue, origin: origin, native: t.isNative)
+        }
         terminals.append(t)
         observe(t)
         persistTerminals()
@@ -521,21 +525,21 @@ final class SessionStore: ObservableObject {
         if let t = terminals.first(where: { $0.sessionId == sid }) { return t }
         if let r = records[sid] ?? history.first(where: { $0.id == sid }), r.agent != .claude {
             let dir = FileManager.default.fileExists(atPath: r.cwd) ? r.cwd : NSHomeDirectory()
-            return r.agent == .codex ? newCodex(in: dir, resume: sid) : newAgy(in: dir, resume: sid)
+            return r.agent == .codex ? newCodex(in: dir, resume: sid, origin: .resume) : newAgy(in: dir, resume: sid, origin: .resume)
         }
         let cwd = Self.resumeDir(sid, fallback: records[sid]?.cwd ?? live[sid]?.cwd ?? NSHomeDirectory())
         let t = TerminalSession(cwd: cwd, claudeArgs: ["--resume", sid], sessionId: sid, fontSize: fontSize,
                                 native: TerminalSession.nativeSessions.contains(sid))
-        add(t)
+        add(t, origin: .resume)
         return t
     }
 
     /// A copy of a conversation under a new session id (`claude --resume <id> --fork-session`).
     /// The original keeps running untouched; the fork learns its own id once Claude starts.
     func fork(_ sid: String, cwd: String, agent: Agent = .claude) -> TerminalSession {
-        if agent == .codex { return newCodex(in: cwd, fork: sid) }
+        if agent == .codex { return newCodex(in: cwd, fork: sid, origin: .fork) }
         let t = TerminalSession(cwd: cwd, claudeArgs: ["--resume", sid, "--fork-session"], sessionId: nil, fontSize: fontSize)
-        add(t)
+        add(t, origin: .fork)
         return t
     }
 
@@ -554,7 +558,7 @@ final class SessionStore: ObservableObject {
         case .claude:
             t = TerminalSession(cwd: folder, claudeArgs: prompt.map { [$0] } ?? [], sessionId: nil, fontSize: fontSize,
                                 preparing: wants ? name : nil)
-            add(t)
+            add(t, origin: .new)
         }
         guard wants else { return t }
         DispatchQueue.global(qos: .userInitiated).async {
@@ -572,18 +576,19 @@ final class SessionStore: ObservableObject {
     /// or a copy of conversation `fork`. `host` reattaches to a tab still running in tmux.
     func newCodex(in cwd: String, prompt: String? = nil, resume: String? = nil, resumeLast: Bool = false,
                   fork: String? = nil, id: UUID = UUID(), host: String? = nil, native: Bool = false,
-                  preparing: String? = nil) -> TerminalSession {
+                  preparing: String? = nil, origin: SessionOrigin = .new) -> TerminalSession {
         let args = resume.map { ["resume", $0] } ?? fork.map { ["fork", $0] }
             ?? (resumeLast ? ["resume", "--last"] : prompt.map { ["--", $0] } ?? [])
         let t = TerminalSession(cwd: cwd, claudeArgs: args, sessionId: resume, fontSize: fontSize, kind: .codex,
                                 native: native, id: id, host: host, preparing: preparing)
-        add(t)
+        add(t, origin: origin)
         return t
     }
 
     /// A tab for a session on a worker.
-    func newWorkerTab(worker: String, session: String, cwd: String) -> TerminalSession {
+    func newWorkerTab(worker: String, session: String, cwd: String, agent: String? = nil, origin: SessionOrigin = .restore) -> TerminalSession {
         if let t = terminals.first(where: { $0.remote?.worker == worker && $0.remote?.session == session }) { return t }
+        Telemetry.sessionOpened(agent: agent ?? "unknown", origin: origin, worker: true)
         let t = TerminalSession(cwd: cwd, claudeArgs: [], sessionId: nil, fontSize: fontSize, kind: .worker,
                                 remote: (worker, session))
         add(t)
@@ -592,11 +597,11 @@ final class SessionStore: ObservableObject {
 
     /// An Antigravity (`agy`) session: new (with a first prompt), or continuing conversation `resume`.
     func newAgy(in cwd: String, prompt: String? = nil, resume: String? = nil, id: UUID = UUID(), host: String? = nil,
-                native: Bool = false, preparing: String? = nil) -> TerminalSession {
+                native: Bool = false, preparing: String? = nil, origin: SessionOrigin = .new) -> TerminalSession {
         let args = resume.map { ["--conversation", $0] } ?? prompt.map { ["-i", $0] } ?? []
         let t = TerminalSession(cwd: cwd, claudeArgs: args, sessionId: resume, fontSize: fontSize, kind: .agy,
                                 native: native, id: id, host: host, preparing: preparing)
-        add(t)
+        add(t, origin: origin)
         return t
     }
 
@@ -612,7 +617,7 @@ final class SessionStore: ObservableObject {
         let alive = SessionHost.exists(host)
         let t = TerminalSession(cwd: cwd, claudeArgs: alive ? [] : ["resume", "--last"], sessionId: nil, fontSize: fontSize,
                                 kind: .codex, id: tab, host: alive ? host : nil)
-        add(t)
+        add(t, origin: .restore)
         return t
     }
 
