@@ -341,6 +341,8 @@ struct SecretAsk: Identifiable {
     /// The lifetime the agent suggested (the user decides).
     let suggested: TimeInterval?
     let replacing: Bool
+    /// The session's tab: the panel shows over it (nil: over the window).
+    let tab: UUID?
     /// Called once with what the user typed and the expiry they chose, or nil when they decline.
     let done: ((value: String, lifetime: TimeInterval?)?) -> Void
 }
@@ -350,11 +352,14 @@ enum SecretPrompt {
     /// The value goes straight to the store: it is never shown to the agent.
     @MainActor
     static func ask(name: String, reason: String, session: String, suggested: TimeInterval?, replacing: Bool,
-                    in model: ProjectModel) async -> (value: String, lifetime: TimeInterval?)? {
+                    in model: ProjectModel, tab: UUID?) async -> (value: String, lifetime: TimeInterval?)? {
         if !NSApp.isActive { NSApp.requestUserAttention(.informationalRequest) }
+        // the asking session's tab comes to the front of its pane, so its panel is on screen
+        let shown = tab.flatMap { id in model.group(containing: id).map { (id, $0) } }
+        if let (id, g) = shown, let t = model.terminal(id), g.selection != "t:\(id)" { model.select(t, in: g) }
         return await withCheckedContinuation { cont in
             model.secretAsks.append(SecretAsk(name: name, reason: reason, session: session, suggested: suggested,
-                                              replacing: replacing, done: { cont.resume(returning: $0) }))
+                                              replacing: replacing, tab: shown?.0, done: { cont.resume(returning: $0) }))
         }
     }
 }
@@ -436,7 +441,7 @@ struct SecretAskPanel: View {
             }
             .padding(.horizontal, 14).frame(height: 40)
         }
-        .frame(width: 520)
+        .frame(maxWidth: 520)
         .background(SwiftUI.Color(nsColor: Theme.chrome))
         .overlay(Rectangle().stroke(SwiftUI.Color(nsColor: Theme.border), lineWidth: 1))
         .compositingGroup()     // one shadow for the panel, none under its fields and buttons

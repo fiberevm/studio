@@ -129,6 +129,10 @@ final class StudioControl {
     }
     private var models: [ProjectModel] { windows.values.compactMap(\.model) }
 
+    /// The project window that has this tab open (every window can look up every session, so "knows the tab" is
+    /// not enough: the tab must be in one of its panes).
+    func window(showing tab: UUID) -> ProjectModel? { models.first { $0.group(containing: tab) != nil } }
+
     /// Whether a tab is open in a project window other than `model` (a session shows in one window only).
     func isOpen(_ id: UUID, elsewhereThan model: ProjectModel) -> Bool {
         models.contains { $0 !== model && $0.groups.contains { $0.tabIds.contains(id) } }
@@ -199,7 +203,7 @@ final class StudioControl {
     private func secret(_ method: String, _ p: [String: Any], callerTab: UUID?) async throws -> Any {
         let secrets = SecretStore.shared
         let me = callerTab.flatMap { id in store?.terminals.first { $0.id == id } }
-        let model = callerTab.flatMap { id in models.first { $0.terminal(id) != nil } } ?? lastActive ?? models.first
+        let model = callerTab.flatMap(window(showing:)) ?? lastActive ?? models.first
         let session = me.flatMap { t in model?.title(of: t) } ?? "A session"
         func name() throws -> String {
             guard let n = p["name"] as? String, SecretStore.validName(n) else {
@@ -242,7 +246,7 @@ final class StudioControl {
             let reason = (p["reason"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             guard let model else { throw ControlError(message: "No Studio window is open to ask the user in.") }
             guard let got = await SecretPrompt.ask(name: n, reason: reason, session: session, suggested: life, replacing: exists,
-                                                   in: model) else {
+                                                   in: model, tab: callerTab) else {
                 return "The user declined to provide \(n)."
             }
             try secrets.set(n, value: got.value, note: reason, expires: expiry(got.lifetime), source: session)
@@ -371,7 +375,7 @@ final class StudioControl {
     /// web_* tools: read and drive a web panel's page (WKWebView) for the agent.
     private func web(_ method: String, _ p: [String: Any], callerTab: UUID?) async throws -> Any {
         guard let store else { throw ControlError(message: "Studio isn't ready") }
-        let model = callerTab.flatMap { id in models.first { $0.terminal(id) != nil } } ?? lastActive ?? models.first
+        let model = callerTab.flatMap(window(showing:)) ?? lastActive ?? models.first
         // the named web tab, else the newest web panel in the caller's window
         let tab: TerminalSession
         if let s = p["tab"] as? String, let id = UUID(uuidString: s), let t = store.terminals.first(where: { $0.id == id }), t.isWeb {
@@ -525,7 +529,7 @@ final class StudioControl {
             throw ControlError(message: "No sandbox provider is set up: install and sign in to the boat CLI (https://boat.dev), or set up AWS Lambda MicroVMs in Settings (⌘, → Sandboxes).")
         }
         let policy = Pref.string(Pref.sandboxPolicy) ?? "auto"   // default: use sandboxes when helpful
-        let model = callerTab.flatMap { id in models.first { $0.terminal(id) != nil } } ?? lastActive ?? models.first
+        let model = callerTab.flatMap(window(showing:)) ?? lastActive ?? models.first
         let me = callerTab.flatMap { id in store.terminals.first { $0.id == id } }
 
         /// The sandbox to act on: the one named, else this session's most recent.

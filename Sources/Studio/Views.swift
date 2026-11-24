@@ -127,7 +127,8 @@ struct ProjectView: View {
             }
         }
         .overlay(alignment: .top) {
-            if let ask = model.secretAsks.first {
+            // a request from a tab shows over that tab (TerminalPane); one with no tab here, over the window
+            if let ask = model.secretAsks.first(where: { $0.tab.flatMap { model.group(containing: $0) } == nil }) {
                 ZStack(alignment: .top) {
                     SwiftUI.Color.black.opacity(0.18)     // dim the window: this wants an answer
                     SecretAskPanel(ask: ask).id(ask.id).padding(.top, 90)
@@ -1337,6 +1338,15 @@ struct TerminalPane: View {
         }
             Hairline()
             SessionStatusBar(terminal: terminal)
+        }
+        .overlay(alignment: .top) {
+            // a secret this session asked for: the panel shows over its own tab
+            if let ask = model.secretAsks.first(where: { $0.tab == terminal.id }) {
+                ZStack(alignment: .top) {
+                    SwiftUI.Color.black.opacity(0.18)
+                    SecretAskPanel(ask: ask).id(ask.id).padding(.horizontal, 16).padding(.top, 48)
+                }
+            }
         }
     }
 }
