@@ -215,11 +215,26 @@ body { background: #191d27; }
     <img src="assets/icon.svg" alt="" width="88" height="88">
     <h1>Download Studio</h1>
     <p>Free for macOS 14 or later. Runs Claude Code, Codex and Antigravity.</p>
-    <a class="end__dl" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.3 1.88-3.4 1.97-3.46-1.07-1.57-2.74-1.78-3.33-1.8-1.42-.15-2.77.83-3.49.83-.72 0-1.83-.81-3.01-.79-1.55.02-2.98.9-3.78 2.29-1.61 2.8-.41 6.94 1.16 9.21.77 1.11 1.68 2.36 2.88 2.31 1.16-.05 1.6-.75 3-.75s1.79.75 3.01.72c1.25-.02 2.04-1.13 2.8-2.25.88-1.29 1.24-2.54 1.26-2.6-.03-.01-2.42-.93-2.47-3.71ZM14.1 5.86c.64-.78 1.07-1.85.95-2.92-.92.04-2.03.61-2.69 1.38-.59.68-1.11 1.77-.97 2.82 1.03.08 2.07-.52 2.71-1.28Z"/></svg>Download for macOS</a>
-    <div class="end__more"><button type="button" id="again">Watch again</button><a href="https://github.com/fiberevm/studio">View on GitHub</a></div>
+    <a class="end__dl" href="https://github.com/fiberevm/studio/releases/latest/download/Studio-arm64.dmg"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.3 1.88-3.4 1.97-3.46-1.07-1.57-2.74-1.78-3.33-1.8-1.42-.15-2.77.83-3.49.83-.72 0-1.83-.81-3.01-.79-1.55.02-2.98.9-3.78 2.29-1.61 2.8-.41 6.94 1.16 9.21.77 1.11 1.68 2.36 2.88 2.31 1.16-.05 1.6-.75 3-.75s1.79.75 3.01.72c1.25-.02 2.04-1.13 2.8-2.25.88-1.29 1.24-2.54 1.26-2.6-.03-.01-2.42-.93-2.47-3.71ZM14.1 5.86c.64-.78 1.07-1.85.95-2.92-.92.04-2.03.61-2.69 1.38-.59.68-1.11 1.77-.97 2.82 1.03.08 2.07-.52 2.71-1.28Z"/></svg>Download for macOS</a>
+    <div class="end__more"><button type="button" id="again">Watch again</button><a href="https://github.com/fiberevm/studio/releases/latest/download/Studio-x86_64.dmg">Intel Mac</a><a href="https://github.com/fiberevm/studio">View on GitHub</a></div>
   </div>
 </main>
 
+<script>
+// Download links give the Apple silicon build. Chromium browsers say whether the Mac is Intel: there, every one
+// gives the Intel build instead (Safari doesn't tell; the end screen has an Intel Mac link)
+(() => {
+  const uad = navigator.userAgentData;
+  if (!uad || !uad.getHighEntropyValues) return;
+  uad.getHighEntropyValues(['architecture']).then(v => {
+    if (v.architecture !== 'x86') return;
+    document.addEventListener('click', e => {
+      const a = e.target.closest && e.target.closest('a[href$="/Studio-arm64.dmg"]');
+      if (a) a.href = a.href.replace('Studio-arm64.dmg', 'Studio-x86_64.dmg');
+    }, true);
+  }).catch(() => {});
+})();
+</script>
 <script>
 (() => {
 /* ================================================================ themes, as Themes.swift defines them */
@@ -444,7 +459,7 @@ function peekHTML() {
 let starI = 0;
 function render() {
   applyTheme(s.theme);
-  win.innerHTML = `<div class="titlebar"><div class="lights"><i></i><i></i><i></i></div><b>shop</b><span class="dash">—</span><span>~/code/shop</span><span class="tb-right"><a class="tb-gh" href="https://github.com/fiberevm/studio">GitHub</a><a class="nudge" href="https://github.com/fiberevm/studio/releases/latest/download/Studio.dmg"><svg width="11" height="11" viewBox="0 0 12 12"><circle cx="6" cy="6" r="6" fill="currentColor" opacity=".9"/><path d="M6 3v5M3.8 6l2.2 2.2L8.2 6" fill="none" stroke="var(--accent)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Download Studio for macOS</a></span></div><div class="hair"></div>
+  win.innerHTML = `<div class="titlebar"><div class="lights"><i></i><i></i><i></i></div><b>shop</b><span class="dash">—</span><span>~/code/shop</span><span class="tb-right"><a class="tb-gh" href="https://github.com/fiberevm/studio">GitHub</a><a class="nudge" href="https://github.com/fiberevm/studio/releases/latest/download/Studio-arm64.dmg"><svg width="11" height="11" viewBox="0 0 12 12"><circle cx="6" cy="6" r="6" fill="currentColor" opacity=".9"/><path d="M6 3v5M3.8 6l2.2 2.2L8.2 6" fill="none" stroke="var(--accent)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Download Studio for macOS</a></span></div><div class="hair"></div>
     <div class="wbody">${s.sidebar ? sidebarHTML() : ''}<div class="layout">${nodeHTML(s.layout)}</div></div>
     ${overlayHTML()}${peekHTML()}${s.drop ? `<div class="drop" style="${s.drop}"></div>` : ''}${s.toast ? `<div class="toast">${esc(s.toast)}</div>` : ''}`;
   if (s.peek) placePeek();
