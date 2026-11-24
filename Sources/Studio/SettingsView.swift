@@ -56,7 +56,7 @@ struct SettingsView: View {
     }()
 
     enum Section: String, CaseIterable, Identifiable {
-        case appearance = "Appearance", agents = "Agents", workers = "Workers", sessions = "Sessions", worktrees = "Worktrees", sandboxes = "Sandboxes", secrets = "Secrets", updates = "Updates", telemetry = "Telemetry", about = "About"
+        case appearance = "Appearance", agents = "Agents", workers = "Workers", sessions = "Sessions", worktrees = "Worktrees", sandboxes = "Sandboxes", secrets = "Secrets", account = "Account", updates = "Updates", telemetry = "Telemetry", about = "About"
         var id: String { rawValue }
         var icon: String {
             switch self {
@@ -67,6 +67,7 @@ struct SettingsView: View {
             case .sandboxes: return "sailboat"
             case .worktrees: return "arrow.triangle.branch"
             case .secrets: return "key"
+            case .account: return "person.crop.circle"
             case .updates: return "arrow.down.circle"
             case .telemetry: return "chart.bar"
             case .about: return "info.circle"
@@ -100,6 +101,7 @@ struct SettingsView: View {
                         case .sandboxes: SandboxSettings(registry: store.sandboxes)
                         case .worktrees: WorktreeSettings()
                         case .secrets: SecretSettings()
+                        case .account: AccountSettings()
                         case .updates: UpdatesSettings()
                         case .telemetry: TelemetrySettings()
                         case .about: AboutSettings()

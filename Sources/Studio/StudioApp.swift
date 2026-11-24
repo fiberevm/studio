@@ -96,7 +96,10 @@ struct StudioApp: App {
 
 struct AppCommands: Commands {
     @ObservedObject var store: SessionStore
-    @FocusedObject private var project: ProjectModel?
+    /// SwiftUI's idea of the focused window: kept for enabling menu items (it redraws them).
+    @FocusedObject private var focused: ProjectModel?
+    /// The window the command acts on, read when it runs: the key window, as AppKit sees it.
+    private var project: ProjectModel? { StudioControl.shared.frontProject ?? focused }
     @Environment(\.openWindow) private var openWindow
     @ObservedObject private var updater = Updater.shared
 

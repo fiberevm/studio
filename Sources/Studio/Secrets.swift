@@ -29,14 +29,17 @@ struct SecretInfo: Codable, Identifiable, Equatable {
 
 /// Where the values live. Release builds use the login keychain; a build from source (ad hoc signature, which
 /// changes with every build, so the keychain would ask for the password each time) uses a 0600 file.
-private protocol SecretBackend {
+/// The account's tokens (Account.swift) are kept the same way.
+protocol SecretBackend {
     func write(_ name: String, _ value: String) throws
     func read(_ name: String) -> String?
     func remove(_ name: String)
 }
 
-private struct KeychainBackend: SecretBackend {
+struct KeychainBackend: SecretBackend {
     let service: String
+    /// What Keychain Access calls an item, before its name.
+    var label = "Studio secret"
     private func query(_ name: String) -> [String: Any] {
         [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: name]
     }
@@ -46,7 +49,7 @@ private struct KeychainBackend: SecretBackend {
         if status == errSecItemNotFound {
             var q = query(name)
             q[kSecValueData as String] = data
-            q[kSecAttrLabel as String] = "Studio secret: \(name)"
+            q[kSecAttrLabel as String] = "\(label): \(name)"
             status = SecItemAdd(q as CFDictionary, nil)
         }
         guard status == errSecSuccess else {
@@ -64,7 +67,7 @@ private struct KeychainBackend: SecretBackend {
     func remove(_ name: String) { SecItemDelete(query(name) as CFDictionary) }
 }
 
-private final class FileBackend: SecretBackend {
+final class FileBackend: SecretBackend {
     let path: String
     init(path: String) { self.path = path }
     private func load() -> [String: String] {
@@ -122,7 +125,7 @@ final class SecretStore: ObservableObject {
     }
 
     /// Whether this app is signed by a developer team (a stable identity the keychain can trust across updates).
-    private static var signedByTeam: Bool {
+    static var signedByTeam: Bool {
         var code: SecCode?
         guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return false }
         var staticCode: SecStaticCode?

@@ -117,6 +117,18 @@ final class StudioControl {
     func unregister(_ m: ProjectModel) { windows.removeValue(forKey: m.windowId) }
     func noteActive(_ m: ProjectModel) { lastActive = m }
 
+    /// Which project folder each window shows (set by the window itself), so commands find the window in front
+    /// from AppKit's key window rather than from SwiftUI's focus, which misses a click into a terminal.
+    var folderByWindow: [ObjectIdentifier: String] = [:]
+
+    /// The project window in front: the key window, else the main one (a panel or Settings may be key).
+    var frontProject: ProjectModel? {
+        for w in [NSApp.keyWindow, NSApp.mainWindow].compactMap({ $0 }) {
+            if let f = folderByWindow[ObjectIdentifier(w)], let m = models.first(where: { $0.folder == f }) { return m }
+        }
+        return nil
+    }
+
     /// Open a terminal tab beside the active pane of the frontmost project window and run `cmd` in it
     /// (Settings → Agents → Log In…). False if no project window is open.
     func openTerminal(running cmd: String) -> Bool {

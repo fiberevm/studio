@@ -1729,7 +1729,10 @@ struct WindowConfigurator: NSViewRepresentable {
             observers.forEach(NotificationCenter.default.removeObserver)
             observers = []
             tracked = (w, folder)
-            MainActor.assumeIsolated { OpenWindows.opened(folder) }
+            MainActor.assumeIsolated {
+                OpenWindows.opened(folder)
+                StudioControl.shared.folderByWindow[ObjectIdentifier(w)] = folder
+            }
             // a beat later, so it lands after SwiftUI sizes a new window to its default
             DispatchQueue.main.async { MainActor.assumeIsolated { OpenWindows.restoreFrame(w, folder: folder) } }
             for name in [NSWindow.didEndLiveResizeNotification, NSWindow.didMoveNotification, NSWindow.didResizeNotification] {
