@@ -30,13 +30,25 @@ enum StudioReleases {
                   let page = (r["html_url"] as? String).flatMap(URL.init(string:)) else { return nil }
             let body = (r["body"] as? String ?? "").replacingOccurrences(of: "\r\n", with: "\n")
             let notes = body.components(separatedBy: "<!-- install -->").first?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let zip = (r["assets"] as? [[String: Any]] ?? []).first { $0["name"] as? String == "Studio.zip" }
+            // this Mac's build (Studio-arm64.zip / Studio-x86_64.zip); releases up to 0.0.14 have one universal Studio.zip
+            let assets = r["assets"] as? [[String: Any]] ?? []
+            let zip = ["Studio-\(archName).zip", "Studio.zip"].lazy
+                .compactMap { name in assets.first { $0["name"] as? String == name } }.first
                 .flatMap { ($0["browser_download_url"] as? String).flatMap(URL.init(string:)) }
             return StudioRelease(version: tag.hasPrefix("v") ? String(tag.dropFirst()) : tag,
                                  date: (r["published_at"] as? String).flatMap(iso.date(from:)),
                                  notes: notes, zip: zip, page: page)
         }
         .sorted { compare($0.version, $1.version) == .orderedDescending }
+    }
+
+    /// The architecture this copy was built for, as release assets name it.
+    static var archName: String {
+        #if arch(arm64)
+        return "arm64"
+        #else
+        return "x86_64"
+        #endif
     }
 
     /// 0.0.10 after 0.0.9.
@@ -62,7 +74,7 @@ final class VersionInstaller: ObservableObject {
     }
 
     func install(_ r: StudioRelease) {
-        guard let zip = r.zip else { state = .failed("Studio \(r.version) has no Studio.zip to install."); return }
+        guard let zip = r.zip else { state = .failed("Studio \(r.version) has no download for this Mac to install."); return }
         install(zip: zip, version: r.version)
     }
 

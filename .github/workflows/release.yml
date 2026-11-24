@@ -1,5 +1,6 @@
 # Builds Studio.app on every version tag (v1.2.3), signs and notarizes it when the Apple secrets are set,
-# and publishes Studio.dmg (drag-to-Applications installer), Studio.zip and appcast.xml (the in-app update feed) to a GitHub release. Without the secrets it still publishes an ad hoc build.
+# and publishes, for Apple silicon (arm64) and Intel (x86_64) each, Studio-<arch>.dmg (drag-to-Applications installer)
+# and Studio-<arch>.zip, plus appcast.xml (the in-app update feed covering both) to a GitHub release. Without the secrets it still publishes an ad hoc build.
 #
 # Secrets (Settings → Secrets and variables → Actions):
 #   MACOS_CERT_P12          base64 of your "Developer ID Application" certificate + private key (.p12)
@@ -33,11 +34,15 @@ permissions:
 jobs:
   release:
     runs-on: macos-26
-    timeout-minutes: 45
+    timeout-minutes: 75
     env:
       TAG: ${{ github.event.inputs.tag || github.ref_name }}
       # Public half of the update key: installed copies only accept updates signed with the private half.
       SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY != '' && 'sT/zgufKv0MQDCvoriLkZb0QiHlHQ8eOSULEaKCVZ3M=' || '' }}
+      # One build per Mac type (about half the download of a universal app). CFBundleVersion is 2×run for Intel
+      # and 2×run+1 for Apple silicon: the update feed lists both, and Sparkle can only mark an item as needing
+      # arm64, so Apple silicon Macs must see their build as the newer of the two (see scripts/make-appcast.sh).
+      ARCHS: arm64 x86_64
     steps:
       - uses: actions/checkout@v4
         with:
@@ -82,7 +87,11 @@ jobs:
           SIGN_IDENTITY: ${{ steps.cert.outputs.identity }}
         run: |
           swift package resolve
-          UNIVERSAL=1 VERSION="${TAG#v}" BUILD_NUMBER="${{ github.run_number }}" APP=build/release/Studio.app ./build-app.sh
+          for a in $ARCHS; do
+            n=$(( ${{ github.run_number }} * 2 )); [ "$a" = arm64 ] && n=$(( n + 1 ))
+            ARCH=$a VERSION="${TAG#v}" BUILD_NUMBER=$n APP=build/release/$a/Studio.app ./build-app.sh
+          done
+          du -sh build/release/*/Studio.app
 
       - uses: actions/setup-go@v5
         with:
@@ -113,12 +122,12 @@ jobs:
             echo "$NOTARY_KEY_P8" | base64 --decode > "$RUNNER_TEMP/notary.p8"
             export NOTARY_KEY_PATH="$RUNNER_TEMP/notary.p8"
           fi
-          scripts/notarize.sh build/release/Studio.app build/release/Studio.zip
+          for a in $ARCHS; do scripts/notarize.sh build/release/$a/Studio.app build/release/Studio-$a.zip; done
           rm -f "$RUNNER_TEMP/notary.p8"
 
       - name: Zip (ad hoc build)
         if: steps.cert.outputs.identity == ''
-        run: ditto -c -k --keepParent build/release/Studio.app build/release/Studio.zip
+        run: for a in $ARCHS; do ditto -c -k --keepParent build/release/$a/Studio.app build/release/Studio-$a.zip; done
 
       - name: Disk image
         env:
@@ -126,7 +135,7 @@ jobs:
         run: |
           # the drag-to-Applications installer (window layout written by dmgbuild, no Finder needed)
           pipx install dmgbuild
-          scripts/make-dmg.sh build/release/Studio.app build/release/Studio.dmg
+          for a in $ARCHS; do scripts/make-dmg.sh build/release/$a/Studio.app build/release/Studio-$a.dmg; done
 
       - name: Notarize disk image
         if: steps.cert.outputs.identity != ''
@@ -142,7 +151,7 @@ jobs:
             echo "$NOTARY_KEY_P8" | base64 --decode > "$RUNNER_TEMP/notary.p8"
             export NOTARY_KEY_PATH="$RUNNER_TEMP/notary.p8"
           fi
-          scripts/notarize.sh build/release/Studio.dmg
+          for a in $ARCHS; do scripts/notarize.sh build/release/Studio-$a.dmg; done
           rm -f "$RUNNER_TEMP/notary.p8"
 
       - name: Update feed
@@ -151,8 +160,12 @@ jobs:
         run: |
           # appcast.xml: what installed copies poll (releases/latest/download/appcast.xml) to update themselves
           if [ -z "$SPARKLE_PRIVATE_KEY" ]; then echo "No SPARKLE_PRIVATE_KEY: this release has no update feed"; exit 0; fi
-          scripts/make-appcast.sh build/release/Studio.zip "${TAG#v}" "${{ github.run_number }}" \
-            "https://github.com/${{ github.repository }}/releases/download/$TAG/Studio.zip" > build/release/appcast.xml
+          args=()
+          for a in $ARCHS; do
+            n=$(( ${{ github.run_number }} * 2 )); [ "$a" = arm64 ] && n=$(( n + 1 ))
+            args+=(build/release/Studio-$a.zip $n "https://github.com/${{ github.repository }}/releases/download/$TAG/Studio-$a.zip")
+          done
+          scripts/make-appcast.sh "${TAG#v}" "${args[@]}" > build/release/appcast.xml
           cat build/release/appcast.xml
 
       - name: Publish release
@@ -161,7 +174,8 @@ jobs:
           SIGNED: ${{ steps.cert.outputs.identity != '' }}
         run: |
           cd build/release
-          shasum -a 256 Studio.dmg Studio.zip | tee Studio.sha256
+          ls -la Studio-*.dmg Studio-*.zip
+          shasum -a 256 Studio-*.dmg Studio-*.zip | tee Studio.sha256
           shasum -a 256 studio-worker-* | tee studio-worker.sha256
           {
             cat "../../docs/releases/${TAG#v}.md"
@@ -170,7 +184,7 @@ jobs:
             echo
             echo "---"
             echo
-            echo "**Install:** download \`Studio.dmg\`, open it and drag Studio to Applications (or use \`Studio.zip\`). Universal (Apple silicon and Intel), macOS 14+. Needs [Claude Code](https://docs.claude.com/en/docs/claude-code) (or Codex, or Antigravity); \`brew install tmux\` recommended."
+            echo "**Install:** download \`Studio-arm64.dmg\` for Apple silicon (M1 and later) or \`Studio-x86_64.dmg\` for an Intel Mac, open it and drag Studio to Applications (or use the matching \`.zip\`). macOS 14+. Needs [Claude Code](https://docs.claude.com/en/docs/claude-code) (or Codex, or Antigravity); \`brew install tmux\` recommended."
             echo
             echo "**Workers:** on a Linux or macOS machine you want to run sessions on, \`curl -fsSL https://raw.githubusercontent.com/fiberevm/studio/main/install-worker.sh | sh\`, then pair it in Settings → Workers."
             echo
@@ -185,10 +199,10 @@ jobs:
           } > notes.md
           FEED=""; [ -f appcast.xml ] && FEED=appcast.xml
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" Studio.dmg Studio.zip Studio.sha256 studio-worker-* studio-worker.sha256 $FEED --clobber
+            gh release upload "$TAG" Studio-*.dmg Studio-*.zip Studio.sha256 studio-worker-* studio-worker.sha256 $FEED --clobber
             gh release edit "$TAG" --notes-file notes.md
           else
-            gh release create "$TAG" Studio.dmg Studio.zip Studio.sha256 studio-worker-* studio-worker.sha256 $FEED --title "Studio ${TAG#v}" --notes-file notes.md
+            gh release create "$TAG" Studio-*.dmg Studio-*.zip Studio.sha256 studio-worker-* studio-worker.sha256 $FEED --title "Studio ${TAG#v}" --notes-file notes.md
           fi
 
       - name: Clean up keychain

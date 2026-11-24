@@ -8,8 +8,13 @@
 #                            ready for scripts/notarize.sh; without it the app is signed ad hoc for local use.
 set -euo pipefail
 cd "$(dirname "$0")"
-#   UNIVERSAL=1              build for Apple silicon and Intel (release builds)
-if [[ -n "${UNIVERSAL:-}" ]]; then
+#   ARCH=arm64|x86_64        build for one architecture only, Sparkle thinned to match (release builds: one
+#                            download per Mac type, about half the size of a universal app)
+#   UNIVERSAL=1              build for Apple silicon and Intel in one app
+if [[ -n "${ARCH:-}" ]]; then
+  swift build -c release --arch "$ARCH"
+  BIN=.build/$ARCH-apple-macosx/release
+elif [[ -n "${UNIVERSAL:-}" ]]; then
   # One arch at a time (a combined multi-arch build trips over SwiftTerm's build plugin), then lipo.
   swift build -c release --arch arm64
   swift build -c release --arch x86_64
@@ -30,6 +35,11 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN/Studio" "$APP/Contents/MacOS/.Studio.new" && mv -f "$APP/Contents/MacOS/.Studio.new" "$APP/Contents/MacOS/Studio"
 cp "$BIN/studio-mcp" "$APP/Contents/MacOS/.studio-mcp.new" && mv -f "$APP/Contents/MacOS/.studio-mcp.new" "$APP/Contents/MacOS/studio-mcp"
 cp "$BIN/studio-attach" "$APP/Contents/MacOS/.studio-attach.new" && mv -f "$APP/Contents/MacOS/.studio-attach.new" "$APP/Contents/MacOS/studio-attach"
+# Strip the symbol tables (half of Studio's binary). The debug info goes to Studio.dSYM next to the app first,
+# so crash reports can still be symbolicated (atos -o Studio.dSYM/Contents/Resources/DWARF/Studio …).
+DSYM="${APP%.app}.dSYM"
+rm -rf "$DSYM" && dsymutil "$BIN/Studio" -o "$DSYM"
+for b in Studio studio-mcp studio-attach; do strip -x "$APP/Contents/MacOS/$b" 2>/dev/null; done
 # Studio's Claude plugin (skills), loaded into every session it starts with --plugin-dir
 rm -rf "$APP/Contents/Resources/.StudioPlugin.new" && cp -R Resources/StudioPlugin "$APP/Contents/Resources/.StudioPlugin.new" \
   && rm -rf "$APP/Contents/Resources/StudioPlugin" && mv "$APP/Contents/Resources/.StudioPlugin.new" "$APP/Contents/Resources/StudioPlugin"
@@ -40,7 +50,8 @@ rm -rf "$APP/Contents/Resources/.MicroVMAgent.new" && cp -R Resources/MicroVMAge
 SPARKLE=.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework
 [[ -d "$SPARKLE" ]] || { echo "build-app.sh: no Sparkle.framework at $SPARKLE (swift package resolve)" >&2; exit 1; }
 mkdir -p "$APP/Contents/Frameworks"
-rm -rf "$APP/Contents/Frameworks/.Sparkle.new" && ditto "$SPARKLE" "$APP/Contents/Frameworks/.Sparkle.new" \
+# (a one-architecture build keeps only that architecture's slice: ditto --arch thins every binary it copies)
+rm -rf "$APP/Contents/Frameworks/.Sparkle.new" && ditto ${ARCH:+--arch "$ARCH"} "$SPARKLE" "$APP/Contents/Frameworks/.Sparkle.new" \
   && rm -rf "$APP/Contents/Frameworks/Sparkle.framework" && mv "$APP/Contents/Frameworks/.Sparkle.new" "$APP/Contents/Frameworks/Sparkle.framework"
 # Only builds given the update feed's public key update themselves (the release workflow sets it);
 # a local build has no feed, so it is never replaced by a release.
@@ -86,7 +97,8 @@ if [[ -n "${SIGN_IDENTITY:-}" ]]; then
   done
   codesign --verify --strict --deep "$APP"
 else
-  codesign --force --sign - "$APP" >/dev/null 2>&1 || true
+  # --deep: a thinned Sparkle.framework lost its own signature
+  codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || true
 fi
 echo "Built $APP"
 [[ "${1:-}" == "--open" ]] && open "$APP"
