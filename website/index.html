@@ -48,6 +48,13 @@ body { background: #191d27; }
 .say::after { content: ""; display: inline-block; width: 2px; height: 1em; margin-left: 2px; vertical-align: -2px; background: #e8875a; animation: blink 1s steps(1) infinite; }
 .ghost { position: fixed; z-index: 58; left: 0; top: 0; height: 35px; display: flex; align-items: center; gap: 8px; padding: 0 16px; font: 12px var(--ui); transform-origin: 0 0;
          box-shadow: 0 6px 18px rgb(0 0 0 / .35); pointer-events: none; opacity: 0; white-space: nowrap; }
+/* the opening: what Studio is, typed in the middle, before the show */
+.intro { position: fixed; inset: 0; z-index: 62; display: grid; place-content: center; gap: 14px; padding: 24px; text-align: center; pointer-events: none;
+         background: rgb(10 12 18 / .78); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); opacity: 0; transition: opacity .6s; }
+.intro.on { opacity: 1; }
+.intro b { font: 650 clamp(30px, 5vw, 60px)/1.08 var(--ui); letter-spacing: -.03em; color: #fff; min-height: 1.08em; }
+.intro b::after { content: ""; display: inline-block; width: .06em; height: .9em; margin-left: .05em; vertical-align: -.08em; background: #e8875a; animation: blink 1s steps(1) infinite; }
+.intro span { font: 500 clamp(15px, 1.6vw, 19px)/1.4 var(--ui); color: rgb(255 255 255 / .62); min-height: 1.4em; }
 .nudge.hot { animation: hot 1.2s ease-in-out infinite; }
 @keyframes hot { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 35%, transparent); } }
 @media (max-width: 639px) { .say { font-size: 15px; } }
@@ -188,6 +195,7 @@ body { background: #191d27; }
   <div class="ghost" id="ghost" aria-hidden="true"><svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="#4A9EFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6.4l2.6 2.6L10 3.4"/></svg><span></span></div>
   <div class="ptr" id="ptr" aria-hidden="true"><svg width="24" height="26" viewBox="0 0 24 26"><path d="M3 2v18.5l4.6-4.4 3 6.8 3.2-1.4-3-6.6h6.4z" fill="#000" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></svg></div>
   <div class="say" id="say" aria-live="polite"><span></span></div>
+  <div class="intro" id="intro" aria-live="polite"><b></b><span></span></div>
 </main>
 
 <script>
@@ -436,17 +444,20 @@ function placePeek() {
 
 /* ================================================================ fitting the window to the screen */
 let scale = 1;
+const intro = document.getElementById('intro');
 function fit() {
   // the window is the page; below 820 points wide it is drawn smaller, so its layout never squeezes
   scale = Math.min(1, innerWidth / 820);
   const Wd = innerWidth / scale, Hd = innerHeight / scale;
   win.style.width = Wd + 'px'; win.style.height = Hd + 'px'; win.style.transform = `scale(${scale})`;
+  intro.style.top = 29 * scale + 'px';   // the title bar, and its download, stay visible over the opening
   if (s.peek) placePeek();
 }
 addEventListener('resize', fit);
 
 /* ================================================================ the demo: a pointer shows where to click, a line types itself */
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const introH = intro.querySelector('b'), introS = intro.querySelector('span');
 const ptr = document.getElementById('ptr'), cap = document.getElementById('say'), capText = cap.querySelector('span'), ghost = document.getElementById('ghost');
 class Stop extends Error {}
 let gen = 0, demoOn = false, idleT, px = innerWidth * .55, py = innerHeight * .6;
@@ -485,7 +496,16 @@ function addTerminal(st) { st.layout.kids[1] = { dir: 'v', kids: [{ g: 'g2' }, {
 async function demo(g) {
   for (;;) {
     s = fresh(); render(); cap.classList.remove('on'); ptr.classList.add('on');
-    setPtr(innerWidth * .5, innerHeight * .62, 0);
+    setPtr(innerWidth * .5, innerHeight * .62, 0); ptr.classList.remove('on');
+    // first, what it is: typed in the middle, then the show
+    intro.classList.add('on'); introH.textContent = ''; introS.textContent = '';
+    await wait(g, 500);
+    for (const [el, text, every] of [[introH, 'All your coding agents in one window.', 55], [introS, 'Studio for Mac  ·  Claude Code, Codex and Antigravity', 22]]) {
+      for (let i = 1; i <= text.length; i++) { el.textContent = text.slice(0, i); if (!reduced) await wait(g, every); }
+      await wait(g, 350);
+    }
+    await wait(g, 1500);
+    intro.classList.remove('on'); ptr.classList.add('on');
     await wait(g, 700);
 
     await move(g, '.tab[data-tab="co"]', .55, .6);
@@ -576,7 +596,7 @@ async function demo(g) {
 }
 function start() { gen++; demoOn = true; ptr.classList.add('on'); demo(gen).catch(e => { if (!(e instanceof Stop)) console.error(e); }); }
 function pause() {
-  gen++; demoOn = false; ptr.classList.remove('on', 'down'); cap.classList.remove('on'); ghost.style.opacity = 0; s.drop = null;
+  gen++; demoOn = false; intro.classList.remove('on'); ptr.classList.remove('on', 'down'); cap.classList.remove('on'); ghost.style.opacity = 0; s.drop = null;
   clearTimeout(idleT); idleT = setTimeout(start, 12000);
 }
 
